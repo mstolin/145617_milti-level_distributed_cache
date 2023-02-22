@@ -11,6 +11,7 @@ public class L1Cache extends AbstractActor {
 
     private Integer id;
     private List<ActorRef> l2Caches;
+    private ActorRef database;
 
     public L1Cache(int id) {
         this.id = id;
@@ -25,10 +26,16 @@ public class L1Cache extends AbstractActor {
         System.out.printf("L1 Cache %d joined group of %d L2 caches\n", this.id, this.l2Caches.size());
     }
 
+    private void onJoinDatabase(JoinDatabaseMessage message) {
+        this.database = message.database;
+        System.out.printf("L1 Cache %d joined group of database\n", this.id);
+    }
+
     @Override
     public Receive createReceive() {
         return this.receiveBuilder()
                 .match(JoinL2CacheMessage.class, this::onJoinL2Cache)
+                .match(JoinDatabaseMessage.class, this::onJoinDatabase)
                 .build();
     }
 
@@ -38,6 +45,14 @@ public class L1Cache extends AbstractActor {
         public JoinL2CacheMessage(List<ActorRef> l2Caches) {
             // copyOf also returns an unmodifiable list
             this.l2Caches = List.copyOf(l2Caches);
+        }
+    }
+
+    public static class JoinDatabaseMessage implements Serializable {
+        private final ActorRef database;
+
+        public JoinDatabaseMessage(ActorRef database) {
+            this.database = database;
         }
     }
 }

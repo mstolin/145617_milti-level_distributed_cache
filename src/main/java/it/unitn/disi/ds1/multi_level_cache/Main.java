@@ -2,6 +2,7 @@ package it.unitn.disi.ds1.multi_level_cache;
 
 import akka.actor.ActorRef;
 import akka.actor.ActorSystem;
+import it.unitn.disi.ds1.multi_level_cache.actors.Database;
 import it.unitn.disi.ds1.multi_level_cache.actors.L2Cache;
 import it.unitn.disi.ds1.multi_level_cache.actors.L1Cache;
 
@@ -21,7 +22,7 @@ public class Main {
         final ActorSystem system = ActorSystem.create("multi-level-cache");
 
         // Create a single database actor
-        //system.actorOf(Database.props());
+        ActorRef database = system.actorOf(Database.props());
 
         // Create the caches
         List<ActorRef> l1Caches = new ArrayList<>();
@@ -36,10 +37,15 @@ public class Main {
             // Create L1 Cache
             ActorRef l1Cache = system.actorOf(L1Cache.props(i));
             l1Caches.add(l1Cache);
-            // Send join message to L1 cache
+
+            // Send join message to L1 cache to join l2 caches
             l2Caches = List.copyOf(l2Caches);
-            L1Cache.JoinL2CacheMessage joinMessage = new L1Cache.JoinL2CacheMessage(l2Caches);
-            l1Cache.tell(joinMessage, null);
+            L1Cache.JoinL2CacheMessage joinL2CacheMessageMessage = new L1Cache.JoinL2CacheMessage(l2Caches);
+            l1Cache.tell(joinL2CacheMessageMessage, null);
+
+            // send join message to L1 Cache to join database
+            L1Cache.JoinDatabaseMessage joinDatabaseMessage = new L1Cache.JoinDatabaseMessage(database);
+            l1Cache.tell(joinDatabaseMessage, null);
         }
 
         // Create the clients

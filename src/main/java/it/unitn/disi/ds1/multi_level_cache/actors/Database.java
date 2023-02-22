@@ -20,7 +20,7 @@ public class Database extends AbstractActor {
 
     @Override
     public Receive createReceive() {
-        return null;
+       return this.receiveBuilder().build();
     }
 
 }
