@@ -2,9 +2,7 @@ package it.unitn.disi.ds1.multi_level_cache;
 
 import akka.actor.ActorRef;
 import akka.actor.ActorSystem;
-import it.unitn.disi.ds1.multi_level_cache.actors.Cache;
-import it.unitn.disi.ds1.multi_level_cache.actors.Client;
-import it.unitn.disi.ds1.multi_level_cache.actors.Database;
+import it.unitn.disi.ds1.multi_level_cache.actors.L2Cache;
 import it.unitn.disi.ds1.multi_level_cache.actors.L1Cache;
 
 import java.util.ArrayList;
@@ -31,7 +29,7 @@ public class Main {
             List<ActorRef> l2Caches = new ArrayList<>();
             for (int j = 0; j < numberOfL2Caches; j++) {
                 // Create L2 Cache
-                ActorRef l2Cache = system.actorOf(Cache.props(i));
+                ActorRef l2Cache = system.actorOf(L2Cache.props(i));
                 l2Caches.add(l2Cache);
             }
 

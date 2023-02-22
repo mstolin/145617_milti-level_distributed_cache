@@ -3,16 +3,16 @@ package it.unitn.disi.ds1.multi_level_cache.actors;
 import akka.actor.AbstractActor;
 import akka.actor.Props;
 
-public class Cache extends AbstractActor {
+public class L2Cache extends AbstractActor {
 
     final Integer id;
 
-    public Cache(int id) {
+    public L2Cache(int id) {
         this.id = id;
     }
 
     static public Props props(int id) {
-        return Props.create(Cache.class, () -> new Cache(id));
+        return Props.create(L2Cache.class, () -> new L2Cache(id));
     }
 
     @Override
