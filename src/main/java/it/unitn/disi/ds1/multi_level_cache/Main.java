@@ -1,7 +1,7 @@
 package it.unitn.disi.ds1.multi_level_cache;
 
 import akka.actor.ActorRef;
-import it.unitn.disi.ds1.multi_level_cache.messages.WriteDataMessage;
+import it.unitn.disi.ds1.multi_level_cache.messages.WriteMessage;
 
 public class Main {
 
@@ -24,7 +24,7 @@ public class Main {
 
         // send random write message
         ActorRef someClient = actorEnvironment.getClients().get(0);
-        WriteDataMessage msg = new WriteDataMessage(3, 7);
+        WriteMessage msg = new WriteMessage(3, 7);
         someClient.tell(msg, null);
     }
 
