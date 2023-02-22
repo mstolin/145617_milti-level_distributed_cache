@@ -5,7 +5,7 @@ import akka.actor.Props;
 
 public class Cache extends AbstractActor {
 
-    private final Integer id;
+    final Integer id;
 
     public Cache(int id) {
         this.id = id;
@@ -17,7 +17,7 @@ public class Cache extends AbstractActor {
 
     @Override
     public Receive createReceive() {
-        return null;
+        return this.receiveBuilder().build();
     }
 
 }
