@@ -1,19 +1,37 @@
-plugins {
-    id 'java'
-}
+apply plugin: 'java'
+apply plugin: 'idea'
+apply plugin: 'application'
 
 group 'it.unitn.disi.ds1'
 version '1.0-SNAPSHOT'
 
 repositories {
     mavenCentral()
+    mavenLocal()
 }
+
+def versions = [
+        ScalaBinary: "2.13"
+]
 
 dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.1'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.1'
+
+    implementation platform("com.typesafe.akka:akka-bom_${versions.ScalaBinary}:2.6.13")
+    implementation "com.typesafe.akka:akka-actor_${versions.ScalaBinary}"
+    testImplementation "com.typesafe.akka:akka-testkit_${versions.ScalaBinary}"
 }
 
 test {
     useJUnitPlatform()
+}
+
+compileJava {
+    options.compilerArgs += ["-Xlint:deprecation"]
+}
+
+mainClassName = "it.unitn.disi.ds1.multi_level_cache.Main"
+run {
+    standardInput = System.in
 }
