@@ -27,7 +27,7 @@ public class ActorEnvironment {
 
         this.database = this.actorSystem.actorOf(Database.props());
         // tell database about all l1 caches
-        this.sendJoinGroupMessage(database, l1Caches);
+        this.sendJoinGroupMessage(this.database, this.l1Caches);
 
         List<ActorRef> allL2Caches = new ArrayList<>();
         for (ActorRef l1Cache: this.l1Caches) {
@@ -37,7 +37,7 @@ public class ActorEnvironment {
             List<ActorRef> l2Caches = this.initL2Caches(numOfL2Caches);
             for (ActorRef l2Cache: l2Caches) {
                 // tell l2 cache about l1 cache
-                this.sendJoinActorMessage(l2Cache, l2Cache);
+                this.sendJoinActorMessage(l2Cache, l1Cache);
             }
             // tell l1 cache about l2 caches
             this.sendJoinGroupMessage(l1Cache, l2Caches);
