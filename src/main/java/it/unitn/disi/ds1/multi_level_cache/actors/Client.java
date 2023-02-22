@@ -9,7 +9,7 @@ import java.util.List;
 public class Client extends AbstractActor {
 
     /** List of level 2 caches, the client knows about */
-    private List<ActorRef> caches;
+    private List<ActorRef> l2Caches;
 
     public Client() {
     }
@@ -20,7 +20,7 @@ public class Client extends AbstractActor {
 
     @Override
     public Receive createReceive() {
-        return null;
+        return this.receiveBuilder().build();
     }
 
 }
