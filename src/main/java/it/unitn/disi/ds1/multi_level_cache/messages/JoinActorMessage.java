@@ -10,4 +10,8 @@ public class JoinActorMessage implements Serializable {
     public JoinActorMessage(ActorRef actor) {
         this.actor = actor;
     }
+
+    public ActorRef getActor() {
+        return actor;
+    }
 }
