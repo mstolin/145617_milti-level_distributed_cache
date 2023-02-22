@@ -4,6 +4,7 @@ import akka.actor.AbstractActor;
 import akka.actor.ActorRef;
 import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.messages.JoinGroupMessage;
+import it.unitn.disi.ds1.multi_level_cache.messages.WriteMessage;
 
 import java.util.HashMap;
 import java.util.List;
@@ -27,11 +28,18 @@ public class Database extends AbstractActor {
         System.out.printf("Database joined group of %d L1 caches\n", this.l1Caches.size());
     }
 
+    private void onWriteMessage(WriteMessage message) {
+        // just forward message for now
+        this.data.put(message.getKey(), message.getValue());
+        System.out.printf("HALLO ICH HABE BEKOMMEN %d: %d\n", message.getKey(), message.getValue());
+    }
+
     @Override
     public Receive createReceive() {
        return this
                .receiveBuilder()
                .match(JoinGroupMessage.class, this::onJoinL1Caches)
+               .match(WriteMessage.class, this::onWriteMessage)
                .build();
     }
 

@@ -5,6 +5,7 @@ import akka.actor.ActorRef;
 import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.messages.JoinActorMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.JoinGroupMessage;
+import it.unitn.disi.ds1.multi_level_cache.messages.WriteMessage;
 
 import java.io.Serializable;
 import java.util.List;
@@ -33,12 +34,19 @@ public class L1Cache extends AbstractActor {
         System.out.printf("L1 Cache %d joined group of database\n", this.id);
     }
 
+    private void onWriteMessage(WriteMessage message) {
+        // just forward message for now
+        System.out.println("L1 hat bekommen\n");
+        this.database.tell(message, getSelf());
+    }
+
     @Override
     public Receive createReceive() {
         return this
                 .receiveBuilder()
                 .match(JoinGroupMessage.class, this::onJoinL2Cache)
                 .match(JoinActorMessage.class, this::onJoinDatabase)
+                .match(WriteMessage.class, this::onWriteMessage)
                 .build();
     }
 }
