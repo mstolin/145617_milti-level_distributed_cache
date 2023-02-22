@@ -29,6 +29,7 @@ public class Main {
 
         // Create the caches
         List<ActorRef> l1Caches = new ArrayList<>();
+        List<ActorRef> allL2Caches = new ArrayList<>();
         for (int i = 0; i < numberOfL1Caches; i++) {
             // Create L1 Cache
             ActorRef l1Cache = system.actorOf(L1Cache.props(i));
@@ -40,6 +41,7 @@ public class Main {
                 // Create L2 Cache
                 ActorRef l2Cache = system.actorOf(L2Cache.props(i));
                 l2Caches.add(l2Cache);
+                allL2Caches.add(l2Cache);
                 // Send join message to L2 cache to join the L1 cache
                 JoinActorMessage joinL1CacheMessage = new JoinActorMessage(l1Cache);
                 l2Cache.tell(joinL1CacheMessage, null);
@@ -53,7 +55,9 @@ public class Main {
             JoinActorMessage joinDatabaseMessage = new JoinActorMessage(database);
             l1Cache.tell(joinDatabaseMessage, null);
         }
+        // make sure lists are unmodifiable
         l1Caches = List.copyOf(l1Caches);
+        allL2Caches = List.copyOf(allL2Caches);
 
         // Send join message to database to join all L1 caches
         JoinGroupMessage joinL1CachesMessageMessage = new JoinGroupMessage(l1Caches);
@@ -61,8 +65,10 @@ public class Main {
 
         // Create the clients
         for (int i = 0; i < numberOfClients; i++) {
-            system.actorOf(Client.props());
+            ActorRef client = system.actorOf(Client.props());
             // join l2 caches
+            JoinGroupMessage joinL2CachesMessageMessage = new JoinGroupMessage(allL2Caches);
+            client.tell(joinL2CachesMessageMessage, null);
         }
     }
 
