@@ -4,6 +4,7 @@ import akka.actor.AbstractActor;
 import akka.actor.ActorRef;
 import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.messages.JoinGroupMessage;
+import it.unitn.disi.ds1.multi_level_cache.messages.ReadMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.WriteConfirmMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.WriteMessage;
 
@@ -40,13 +41,18 @@ public class Client extends AbstractActor {
 
     private void onWriteMessage(WriteMessage message) {
         System.out.printf("%s sends write message to random L2 cache\n", this.id);
-
         ActorRef l2Cache = this.getRandomL2Cache();
         l2Cache.tell(message, this.getSelf());
     }
 
     private void onWriteConfirmMessage(WriteConfirmMessage message) {
         System.out.printf("%s received write confirm (%s)\n", this.id, message.getWriteMessageUUID().toString());
+    }
+
+    private void onReadMessage(ReadMessage message) {
+        System.out.printf("%s send read message to random L2 Cache\n", this.id);
+        ActorRef l2Cache = this.getRandomL2Cache();
+        l2Cache.tell(message, this.getSelf());
     }
 
     @Override
@@ -56,6 +62,7 @@ public class Client extends AbstractActor {
                 .match(JoinGroupMessage.class, this::onJoinL2Cache)
                 .match(WriteMessage.class, this::onWriteMessage)
                 .match(WriteConfirmMessage.class, this::onWriteConfirmMessage)
+                .match(ReadMessage.class, this::onReadMessage)
                 .build();
     }
 
