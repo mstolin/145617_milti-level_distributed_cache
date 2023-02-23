@@ -4,6 +4,7 @@ import akka.actor.ActorRef;
 import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
 
+import java.io.Serializable;
 import java.util.List;
 import java.util.UUID;
 
@@ -31,7 +32,7 @@ public class L1Cache extends Cache {
     }
 
     @Override
-    protected void forwardWriteToNext(WriteMessage message) {
+    protected void forwardMessageToNext(Serializable message) {
         this.database.tell(message, this.getSelf());
     }
 
@@ -68,6 +69,7 @@ public class L1Cache extends Cache {
                 .match(WriteMessage.class, this::onWriteMessage)
                 .match(WriteConfirmMessage.class, this::onWriteConfirmMessage)
                 .match(RefillMessage.class, this::onRefillMessage)
+                .match(ReadMessage.class, this::onReadMessage)
                 .build();
     }
 }

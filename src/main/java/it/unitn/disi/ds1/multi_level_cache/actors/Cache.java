@@ -2,10 +2,12 @@ package it.unitn.disi.ds1.multi_level_cache.actors;
 
 import akka.actor.AbstractActor;
 import akka.actor.ActorRef;
+import it.unitn.disi.ds1.multi_level_cache.messages.ReadMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.RefillMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.WriteConfirmMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.WriteMessage;
 
+import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -22,7 +24,8 @@ public abstract class Cache extends AbstractActor {
         this.id = id;
     }
 
-    protected abstract void forwardWriteToNext(WriteMessage message);
+    protected abstract void forwardMessageToNext(Serializable message);
+
     protected abstract void forwardConfirmWriteToSender(WriteConfirmMessage message);
 
     protected abstract void addToWriteHistory(UUID uuid);
@@ -37,7 +40,7 @@ public abstract class Cache extends AbstractActor {
             then forward to the next actor (L1 cache or database).
              */
             this.addToWriteHistory(message.getUuid());
-            this.forwardWriteToNext(message);
+            this.forwardMessageToNext(message);
         } else {
             // todo Error this shouldn't be
         }
@@ -72,6 +75,17 @@ public abstract class Cache extends AbstractActor {
         } else {
             // never known this key, don't update
             System.out.printf("%s never read/write key %d, therefore no update\n", this.id, message.getKey());
+        }
+    }
+
+    protected void onReadMessage(ReadMessage message) {
+        // check if we already have the value
+        if (this.cache.containsKey(message.getKey())) {
+            int wanted = this.cache.get(message.getKey());
+            System.out.printf("%s already knows %d (%d)", message.getKey(), wanted);
+        } else {
+            System.out.printf("%s does not know about %d, forward to next\n", this.id, message.getKey());
+            this.forwardMessageToNext(message);
         }
     }
 
