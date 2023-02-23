@@ -47,6 +47,19 @@ public class L1Cache extends Cache {
     }
 
     @Override
+    protected void onRefillMessage(RefillMessage message) {
+        super.onRefillMessage(message);
+
+        // as a L1 cache, we need to forward refill to all L2s if needed
+        if (this.cache.containsKey(message.getKey())) {
+            // only if we contain the key, otherwise, the L2s can't know about it either
+            for (ActorRef l2Cache: this.l2Caches) {
+                l2Cache.tell(message, this.getSelf());
+            }
+        }
+    }
+
+    @Override
     public Receive createReceive() {
         return this
                 .receiveBuilder()
