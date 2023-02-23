@@ -8,13 +8,17 @@ import it.unitn.disi.ds1.multi_level_cache.messages.JoinGroupMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.WriteConfirmMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.WriteMessage;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 public class L1Cache extends AbstractActor {
 
     private String id;
     private List<ActorRef> l2Caches;
     private ActorRef database;
+    private Map<UUID, ActorRef> writeHistory = new HashMap<>();
 
     public L1Cache(int id) {
         this.id = String.format("L1-%d", id);
@@ -36,18 +40,20 @@ public class L1Cache extends AbstractActor {
 
     private void onWriteMessage(WriteMessage message) {
         // just forward message for now
-        System.out.printf("%s received write message, forward to database\n", this.id);
+        System.out.printf("%s received write message (%s), forward to database\n", this.id, message.getUuid().toString());
+        // todo Check if uuid is already there?
+        this.writeHistory.put(message.getUuid(), this.getSender());
         this.database.tell(message, getSelf());
     }
 
     private void onWriteConfirmMessage(WriteConfirmMessage message) {
-        System.out.printf("%s received write confirm, forward to L2 cache\n", this.id);
-        this.getSender().tell(message, getSelf());
-        /*WriteMessage confirmed = message.getWriteMessage();
-        System.out.printf("MESSAGE CONFIRMED %d: %d\n", confirmed.getKey(), confirmed.getValue());
-        if (this.writeHistory.remove(confirmed)) {
-            System.out.println("MESSAGE WAS REMOVED FROM HISTORY");
-        }*/
+        System.out.printf(
+                "%s received write confirm message (%s), forward to L2 cache\n",
+                this.id, message.getWriteMessageUUID().toString());
+        // todo Check if key exists
+        ActorRef l2Cache = this.writeHistory.get(message.getWriteMessageUUID());
+        this.writeHistory.remove(message.getWriteMessageUUID());
+        l2Cache.tell(message, this.getSelf());
     }
 
     @Override
