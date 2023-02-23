@@ -1,6 +1,5 @@
 package it.unitn.disi.ds1.multi_level_cache.actors;
 
-import akka.actor.AbstractActor;
 import akka.actor.ActorRef;
 import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.messages.JoinActorMessage;
@@ -8,20 +7,16 @@ import it.unitn.disi.ds1.multi_level_cache.messages.JoinGroupMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.WriteConfirmMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.WriteMessage;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
-public class L1Cache extends AbstractActor {
+public class L1Cache extends Cache {
 
-    private String id;
     private List<ActorRef> l2Caches;
     private ActorRef database;
-    private Map<UUID, ActorRef> writeHistory = new HashMap<>();
 
     public L1Cache(int id) {
-        this.id = String.format("L1-%d", id);
+        super(String.format("L1-%d", id));
     }
 
     static public Props props(int id) {
@@ -38,22 +33,20 @@ public class L1Cache extends AbstractActor {
         System.out.printf("%s joined group of database\n", this.id);
     }
 
-    private void onWriteMessage(WriteMessage message) {
-        // just forward message for now
-        System.out.printf("%s received write message (%s), forward to database\n", this.id, message.getUuid().toString());
-        // todo Check if uuid is already there?
-        this.writeHistory.put(message.getUuid(), this.getSender());
-        this.database.tell(message, getSelf());
+    @Override
+    protected void forwardWriteToNext(WriteMessage message) {
+        this.database.tell(message, this.getSelf());
     }
 
-    private void onWriteConfirmMessage(WriteConfirmMessage message) {
-        System.out.printf(
-                "%s received write confirm message (%s), forward to L2 cache\n",
-                this.id, message.getWriteMessageUUID().toString());
-        // todo Check if key exists
+    @Override
+    protected void forwardConfirmWriteToSender(WriteConfirmMessage message) {
         ActorRef l2Cache = this.writeHistory.get(message.getWriteMessageUUID());
-        this.writeHistory.remove(message.getWriteMessageUUID());
         l2Cache.tell(message, this.getSelf());
+    }
+
+    @Override
+    protected void addToWriteHistory(UUID uuid) {
+        this.writeHistory.put(uuid, this.getSender());
     }
 
     @Override
