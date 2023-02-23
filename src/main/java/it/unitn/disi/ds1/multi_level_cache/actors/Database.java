@@ -4,6 +4,7 @@ import akka.actor.AbstractActor;
 import akka.actor.ActorRef;
 import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.messages.JoinGroupMessage;
+import it.unitn.disi.ds1.multi_level_cache.messages.WriteConfirmMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.WriteMessage;
 
 import java.util.HashMap;
@@ -29,9 +30,16 @@ public class Database extends AbstractActor {
     }
 
     private void onWriteMessage(WriteMessage message) {
+        System.out.printf("Database received write message of {%d: %d}\n", message.getKey(), message.getValue());
         // just forward message for now
         this.data.put(message.getKey(), message.getValue());
-        System.out.printf("HALLO ICH HABE BEKOMMEN %d: %d\n", message.getKey(), message.getValue());
+
+        // send confirm to L1 sender
+        WriteConfirmMessage writeConfirmMessage = new WriteConfirmMessage(message);
+        this.getSender().tell(writeConfirmMessage, this.getSelf());
+
+        // send refill to all other L1 caches
+        // todo
     }
 
     @Override
