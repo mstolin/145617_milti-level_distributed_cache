@@ -4,6 +4,7 @@ import akka.actor.AbstractActor;
 import akka.actor.ActorRef;
 import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.messages.JoinGroupMessage;
+import it.unitn.disi.ds1.multi_level_cache.messages.RefillMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.WriteConfirmMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.WriteMessage;
 
@@ -13,11 +14,10 @@ import java.util.Map;
 
 public class Database extends AbstractActor {
 
-    private Map<Integer, Integer> data;
     private List<ActorRef> l1Caches;
+    private Map<Integer, Integer> data = new HashMap<>();
 
     public Database() {
-        this.data = new HashMap<>();
     }
 
     static public Props props() {
@@ -31,15 +31,21 @@ public class Database extends AbstractActor {
 
     private void onWriteMessage(WriteMessage message) {
         System.out.printf("Database received write message of {%d: %d}\n", message.getKey(), message.getValue());
-        // just forward message for now
+
+        // 1. save new data
         this.data.put(message.getKey(), message.getValue());
 
-        // send confirm to L1 sender
-        WriteConfirmMessage writeConfirmMessage = new WriteConfirmMessage(message);
+        // 2. send confirm to L1 sender
+        WriteConfirmMessage writeConfirmMessage = new WriteConfirmMessage(message.getUuid(), message.getKey(), message.getValue());
         this.getSender().tell(writeConfirmMessage, this.getSelf());
 
-        // send refill to all other L1 caches
-        // todo
+        // 3. send refill to all other L1 caches
+        RefillMessage refillMessage = new RefillMessage(message.getKey(), message.getValue());
+        for (ActorRef l1Cache: this.l1Caches) {
+            if (l1Cache != this.getSender()) {
+                l1Cache.tell(refillMessage, this.getSelf());
+            }
+        }
     }
 
     @Override
