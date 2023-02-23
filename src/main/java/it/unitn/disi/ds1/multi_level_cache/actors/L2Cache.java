@@ -3,6 +3,7 @@ package it.unitn.disi.ds1.multi_level_cache.actors;
 import akka.actor.ActorRef;
 import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.messages.JoinActorMessage;
+import it.unitn.disi.ds1.multi_level_cache.messages.RefillMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.WriteConfirmMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.WriteMessage;
 
@@ -48,6 +49,7 @@ public class L2Cache extends Cache {
                 .match(JoinActorMessage.class, this::onJoinL1Cache)
                 .match(WriteMessage.class, this::onWriteMessage)
                 .match(WriteConfirmMessage.class, this::onWriteConfirmMessage)
+                .match(RefillMessage.class, this::onRefillMessage)
                 .build();
     }
 

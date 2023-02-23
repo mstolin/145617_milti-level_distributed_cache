@@ -2,10 +2,7 @@ package it.unitn.disi.ds1.multi_level_cache.actors;
 
 import akka.actor.ActorRef;
 import akka.actor.Props;
-import it.unitn.disi.ds1.multi_level_cache.messages.JoinActorMessage;
-import it.unitn.disi.ds1.multi_level_cache.messages.JoinGroupMessage;
-import it.unitn.disi.ds1.multi_level_cache.messages.WriteConfirmMessage;
-import it.unitn.disi.ds1.multi_level_cache.messages.WriteMessage;
+import it.unitn.disi.ds1.multi_level_cache.messages.*;
 
 import java.util.List;
 import java.util.UUID;
@@ -57,6 +54,7 @@ public class L1Cache extends Cache {
                 .match(JoinActorMessage.class, this::onJoinDatabase)
                 .match(WriteMessage.class, this::onWriteMessage)
                 .match(WriteConfirmMessage.class, this::onWriteConfirmMessage)
+                .match(RefillMessage.class, this::onRefillMessage)
                 .build();
     }
 }

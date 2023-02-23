@@ -2,6 +2,7 @@ package it.unitn.disi.ds1.multi_level_cache.actors;
 
 import akka.actor.AbstractActor;
 import akka.actor.ActorRef;
+import it.unitn.disi.ds1.multi_level_cache.messages.RefillMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.WriteConfirmMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.WriteMessage;
 
@@ -13,7 +14,7 @@ public abstract class Cache extends AbstractActor {
 
     protected Map<UUID, ActorRef> writeHistory = new HashMap<>();
 
-    public String id;
+    public final String id;
 
     protected Map<Integer, Integer> cache = new HashMap<>();
 
@@ -32,7 +33,7 @@ public abstract class Cache extends AbstractActor {
 
         if (!this.writeHistory.containsKey(message.getUuid())) {
             /*
-            message is not known, so we need to add the message to our history,
+            Message is not known, so we need to add the message to our history,
             then forward to the next actor (L1 cache or database).
              */
             this.addToWriteHistory(message.getUuid());
@@ -57,6 +58,20 @@ public abstract class Cache extends AbstractActor {
             this.writeHistory.remove(message.getWriteMessageUUID());
         } else {
             // todo Error this shouldn't be
+        }
+    }
+
+    protected void onRefillMessage(RefillMessage message) {
+        System.out.printf(
+                "%s received refill message for key %d. Update if needed.\n",
+                this.id, message.getKey());
+
+        if (this.cache.containsKey(message.getKey())) {
+            // we need to update
+            this.cache.put(message.getKey(), message.getValue());
+        } else {
+            // never known this key, don't update
+            System.out.printf("%s never read/write key %d, therefore no update\n", this.id, message.getKey());
         }
     }
 
