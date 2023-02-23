@@ -46,12 +46,15 @@ public class Database extends AbstractActor {
     }
 
     private void onReadMessage(ReadMessage message) {
-        System.out.printf("Database received read message for key %d\n", message.getKey());
-        if (this.data.containsKey(message.getKey())) {
-            int value = this.data.get(message.getKey());
-            System.out.printf("Requested value is %d\n", value);
+        int key = message.getKey();
+        System.out.printf("Database received read message for key %d\n", key);
+        if (this.data.containsKey(key)) {
+            int value = this.data.get(key);
+            System.out.printf("Requested value is %d, send fill message to L1 Cache\n", value);
+            FillMessage fillMessage = new FillMessage(key, value);
+            this.getSender().tell(fillMessage, this.getSelf());
         } else {
-            System.out.printf("Database does not know about key %d\n", message.getKey());
+            System.out.printf("Database does not know about key %d\n", key);
             // todo send error response
         }
     }
