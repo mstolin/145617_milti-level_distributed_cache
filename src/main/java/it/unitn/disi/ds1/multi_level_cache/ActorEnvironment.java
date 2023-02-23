@@ -30,11 +30,12 @@ public class ActorEnvironment {
         this.sendJoinGroupMessage(this.database, this.l1Caches);
 
         List<ActorRef> allL2Caches = new ArrayList<>();
-        for (ActorRef l1Cache: this.l1Caches) {
+        for (int i = 0; i < this.l1Caches.size(); i++) {
+            ActorRef l1Cache = this.l1Caches.get(i);
             // tell l1 cache about database
             this.sendJoinActorMessage(l1Cache, this.database);
             // generate l2 caches for each l1 cache
-            List<ActorRef> l2Caches = this.initL2Caches(numOfL2Caches);
+            List<ActorRef> l2Caches = this.initL2Caches(numOfL2Caches, i);
             for (ActorRef l2Cache: l2Caches) {
                 // tell l2 cache about l1 cache
                 this.sendJoinActorMessage(l2Cache, l1Cache);
@@ -62,10 +63,10 @@ public class ActorEnvironment {
         return List.copyOf(actors);
     }
 
-    private List<ActorRef> initL2Caches(int total) {
+    private List<ActorRef> initL2Caches(int total, int l1Id) {
         List<ActorRef> actors = new ArrayList<>();
         for (int i = 0; i < total; i++) {
-            ActorRef actor = this.actorSystem.actorOf(L2Cache.props(i));
+            ActorRef actor = this.actorSystem.actorOf(L2Cache.props(l1Id, i));
             actors.add(actor);
         }
         return List.copyOf(actors);
@@ -74,7 +75,7 @@ public class ActorEnvironment {
     private List<ActorRef> initClients(int total) {
         List<ActorRef> actors = new ArrayList<>();
         for (int i = 0; i < total; i++) {
-            ActorRef actor = this.actorSystem.actorOf(Client.props());
+            ActorRef actor = this.actorSystem.actorOf(Client.props(i));
             actors.add(actor);
         }
         return List.copyOf(actors);
