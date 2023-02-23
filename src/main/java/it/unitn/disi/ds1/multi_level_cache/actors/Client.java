@@ -9,6 +9,7 @@ import it.unitn.disi.ds1.multi_level_cache.messages.WriteMessage;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
 public class Client extends AbstractActor {
 
@@ -26,6 +27,12 @@ public class Client extends AbstractActor {
         return Props.create(Client.class, () -> new Client(id));
     }
 
+    private ActorRef getRandomL2Cache() {
+        Random rand = new Random();
+        ActorRef l2Cache = this.l2Caches.get(rand.nextInt(this.l2Caches.size()));
+        return l2Cache;
+    }
+
     private void onJoinL2Cache(JoinGroupMessage message) {
         this.l2Caches = List.copyOf(message.getGroup());
         System.out.printf("%s joined group of %d L2 caches\n", this.id, this.l2Caches.size());
@@ -33,18 +40,13 @@ public class Client extends AbstractActor {
 
     private void onWriteMessage(WriteMessage message) {
         System.out.printf("%s sends write message to random L2 cache\n", this.id);
-        // just forward message for now
-        this.writeHistory.add(message);
-        ActorRef l2Cache = this.l2Caches.get(0);
-        l2Cache.tell(message, getSelf());
+
+        ActorRef l2Cache = this.getRandomL2Cache();
+        l2Cache.tell(message, this.getSelf());
     }
 
     private void onWriteConfirmMessage(WriteConfirmMessage message) {
-        System.out.printf("%s received write confirm\n", this.id);
-        WriteMessage confirmed = message.getWriteMessage();
-        if (this.writeHistory.remove(confirmed)) {
-            System.out.println("MESSAGE WAS REMOVED FROM HISTORY");
-        }
+        System.out.printf("%s received write confirm (%s)\n", this.id, message.getWriteMessageUUID().toString());
     }
 
     @Override
