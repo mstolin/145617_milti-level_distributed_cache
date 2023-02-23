@@ -2,10 +2,7 @@ package it.unitn.disi.ds1.multi_level_cache.actors;
 
 import akka.actor.AbstractActor;
 import akka.actor.ActorRef;
-import it.unitn.disi.ds1.multi_level_cache.messages.ReadMessage;
-import it.unitn.disi.ds1.multi_level_cache.messages.RefillMessage;
-import it.unitn.disi.ds1.multi_level_cache.messages.WriteConfirmMessage;
-import it.unitn.disi.ds1.multi_level_cache.messages.WriteMessage;
+import it.unitn.disi.ds1.multi_level_cache.messages.*;
 
 import java.io.Serializable;
 import java.util.HashMap;
@@ -82,11 +79,17 @@ public abstract class Cache extends AbstractActor {
         // check if we already have the value
         if (this.cache.containsKey(message.getKey())) {
             int wanted = this.cache.get(message.getKey());
-            System.out.printf("%s already knows %d (%d)", message.getKey(), wanted);
+            System.out.printf("%s already knows %d (%d)", this.id, message.getKey(), wanted);
+            // todo send read confirm message
         } else {
             System.out.printf("%s does not know about %d, forward to next\n", this.id, message.getKey());
             this.forwardMessageToNext(message);
         }
+    }
+
+    protected void onFillMessage(FillMessage message) {
+        System.out.printf("%s received fill message for {%d: %d}\n", this.id, message.getKey(), message.getValue());
+        this.cache.put(message.getKey(), message.getValue());
     }
 
 }
