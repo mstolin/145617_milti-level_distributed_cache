@@ -3,10 +3,7 @@ package it.unitn.disi.ds1.multi_level_cache.actors;
 import akka.actor.AbstractActor;
 import akka.actor.ActorRef;
 import akka.actor.Props;
-import it.unitn.disi.ds1.multi_level_cache.messages.JoinGroupMessage;
-import it.unitn.disi.ds1.multi_level_cache.messages.RefillMessage;
-import it.unitn.disi.ds1.multi_level_cache.messages.WriteConfirmMessage;
-import it.unitn.disi.ds1.multi_level_cache.messages.WriteMessage;
+import it.unitn.disi.ds1.multi_level_cache.messages.*;
 
 import java.util.HashMap;
 import java.util.List;
@@ -48,12 +45,24 @@ public class Database extends AbstractActor {
         }
     }
 
+    private void onReadMessage(ReadMessage message) {
+        System.out.printf("Database received read message for key %d\n", message.getKey());
+        if (this.data.containsKey(message.getKey())) {
+            int value = this.data.get(message.getKey());
+            System.out.printf("Requested value is %d\n", value);
+        } else {
+            System.out.printf("Database does not know about key %d\n", message.getKey());
+            // todo send error response
+        }
+    }
+
     @Override
     public Receive createReceive() {
        return this
                .receiveBuilder()
                .match(JoinGroupMessage.class, this::onJoinL1Caches)
                .match(WriteMessage.class, this::onWriteMessage)
+               .match(ReadMessage.class, this::onReadMessage)
                .build();
     }
 
