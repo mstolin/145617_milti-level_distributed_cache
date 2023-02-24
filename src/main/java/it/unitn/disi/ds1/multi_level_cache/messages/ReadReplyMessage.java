@@ -1,6 +1,8 @@
 package it.unitn.disi.ds1.multi_level_cache.messages;
 
-public class ReadReplyMessage {
+import java.io.Serializable;
+
+public class ReadReplyMessage implements Serializable {
 
     private final int key;
 
