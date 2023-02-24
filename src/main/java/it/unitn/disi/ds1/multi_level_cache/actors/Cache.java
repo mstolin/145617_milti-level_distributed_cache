@@ -21,6 +21,14 @@ public abstract class Cache extends AbstractActor {
         this.id = id;
     }
 
+    protected int getValueForKey(int key) {
+        return this.cache.get(key);
+    }
+
+    protected void setValueForKey(int key, int value) {
+        this.cache.put(key, value);
+    }
+
     protected abstract void forwardMessageToNext(Serializable message);
 
     protected abstract void forwardConfirmWriteToSender(WriteConfirmMessage message);
@@ -62,16 +70,18 @@ public abstract class Cache extends AbstractActor {
     }
 
     protected void onRefillMessage(RefillMessage message) {
+        int key = message.getKey();
+
         System.out.printf(
                 "%s received refill message for key %d. Update if needed.\n",
-                this.id, message.getKey());
+                this.id, key);
 
-        if (this.cache.containsKey(message.getKey())) {
+        if (this.cache.containsKey(key)) {
             // we need to update
-            this.cache.put(message.getKey(), message.getValue());
+            this.setValueForKey(key, message.getValue());
         } else {
             // never known this key, don't update
-            System.out.printf("%s never read/write key %d, therefore no update\n", this.id, message.getKey());
+            System.out.printf("%s never read/write key %d, therefore no update\n", this.id, key);
         }
     }
 
@@ -81,6 +91,7 @@ public abstract class Cache extends AbstractActor {
             int wanted = this.cache.get(message.getKey());
             System.out.printf("%s already knows %d (%d)", this.id, message.getKey(), wanted);
             // todo send read confirm message
+            // if this is not last level, need to send refill message, otherwise read reply
         } else {
             System.out.printf("%s does not know about %d, forward to next\n", this.id, message.getKey());
             this.forwardMessageToNext(message);
