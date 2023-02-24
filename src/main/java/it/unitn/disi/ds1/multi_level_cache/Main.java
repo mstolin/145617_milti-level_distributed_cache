@@ -1,8 +1,5 @@
 package it.unitn.disi.ds1.multi_level_cache;
 
-import akka.actor.ActorRef;
-import it.unitn.disi.ds1.multi_level_cache.messages.WriteMessage;
-
 public class Main {
 
     /**
@@ -23,9 +20,16 @@ public class Main {
                 "Multi-Level-Cache", numberOfL1Caches, numberOfL2Caches, numberOfClients);
 
         // send random write message
-        ActorRef someClient = actorEnvironment.getClients().get(0);
-        WriteMessage msg = new WriteMessage(3, 7);
-        someClient.tell(msg, null);
+        actorEnvironment.makeClientWrite(0, 3, 100);
+
+        // send random read message
+        actorEnvironment.makeClientReadAfter(10, 1, 3);
+
+        // todo Implement:
+        // Better to have some other kind of class that handles actions, then only call:
+        // ActorRef a = actorEnvironment.getRandomClient()
+        // dispatcher.sentReadMessage(a)
+        // ...
     }
 
 }

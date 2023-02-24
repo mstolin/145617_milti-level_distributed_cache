@@ -8,7 +8,11 @@ import it.unitn.disi.ds1.multi_level_cache.actors.L1Cache;
 import it.unitn.disi.ds1.multi_level_cache.actors.L2Cache;
 import it.unitn.disi.ds1.multi_level_cache.messages.JoinActorMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.JoinGroupMessage;
+import it.unitn.disi.ds1.multi_level_cache.messages.ReadMessage;
+import it.unitn.disi.ds1.multi_level_cache.messages.WriteMessage;
 
+import java.io.Serializable;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -105,6 +109,44 @@ public class ActorEnvironment {
 
     public List<ActorRef> getClients() {
         return clients;
+    }
+
+    public void makeClientRead(int clientIndex, int key) {
+        if (clientIndex > this.clients.size() - 1) {
+            // client doesn't exist
+            return;
+        }
+        ReadMessage readMessage = new ReadMessage(key);
+        ActorRef client = this.clients.get(clientIndex);
+        client.tell(readMessage, ActorRef.noSender());
+    }
+
+    public void makeClientReadAfter(long seconds, int clientIndex, int key) {
+        if (clientIndex > this.clients.size() - 1) {
+            // client doesn't exist
+            return;
+        }
+
+        ReadMessage readMessage = new ReadMessage(key);
+        ActorRef client = this.clients.get(clientIndex);
+
+        this.actorSystem.getScheduler().scheduleOnce(
+                Duration.ofSeconds(seconds),
+                client,
+                readMessage,
+                this.actorSystem.dispatcher(),
+                ActorRef.noSender()
+        );
+    }
+
+    public void makeClientWrite(int clientIndex, int key, int value) {
+        if (clientIndex > this.clients.size() - 1) {
+            // client doesn't exist
+            return;
+        }
+        WriteMessage writeMessage = new WriteMessage(key, value);
+        ActorRef client = this.clients.get(clientIndex);
+        client.tell(writeMessage, ActorRef.noSender());
     }
 
 }
