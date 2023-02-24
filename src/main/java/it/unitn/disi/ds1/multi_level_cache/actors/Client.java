@@ -3,10 +3,7 @@ package it.unitn.disi.ds1.multi_level_cache.actors;
 import akka.actor.AbstractActor;
 import akka.actor.ActorRef;
 import akka.actor.Props;
-import it.unitn.disi.ds1.multi_level_cache.messages.JoinGroupMessage;
-import it.unitn.disi.ds1.multi_level_cache.messages.ReadMessage;
-import it.unitn.disi.ds1.multi_level_cache.messages.WriteConfirmMessage;
-import it.unitn.disi.ds1.multi_level_cache.messages.WriteMessage;
+import it.unitn.disi.ds1.multi_level_cache.messages.*;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -55,6 +52,10 @@ public class Client extends AbstractActor {
         l2Cache.tell(message, this.getSelf());
     }
 
+    private void onReadReplyMessage(ReadReplyMessage message) {
+        System.out.printf("Received read reply {%d: %d}\n", message.getKey(), message.getValue());
+    }
+
     @Override
     public Receive createReceive() {
         return this
@@ -63,6 +64,7 @@ public class Client extends AbstractActor {
                 .match(WriteMessage.class, this::onWriteMessage)
                 .match(WriteConfirmMessage.class, this::onWriteConfirmMessage)
                 .match(ReadMessage.class, this::onReadMessage)
+                .match(ReadReplyMessage.class, this::onReadReplyMessage)
                 .build();
     }
 
