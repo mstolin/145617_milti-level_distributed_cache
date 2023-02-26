@@ -1,5 +1,7 @@
 package it.unitn.disi.ds1.multi_level_cache;
 
+import it.unitn.disi.ds1.multi_level_cache.environment.ClientWrapper;
+
 public class Main {
 
     /**
@@ -19,17 +21,10 @@ public class Main {
         ActorEnvironment actorEnvironment = new ActorEnvironment(
                 "Multi-Level-Cache", numberOfL1Caches, numberOfL2Caches, numberOfClients);
 
-        // send random write message
-        actorEnvironment.makeClientWrite(0, 3, 100);
-
-        // send random read message
-        actorEnvironment.makeClientReadAfter(10, 1, 3);
-
-        // todo Implement:
-        // Better to have some other kind of class that handles actions, then only call:
-        // ActorRef a = actorEnvironment.getRandomClient()
-        // dispatcher.sentReadMessage(a)
-        // ...
+        ClientWrapper firstClient = new ClientWrapper(actorEnvironment.getClients().get(0), actorEnvironment.getL2Caches());
+        ClientWrapper secondClient = new ClientWrapper(actorEnvironment.getClients().get(1), actorEnvironment.getL2Caches());
+        firstClient.sendReadMessage(3);
+        secondClient.sendWriteMessage(3, 100);
     }
 
 }
