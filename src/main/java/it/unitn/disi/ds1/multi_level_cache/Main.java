@@ -1,5 +1,6 @@
 package it.unitn.disi.ds1.multi_level_cache;
 
+import it.unitn.disi.ds1.multi_level_cache.environment.ActorEnvironment;
 import it.unitn.disi.ds1.multi_level_cache.environment.ClientWrapper;
 
 public class Main {
