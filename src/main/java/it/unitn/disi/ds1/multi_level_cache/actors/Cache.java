@@ -9,10 +9,11 @@ import java.util.*;
 
 public abstract class Cache extends AbstractActor {
 
+    private Map<UUID, WriteMessage> writeQueue = new HashMap<>();
     private Map<UUID, ActorRef> writeConfirmQueue = new HashMap<>();
     private Map<Integer, List<ActorRef>> readReplyQueue = new HashMap<>();
     private Map<Integer, List<ActorRef>> fillQueue = new HashMap<>();
-    private Map<Integer, List<ActorRef>> reFillQueue = new HashMap<>();
+    private Map<Integer, RefillMessage> reFillQueue = new HashMap<>();
     protected Map<Integer, Integer> cache = new HashMap<>();
     /**
      * Determines if this is the last level cache.
@@ -51,20 +52,14 @@ public abstract class Cache extends AbstractActor {
         }
     }
 
-    protected void responseWriteConfirmQueue(UUID uuid, WriteConfirmMessage message) {
+    protected Optional<ActorRef> responseWriteConfirmQueue(UUID uuid, WriteConfirmMessage message) {
         if (this.writeConfirmQueue.containsKey(uuid)) {
             ActorRef actor = this.writeConfirmQueue.get(uuid);
             actor.tell(message, this.getSelf());
             this.writeConfirmQueue.remove(uuid);
+            return Optional.of(actor);
         }
-    }
-
-    protected void addToWriteConfirmQueue(UUID uuid, ActorRef actor) {
-        if (!this.writeConfirmQueue.containsKey(uuid)) {
-            this.writeConfirmQueue.put(uuid, actor);
-        } else {
-            // todo Error this shouldn't be
-        }
+        return Optional.empty();
     }
 
     /**
@@ -104,8 +99,33 @@ public abstract class Cache extends AbstractActor {
         this.responseToQueue(this.fillQueue, key, message);
     }
 
-    private void responseToReFillQueue(int key, Serializable message) {
-        this.responseToQueue(this.reFillQueue, key, message);
+    private void responseToReFillQueue(int key) {
+        if (this.reFillQueue.containsKey(key)) {
+            RefillMessage message = this.reFillQueue.get(key);
+            for (ActorRef actor: this.previousLevelCaches) {
+                actor.tell(message, this.getSelf());
+            }
+            this.reFillQueue.remove(key);
+        } else {
+            // todo send error
+        }
+    }
+
+    private void responseToWriteQueue(UUID uuid) {
+        if (this.writeQueue.containsKey(uuid)) {
+            Iterator<UUID> iter = this.writeQueue.keySet().iterator();
+            while (iter.hasNext()) {
+                UUID current = iter.next();
+                if (uuid.equals(current)) {
+                    // send message to next
+                    WriteMessage message = this.writeQueue.get(current);
+                    this.next.tell(message, this.getSelf());
+                    iter.remove();
+                }
+            }
+        } else {
+            // todo error
+        }
     }
 
     private void addToQueue(Map<Integer, List<ActorRef>> queue, int key, ActorRef actor) {
@@ -128,8 +148,12 @@ public abstract class Cache extends AbstractActor {
         this.addToQueue(this.fillQueue, key, actor);
     }
 
-    private void addToReFillQueue(int key, ActorRef actor) {
-        this.addToQueue(this.reFillQueue, key, actor);
+    private void addToWriteConfirmQueue(UUID uuid, ActorRef actor) {
+        if (!this.writeConfirmQueue.containsKey(uuid)) {
+            this.writeConfirmQueue.put(uuid, actor);
+        } else {
+            // todo Error this shouldn't be
+        }
     }
 
     private void replyValueForKey(int key) {
@@ -158,19 +182,22 @@ public abstract class Cache extends AbstractActor {
 
     protected void onWriteMessage(WriteMessage message) {
         UUID uuid = message.getUuid();
-
-        // just forward message for now
         System.out.printf("%s received write message (%s), forward to next\n", this.id, uuid.toString());
 
-        // 1. add to write confirm queue
+        /*
+         This is a cache, so we have to forward the write-message until the database
+         */
+        // 1. Add to write queue
+        this.writeQueue.put(uuid, message);
+        // 2. Add sender to write confirm queue
         this.addToWriteConfirmQueue(uuid, this.getSender());
-        // 2. forward message to next
-        // todo make with queue
-        this.forwardMessageToNext(message);
+        // 3. forward message to next
+        this.responseToWriteQueue(uuid);
     }
 
     protected void onWriteConfirmMessage(WriteConfirmMessage message) {
         UUID uuid = message.getWriteMessageUUID();
+        int key = message.getKey();
         System.out.printf(
                 "%s received write confirm message (%s), forward to sender\n",
                 this.id, uuid.toString());
@@ -181,42 +208,48 @@ public abstract class Cache extends AbstractActor {
             lastly remove message from our history.
              */
             System.out.printf("%s need to forward confirm message\n", this.id);
-            this.setValueForKey(message.getKey(), message.getValue());
-            this.responseWriteConfirmQueue(uuid, message);
 
-            // send refill to all other lower level caches
-            // todo
+            // 1. Update value
+            this.setValueForKey(key, message.getValue());
+            // 2. Response confirm to sender
+            Optional<ActorRef> sender = this.responseWriteConfirmQueue(uuid, message);
+            // 3. Send refill to all other lower level caches (if lower caches exist)
+            // todo make responseToRefillQueue
+            if (!this.isLastLevelCache && sender.isPresent()) {
+                for (ActorRef lastCache: this.previousLevelCaches) {
+                    if (lastCache != sender.get()) {
+                        RefillMessage reFillMessage = new RefillMessage(key, this.getValueForKey(key));
+                        lastCache.tell(reFillMessage, this.getSelf());
+                    }
+                }
+            }
         } else {
             // todo Error this shouldn't be
         }
     }
 
     protected void onRefillMessage(RefillMessage message) {
-
-        // todo rename ReFill
-        // todo Here check if we need to write confirm for the key
-
         int key = message.getKey();
-
         System.out.printf(
                 "%s received refill message for key %d. Update if needed.\n",
                 this.id, key);
 
-        // 1. update if needed
-        // todo make own function
+        // 1. Update if needed
         if (this.cache.containsKey(key)) {
             // we need to update
             this.setValueForKey(key, message.getValue());
+
+            // 2. Now forward to previous level Caches
+            if (!this.isLastLevelCache) {
+                // 1. Add refill message to queue
+                this.reFillQueue.put(key, message);
+                // 2. Dequeue refill message queue
+                this.responseToReFillQueue(key);
+                System.out.printf("%s need to reply to last level, count: %d\n", this.id, this.previousLevelCaches.size());
+            }
         } else {
             // never known this key, don't update
             System.out.printf("%s never read/write key %d, therefore no update\n", this.id, key);
-        }
-
-        // 2. if not last level (L2), forward refill to previous level
-        // todo think about a queue here
-        if (!this.isLastLevelCache) {
-            System.out.printf("%s need to reply to last level, count: %d\n", this.id, this.previousLevelCaches.size());
-            this.replyToLastLevel(message);
         }
     }
 
