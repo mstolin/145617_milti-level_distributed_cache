@@ -15,6 +15,8 @@ public abstract class Cache extends AbstractActor {
      * for a specific key.
      */
     private Map<Integer, List<ActorRef>> readQueue = new HashMap<>();
+    private Map<Integer, List<ActorRef>> fillQueue = new HashMap<>();
+    private Map<Integer, List<ActorRef>> reFillQueue = new HashMap<>();
     protected Map<Integer, Integer> cache = new HashMap<>();
     /**
      * Determines if this is the last level cache.
@@ -69,15 +71,6 @@ public abstract class Cache extends AbstractActor {
         }
     }
 
-    private Serializable getReadReplyMessage(int key) {
-        int value = this.getValueForKey(key);
-        if (this.isLastLevelCache) {
-            return new ReadReplyMessage(key, value);
-        } else {
-            return new RefillMessage(key, value);
-        }
-    }
-
     /**
      * Responds the given message to all actors in the read queue
      * for the given key. Afterwards, it removes the actor from
@@ -86,9 +79,9 @@ public abstract class Cache extends AbstractActor {
      * @param key Key of the value that was requested
      * @param message Response message
      */
-    private void responseToReadQueue(int key, Serializable message) {
-        if (this.readQueue.containsKey(key)) {
-            List<ActorRef> actors = this.readQueue.get(key);
+    private void responseToQueue(Map<Integer, List<ActorRef>> queue, int key, Serializable message) {
+        if (queue.containsKey(key)) {
+            List<ActorRef> actors = queue.get(key);
 
             // reply
             Iterator<ActorRef> iter = actors.iterator();
@@ -100,22 +93,59 @@ public abstract class Cache extends AbstractActor {
 
             // reset queue if its empty
             if (actors.isEmpty()) {
-                this.readQueue.remove(key);
+                queue.remove(key);
             }
         } else {
             // todo throw error
         }
     }
 
-    private void addToReadQueue(int key, ActorRef actor) {
-        if (this.readQueue.containsKey(key)) {
+    private void responseToReadQueue(int key, Serializable message) {
+        this.responseToQueue(this.readQueue, key, message);
+    }
+
+    private void responseToFillQueue(int key, Serializable message) {
+        this.responseToQueue(this.fillQueue, key, message);
+    }
+
+    private void responseToReFillQueue(int key, Serializable message) {
+        this.responseToQueue(this.reFillQueue, key, message);
+    }
+
+    private void addToQueue(Map<Integer, List<ActorRef>> queue, int key, ActorRef actor) {
+        if (queue.containsKey(key)) {
             // append to existing list
-            this.readQueue.get(key).add(actor);
+            queue.get(key).add(actor);
         } else {
             // need to add new list
             List<ActorRef> actors = new ArrayList<>();
             actors.add(actor);
-            this.readQueue.put(key, actors);
+            queue.put(key, actors);
+        }
+    }
+
+    private void addToReadQueue(int key, ActorRef actor) {
+        this.addToQueue(this.readQueue, key, actor);
+    }
+
+    private void addToFillQueue(int key, ActorRef actor) {
+        this.addToQueue(this.fillQueue, key, actor);
+    }
+
+    private void addToReFillQueue(int key, ActorRef actor) {
+        this.addToQueue(this.reFillQueue, key, actor);
+    }
+
+    private void replyValueForKey(int key) {
+        int wanted = this.getValueForKey(key);
+        if (!this.isLastLevelCache) {
+            // response to fill queue
+            FillMessage fillMessage = new FillMessage(key, wanted);
+            this.responseToFillQueue(key, fillMessage);
+        } else {
+            // response to read reply queue
+            ReadReplyMessage replyMessage = new ReadReplyMessage(key, wanted);
+            this.responseToReadQueue(key, replyMessage);
         }
     }
 
@@ -166,6 +196,10 @@ public abstract class Cache extends AbstractActor {
     }
 
     protected void onRefillMessage(RefillMessage message) {
+
+        // todo rename ReFill
+        // todo Here check if we need to write confirm for the key
+
         int key = message.getKey();
 
         System.out.printf(
@@ -192,37 +226,34 @@ public abstract class Cache extends AbstractActor {
 
     protected void onReadMessage(ReadMessage message) {
         int key = message.getKey();
+        ActorRef sender = this.getSender();
+
+        if (!this.isLastLevelCache) {
+            // add l2 to fill queue
+            this.addToFillQueue(key, sender);
+        } else {
+            // add client to read reply queue
+            this.addToReadQueue(key, sender);
+        }
 
         // check if we already have the value
         if (this.cache.containsKey(key)) {
             // directly response back
             int wanted = this.getValueForKey(key);
-            System.out.printf("%s already knows %d (%d)", this.id, key, wanted);
-            Serializable replyMessage = getReadReplyMessage(key);
-            this.responseToReadQueue(key, replyMessage);
+            System.out.printf("%s already knows %d (%d)\n", this.id, key, wanted);
+            this.replyValueForKey(key);
         } else {
-            // we need to add to to the queue
-            this.addToReadQueue(key, this.getSender());
-            // and to ask next level about it
+            // ask next level about it
             System.out.printf("%s does not know about %d, forward to next\n", this.id, key);
             this.forwardMessageToNext(message);
         }
     }
 
     protected void onFillMessage(FillMessage message) {
-        int key = message.getKey();;
+        int key = message.getKey();
         System.out.printf("%s received fill message for {%d: %d}\n", this.id, message.getKey(), message.getValue());
         this.cache.put(key, message.getValue());
-
-        // if this is not last level (not L2), forward to previous group
-        // todo think about a queue here
-        if (!this.isLastLevelCache) {
-            //this.replyToLastLevel(message);
-        } else {
-            // send read reply to client
-            ReadReplyMessage readReplyMessage = new ReadReplyMessage(key, this.getValueForKey(key));
-            this.responseToReadQueue(key, readReplyMessage);
-        }
+        this.replyValueForKey(key);
     }
 
     @Override
