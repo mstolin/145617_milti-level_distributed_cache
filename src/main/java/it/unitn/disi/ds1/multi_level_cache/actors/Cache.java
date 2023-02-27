@@ -10,11 +10,7 @@ import java.util.*;
 public abstract class Cache extends AbstractActor {
 
     private Map<UUID, ActorRef> writeConfirmQueue = new HashMap<>();
-    /**
-     * The readQueue holds all actors that have requested the value
-     * for a specific key.
-     */
-    private Map<Integer, List<ActorRef>> readQueue = new HashMap<>();
+    private Map<Integer, List<ActorRef>> readReplyQueue = new HashMap<>();
     private Map<Integer, List<ActorRef>> fillQueue = new HashMap<>();
     private Map<Integer, List<ActorRef>> reFillQueue = new HashMap<>();
     protected Map<Integer, Integer> cache = new HashMap<>();
@@ -101,7 +97,7 @@ public abstract class Cache extends AbstractActor {
     }
 
     private void responseToReadQueue(int key, Serializable message) {
-        this.responseToQueue(this.readQueue, key, message);
+        this.responseToQueue(this.readReplyQueue, key, message);
     }
 
     private void responseToFillQueue(int key, Serializable message) {
@@ -125,7 +121,7 @@ public abstract class Cache extends AbstractActor {
     }
 
     private void addToReadQueue(int key, ActorRef actor) {
-        this.addToQueue(this.readQueue, key, actor);
+        this.addToQueue(this.readReplyQueue, key, actor);
     }
 
     private void addToFillQueue(int key, ActorRef actor) {
