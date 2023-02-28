@@ -11,10 +11,10 @@ public abstract class Cache extends AbstractActor {
 
     private Map<UUID, WriteMessage> writeQueue = new HashMap<>();
     private Map<UUID, ActorRef> writeConfirmQueue = new HashMap<>();
-    private Map<Integer, List<ActorRef>> readReplyQueue = new HashMap<>();
-    private Map<Integer, List<ActorRef>> fillQueue = new HashMap<>();
+    private Map<Integer, ActorRef> readReplyQueue = new HashMap<>();
+    private Map<Integer, ActorRef> fillQueue = new HashMap<>();
     private Map<Integer, RefillMessage> reFillQueue = new HashMap<>();
-    protected Map<Integer, Integer> cache = new HashMap<>();
+    private Map<Integer, Integer> cache = new HashMap<>();
     /**
      * Determines if this is the last level cache.
      * If true, this is the cache the clients talk to.
@@ -24,9 +24,9 @@ public abstract class Cache extends AbstractActor {
      * A list of all actors of the previous level.
      * Empty if this is a last level cache.
      */
-    protected List<ActorRef> previousLevelCaches;
+    private List<ActorRef> previousLevelCaches;
     /** This is either the next level cache or the database */
-    protected ActorRef next;
+    private ActorRef next;
 
     public final String id;
 
@@ -34,25 +34,29 @@ public abstract class Cache extends AbstractActor {
         this.id = id;
     }
 
-    protected int getValueForKey(int key) {
+    private int getValueForKey(int key) {
         return this.cache.get(key);
     }
 
-    protected void setValueForKey(int key, int value) {
+    private void setValueForKey(int key, int value) {
         this.cache.put(key, value);
     }
 
-    protected void forwardMessageToNext(Serializable message) {
+    private void forwardMessageToNext(Serializable message) {
         this.next.tell(message, this.getSelf());
     }
 
-    protected void replyToLastLevel(Serializable message) {
+    private void multicastToLastLevel(Serializable message) {
         for (ActorRef actor: this.previousLevelCaches) {
             actor.tell(message, this.getSelf());
         }
     }
 
-    protected Optional<ActorRef> responseWriteConfirmQueue(UUID uuid, WriteConfirmMessage message) {
+    private void sendToNext(Serializable message) {
+        this.next.tell(message, this.getSelf());
+    }
+
+    private Optional<ActorRef> responseWriteConfirmQueue(UUID uuid, WriteConfirmMessage message) {
         if (this.writeConfirmQueue.containsKey(uuid)) {
             ActorRef actor = this.writeConfirmQueue.get(uuid);
             actor.tell(message, this.getSelf());
@@ -89,14 +93,6 @@ public abstract class Cache extends AbstractActor {
         } else {
             // todo throw error
         }
-    }
-
-    private void responseToReadQueue(int key, Serializable message) {
-        this.responseToQueue(this.readReplyQueue, key, message);
-    }
-
-    private void responseToFillQueue(int key, Serializable message) {
-        this.responseToQueue(this.fillQueue, key, message);
     }
 
     private void responseToReFillQueue(int key) {
@@ -140,14 +136,6 @@ public abstract class Cache extends AbstractActor {
         }
     }
 
-    private void addToReadQueue(int key, ActorRef actor) {
-        this.addToQueue(this.readReplyQueue, key, actor);
-    }
-
-    private void addToFillQueue(int key, ActorRef actor) {
-        this.addToQueue(this.fillQueue, key, actor);
-    }
-
     private void addToWriteConfirmQueue(UUID uuid, ActorRef actor) {
         if (!this.writeConfirmQueue.containsKey(uuid)) {
             this.writeConfirmQueue.put(uuid, actor);
@@ -156,16 +144,33 @@ public abstract class Cache extends AbstractActor {
         }
     }
 
-    private void replyValueForKey(int key) {
-        int wanted = this.getValueForKey(key);
+    private void responseReadReplyMessage(int key) {
+        if (this.readReplyQueue.containsKey(key)) {
+            int value = this.getValueForKey(key);
+            ActorRef client = this.readReplyQueue.get(key);
+            ReadReplyMessage readReplyMessage = new ReadReplyMessage(key, value);
+            client.tell(readReplyMessage, this.getSelf());
+            this.readReplyQueue.remove(key);
+        }
+    }
+
+    private void responseFillMessage(int key) {
+        if (this.fillQueue.containsKey(key)) {
+            int value = this.getValueForKey(key);
+            ActorRef cache = this.fillQueue.get(key);
+            FillMessage fillMessage = new FillMessage(key, value);
+            cache.tell(fillMessage, this.getSelf());
+            this.fillQueue.remove(key);
+        }
+    }
+
+    private void responseForFillOrReadReply(int key) {
         if (!this.isLastLevelCache) {
-            // response to fill queue
-            FillMessage fillMessage = new FillMessage(key, wanted);
-            this.responseToFillQueue(key, fillMessage);
+            // forward fill to l2 cache
+            this.responseFillMessage(key);
         } else {
-            // response to read reply queue
-            ReadReplyMessage replyMessage = new ReadReplyMessage(key, wanted);
-            this.responseToReadQueue(key, replyMessage);
+            // answer read reply to client
+            this.responseReadReplyMessage(key);
         }
     }
 
@@ -180,7 +185,7 @@ public abstract class Cache extends AbstractActor {
                 this.id, this.previousLevelCaches.size());
     }
 
-    protected void onWriteMessage(WriteMessage message) {
+    private void onWriteMessage(WriteMessage message) {
         UUID uuid = message.getUuid();
         System.out.printf("%s received write message (%s), forward to next\n", this.id, uuid.toString());
 
@@ -195,7 +200,7 @@ public abstract class Cache extends AbstractActor {
         this.responseToWriteQueue(uuid);
     }
 
-    protected void onWriteConfirmMessage(WriteConfirmMessage message) {
+    private void onWriteConfirmMessage(WriteConfirmMessage message) {
         UUID uuid = message.getWriteMessageUUID();
         int key = message.getKey();
         System.out.printf(
@@ -209,8 +214,10 @@ public abstract class Cache extends AbstractActor {
              */
             System.out.printf("%s need to forward confirm message\n", this.id);
 
-            // 1. Update value
-            this.setValueForKey(key, message.getValue());
+            // 1. Update value if needed
+            if (this.cache.containsKey(key)) {
+                this.setValueForKey(key, message.getValue());
+            }
             // 2. Response confirm to sender
             Optional<ActorRef> sender = this.responseWriteConfirmQueue(uuid, message);
             // 3. Send refill to all other lower level caches (if lower caches exist)
@@ -218,7 +225,7 @@ public abstract class Cache extends AbstractActor {
             if (!this.isLastLevelCache && sender.isPresent()) {
                 for (ActorRef lastCache: this.previousLevelCaches) {
                     if (lastCache != sender.get()) {
-                        RefillMessage reFillMessage = new RefillMessage(key, this.getValueForKey(key));
+                        RefillMessage reFillMessage = new RefillMessage(key, message.getValue());
                         lastCache.tell(reFillMessage, this.getSelf());
                     }
                 }
@@ -228,7 +235,7 @@ public abstract class Cache extends AbstractActor {
         }
     }
 
-    protected void onRefillMessage(RefillMessage message) {
+    private void onRefillMessage(RefillMessage message) {
         int key = message.getKey();
         System.out.printf(
                 "%s received refill message for key %d. Update if needed.\n",
@@ -238,51 +245,54 @@ public abstract class Cache extends AbstractActor {
         if (this.cache.containsKey(key)) {
             // we need to update
             this.setValueForKey(key, message.getValue());
-
-            // 2. Now forward to previous level Caches
-            if (!this.isLastLevelCache) {
-                // 1. Add refill message to queue
-                this.reFillQueue.put(key, message);
-                // 2. Dequeue refill message queue
-                this.responseToReFillQueue(key);
-                System.out.printf("%s need to reply to last level, count: %d\n", this.id, this.previousLevelCaches.size());
-            }
         } else {
             // never known this key, don't update
             System.out.printf("%s never read/write key %d, therefore no update\n", this.id, key);
         }
+
+        // 2. Now forward to previous level Caches
+        if (!this.isLastLevelCache) {
+            // 1. Add refill message to queue
+            this.reFillQueue.put(key, message);
+            // 2. Dequeue refill message queue
+            this.responseToReFillQueue(key);
+            System.out.printf("%s need to reply to last level, count: %d\n", this.id, this.previousLevelCaches.size());
+        }
     }
 
-    protected void onReadMessage(ReadMessage message) {
+    private void onReadMessage(ReadMessage message) {
         int key = message.getKey();
-        ActorRef sender = this.getSender();
 
+        // add sender to queue
         if (!this.isLastLevelCache) {
-            // add l2 to fill queue
-            this.addToFillQueue(key, sender);
+            // add l2 cache to fill queue
+            this.fillQueue.put(key, this.getSender());
         } else {
-            // add client to read reply queue
-            this.addToReadQueue(key, sender);
+            // add to read reply queue, only for last level cache, so we can reply to client
+            this.readReplyQueue.put(key, this.getSender());
         }
 
-        // check if we already have the value
-        if (this.cache.containsKey(key)) {
-            // directly response back
+        // todo Check if our value is newer than the one by the client, if not, forward read message to get newest value
+        // check if we own a more recent value
+        if (this.cache.containsKey(key)) { // AND IS OUR NEWER OR EQUAL TO CLIENT ONE
             int wanted = this.getValueForKey(key);
             System.out.printf("%s already knows %d (%d)\n", this.id, key, wanted);
-            this.replyValueForKey(key);
+            // response accordingly
+            this.responseForFillOrReadReply(key);
         } else {
-            // ask next level about it
             System.out.printf("%s does not know about %d, forward to next\n", this.id, key);
+            // forward message to next
             this.forwardMessageToNext(message);
         }
     }
 
-    protected void onFillMessage(FillMessage message) {
+    private void onFillMessage(FillMessage message) {
         int key = message.getKey();
         System.out.printf("%s received fill message for {%d: %d}\n", this.id, message.getKey(), message.getValue());
-        this.cache.put(key, message.getValue());
-        this.replyValueForKey(key);
+        // Update value
+        this.setValueForKey(key, message.getValue());
+        // response accordingly
+        this.responseForFillOrReadReply(key);
     }
 
     @Override
