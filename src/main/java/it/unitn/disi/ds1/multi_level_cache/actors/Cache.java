@@ -9,11 +9,9 @@ import java.util.*;
 
 public abstract class Cache extends AbstractActor {
 
-    private Map<UUID, WriteMessage> writeQueue = new HashMap<>();
     private Map<UUID, ActorRef> writeConfirmQueue = new HashMap<>();
     private Map<Integer, ActorRef> readReplyQueue = new HashMap<>();
     private Map<Integer, ActorRef> fillQueue = new HashMap<>();
-    private Map<Integer, RefillMessage> reFillQueue = new HashMap<>();
     private Map<Integer, Integer> cache = new HashMap<>();
     /**
      * Determines if this is the last level cache.
@@ -46,14 +44,10 @@ public abstract class Cache extends AbstractActor {
         this.next.tell(message, this.getSelf());
     }
 
-    private void multicastToLastLevel(Serializable message) {
-        for (ActorRef actor: this.previousLevelCaches) {
+    private void multicast(Serializable message, List<ActorRef> group) {
+        for (ActorRef actor: group) {
             actor.tell(message, this.getSelf());
         }
-    }
-
-    private void sendToNext(Serializable message) {
-        this.next.tell(message, this.getSelf());
     }
 
     private Optional<ActorRef> responseWriteConfirmQueue(UUID uuid, WriteConfirmMessage message) {
@@ -64,84 +58,6 @@ public abstract class Cache extends AbstractActor {
             return Optional.of(actor);
         }
         return Optional.empty();
-    }
-
-    /**
-     * Responds the given message to all actors in the read queue
-     * for the given key. Afterwards, it removes the actor from
-     * the queue.
-     *
-     * @param key Key of the value that was requested
-     * @param message Response message
-     */
-    private void responseToQueue(Map<Integer, List<ActorRef>> queue, int key, Serializable message) {
-        if (queue.containsKey(key)) {
-            List<ActorRef> actors = queue.get(key);
-
-            // reply
-            Iterator<ActorRef> iter = actors.iterator();
-            while (iter.hasNext()) {
-                ActorRef actor = iter.next();
-                actor.tell(message, this.getSelf());
-                iter.remove();
-            }
-
-            // reset queue if its empty
-            if (actors.isEmpty()) {
-                queue.remove(key);
-            }
-        } else {
-            // todo throw error
-        }
-    }
-
-    private void responseToReFillQueue(int key) {
-        if (this.reFillQueue.containsKey(key)) {
-            RefillMessage message = this.reFillQueue.get(key);
-            for (ActorRef actor: this.previousLevelCaches) {
-                actor.tell(message, this.getSelf());
-            }
-            this.reFillQueue.remove(key);
-        } else {
-            // todo send error
-        }
-    }
-
-    private void responseToWriteQueue(UUID uuid) {
-        if (this.writeQueue.containsKey(uuid)) {
-            Iterator<UUID> iter = this.writeQueue.keySet().iterator();
-            while (iter.hasNext()) {
-                UUID current = iter.next();
-                if (uuid.equals(current)) {
-                    // send message to next
-                    WriteMessage message = this.writeQueue.get(current);
-                    this.next.tell(message, this.getSelf());
-                    iter.remove();
-                }
-            }
-        } else {
-            // todo error
-        }
-    }
-
-    private void addToQueue(Map<Integer, List<ActorRef>> queue, int key, ActorRef actor) {
-        if (queue.containsKey(key)) {
-            // append to existing list
-            queue.get(key).add(actor);
-        } else {
-            // need to add new list
-            List<ActorRef> actors = new ArrayList<>();
-            actors.add(actor);
-            queue.put(key, actors);
-        }
-    }
-
-    private void addToWriteConfirmQueue(UUID uuid, ActorRef actor) {
-        if (!this.writeConfirmQueue.containsKey(uuid)) {
-            this.writeConfirmQueue.put(uuid, actor);
-        } else {
-            // todo Error this shouldn't be
-        }
     }
 
     private void responseReadReplyMessage(int key) {
@@ -189,15 +105,9 @@ public abstract class Cache extends AbstractActor {
         UUID uuid = message.getUuid();
         System.out.printf("%s received write message (%s), forward to next\n", this.id, uuid.toString());
 
-        /*
-         This is a cache, so we have to forward the write-message until the database
-         */
-        // 1. Add to write queue
-        this.writeQueue.put(uuid, message);
-        // 2. Add sender to write confirm queue
-        this.addToWriteConfirmQueue(uuid, this.getSender());
-        // 3. forward message to next
-        this.responseToWriteQueue(uuid);
+        // Regardless of level, we add the sender to the write-confirm-queue
+        this.writeConfirmQueue.put(uuid, this.getSender());
+        this.forwardMessageToNext(message);
     }
 
     private void onWriteConfirmMessage(WriteConfirmMessage message) {
@@ -218,15 +128,16 @@ public abstract class Cache extends AbstractActor {
             if (this.cache.containsKey(key)) {
                 this.setValueForKey(key, message.getValue());
             }
+
             // 2. Response confirm to sender
             Optional<ActorRef> sender = this.responseWriteConfirmQueue(uuid, message);
+
             // 3. Send refill to all other lower level caches (if lower caches exist)
-            // todo make responseToRefillQueue
             if (!this.isLastLevelCache && sender.isPresent()) {
-                for (ActorRef lastCache: this.previousLevelCaches) {
-                    if (lastCache != sender.get()) {
-                        RefillMessage reFillMessage = new RefillMessage(key, message.getValue());
-                        lastCache.tell(reFillMessage, this.getSelf());
+                RefillMessage reFillMessage = new RefillMessage(key, message.getValue());
+                for (ActorRef cache: this.previousLevelCaches) {
+                    if (cache != sender.get()) {
+                        cache.tell(reFillMessage, this.getSelf());
                     }
                 }
             }
@@ -252,11 +163,8 @@ public abstract class Cache extends AbstractActor {
 
         // 2. Now forward to previous level Caches
         if (!this.isLastLevelCache) {
-            // 1. Add refill message to queue
-            this.reFillQueue.put(key, message);
-            // 2. Dequeue refill message queue
-            this.responseToReFillQueue(key);
             System.out.printf("%s need to reply to last level, count: %d\n", this.id, this.previousLevelCaches.size());
+            this.multicast(message, this.previousLevelCaches);
         }
     }
 
