@@ -8,11 +8,13 @@ public class RefillMessage implements Serializable {
 
     private final int value;
 
-    public RefillMessage(int key, int value) {
+    private final int updateCount;
+
+    public RefillMessage(int key, int value, int updateCount) {
         this.key = key;
         this.value = value;
+        this.updateCount = updateCount;
     }
-
 
     public int getKey() {
         return key;
@@ -20,6 +22,10 @@ public class RefillMessage implements Serializable {
 
     public int getValue() {
         return value;
+    }
+
+    public int getUpdateCount() {
+        return updateCount;
     }
 
 }

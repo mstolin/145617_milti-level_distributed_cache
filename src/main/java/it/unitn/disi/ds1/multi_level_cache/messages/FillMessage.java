@@ -8,9 +8,12 @@ public class FillMessage implements Serializable {
 
     private final int value;
 
-    public FillMessage(int key, int value) {
+    private final int updateCount;
+
+    public FillMessage(int key, int value, int updateCount) {
         this.key = key;
         this.value = value;
+        this.updateCount = updateCount;
     }
 
     public int getKey() {
@@ -19,6 +22,10 @@ public class FillMessage implements Serializable {
 
     public int getValue() {
         return value;
+    }
+
+    public int getUpdateCount() {
+        return updateCount;
     }
 
 }
