@@ -2,6 +2,7 @@ package it.unitn.disi.ds1.multi_level_cache.actors;
 
 import akka.actor.AbstractActor;
 import akka.actor.ActorRef;
+import it.unitn.disi.ds1.multi_level_cache.actors.utils.DataStore;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
 
 import java.io.Serializable;
@@ -12,7 +13,7 @@ public abstract class Cache extends AbstractActor {
     private Map<UUID, ActorRef> writeConfirmQueue = new HashMap<>();
     private Map<Integer, ActorRef> readReplyQueue = new HashMap<>();
     private Map<Integer, ActorRef> fillQueue = new HashMap<>();
-    private Map<Integer, Integer> cache = new HashMap<>();
+    private DataStore data = new DataStore();
     /**
      * Determines if this is the last level cache.
      * If true, this is the cache the clients talk to.
@@ -30,14 +31,6 @@ public abstract class Cache extends AbstractActor {
 
     public Cache(String id) {
         this.id = id;
-    }
-
-    private int getValueForKey(int key) {
-        return this.cache.get(key);
-    }
-
-    private void setValueForKey(int key, int value) {
-        this.cache.put(key, value);
     }
 
     private void forwardMessageToNext(Serializable message) {
@@ -61,20 +54,24 @@ public abstract class Cache extends AbstractActor {
     }
 
     private void responseReadReplyMessage(int key) {
-        if (this.readReplyQueue.containsKey(key)) {
-            int value = this.getValueForKey(key);
+        Optional<Integer> value = this.data.getValueForKey(key);
+        Optional<Integer> updateCount = this.data.getUpdateCountForKey(key);
+
+        if (this.readReplyQueue.containsKey(key) && value.isPresent() && updateCount.isPresent()) {
             ActorRef client = this.readReplyQueue.get(key);
-            ReadReplyMessage readReplyMessage = new ReadReplyMessage(key, value);
+            ReadReplyMessage readReplyMessage = new ReadReplyMessage(key, value.get(), updateCount.get());
             client.tell(readReplyMessage, this.getSelf());
             this.readReplyQueue.remove(key);
         }
     }
 
     private void responseFillMessage(int key) {
-        if (this.fillQueue.containsKey(key)) {
-            int value = this.getValueForKey(key);
+        Optional<Integer> value = this.data.getValueForKey(key);
+        Optional<Integer> updateCount = this.data.getUpdateCountForKey(key);
+
+        if (this.fillQueue.containsKey(key) && value.isPresent() && updateCount.isPresent()) {
             ActorRef cache = this.fillQueue.get(key);
-            FillMessage fillMessage = new FillMessage(key, value);
+            FillMessage fillMessage = new FillMessage(key, value.get(), updateCount.get());
             cache.tell(fillMessage, this.getSelf());
             this.fillQueue.remove(key);
         }
@@ -125,8 +122,10 @@ public abstract class Cache extends AbstractActor {
             System.out.printf("%s need to forward confirm message\n", this.id);
 
             // 1. Update value if needed
-            if (this.cache.containsKey(key)) {
-                this.setValueForKey(key, message.getValue());
+            if (this.data.containsKey(key)) {
+                System.out.printf("%s Update value: {%d :%d} (given UC: %d, my UC: %d)\n",
+                        this.id, key, message.getValue(), message.getUpdateCount(), this.data.getUpdateCountForKey(key).get());
+                this.data.setValueForKey(key, message.getValue(), message.getUpdateCount());
             }
 
             // 2. Response confirm to sender
@@ -134,7 +133,7 @@ public abstract class Cache extends AbstractActor {
 
             // 3. Send refill to all other lower level caches (if lower caches exist)
             if (!this.isLastLevelCache && sender.isPresent()) {
-                RefillMessage reFillMessage = new RefillMessage(key, message.getValue());
+                RefillMessage reFillMessage = new RefillMessage(key, message.getValue(), message.getUpdateCount());
                 for (ActorRef cache: this.previousLevelCaches) {
                     if (cache != sender.get()) {
                         cache.tell(reFillMessage, this.getSelf());
@@ -153,9 +152,11 @@ public abstract class Cache extends AbstractActor {
                 this.id, key);
 
         // 1. Update if needed
-        if (this.cache.containsKey(key)) {
+        if (this.data.containsKey(key)) {
             // we need to update
-            this.setValueForKey(key, message.getValue());
+            System.out.printf("%s Update value: {%d :%d} (given UC: %d, my UC: %d)\n",
+                    this.id, key, message.getValue(), message.getUpdateCount(), this.data.getUpdateCountForKey(key).get());
+            this.data.setValueForKey(key, message.getValue(), message.getUpdateCount());
         } else {
             // never known this key, don't update
             System.out.printf("%s never read/write key %d, therefore no update\n", this.id, key);
@@ -170,6 +171,7 @@ public abstract class Cache extends AbstractActor {
 
     private void onReadMessage(ReadMessage message) {
         int key = message.getKey();
+        int updateCount = message.getUpdateCount();
 
         // add sender to queue
         if (!this.isLastLevelCache) {
@@ -180,25 +182,30 @@ public abstract class Cache extends AbstractActor {
             this.readReplyQueue.put(key, this.getSender());
         }
 
-        // todo Check if our value is newer than the one by the client, if not, forward read message to get newest value
-        // check if we own a more recent value
-        if (this.cache.containsKey(key)) { // AND IS OUR NEWER OR EQUAL TO CLIENT ONE
-            int wanted = this.getValueForKey(key);
-            System.out.printf("%s already knows %d (%d)\n", this.id, key, wanted);
+        Optional<Integer> wanted = this.data.getValueForKey(key);
+        // check if we own a more recent or an equal value
+        if (wanted.isPresent() && this.data.isNewerOrEqual(key, updateCount)) {
+            System.out.printf("%s knows an equal or more recent value: {%d :%d} (given UC: %d, my UC: %d)\n",
+                    this.id, key, wanted.get(), updateCount, this.data.getUpdateCountForKey(key).get());
             // response accordingly
             this.responseForFillOrReadReply(key);
         } else {
-            System.out.printf("%s does not know about %d, forward to next\n", this.id, key);
-            // forward message to next
+            // We either know non or an old value, so forward message to next
+            System.out.printf("%s does not know %d or has an older version (given UC: %d, my UC: %d), forward to next\n",
+                    this.id, key, updateCount, this.data.getUpdateCountForKey(key).orElse(0));
             this.forwardMessageToNext(message);
         }
     }
 
     private void onFillMessage(FillMessage message) {
+        /* No need to check the received update count. At this point, the received value is at least equal
+        to our known value. See onReadMessage why.
+         */
         int key = message.getKey();
-        System.out.printf("%s received fill message for {%d: %d}\n", this.id, message.getKey(), message.getValue());
+        System.out.printf("%s received fill message for {%d: %d} (given UC: %d, my UC: %d)\n",
+                this.id, message.getKey(), message.getValue(), message.getUpdateCount(), this.data.getUpdateCountForKey(key).orElse(0));
         // Update value
-        this.setValueForKey(key, message.getValue());
+        this.data.setValueForKey(key, message.getValue(), message.getUpdateCount());
         // response accordingly
         this.responseForFillOrReadReply(key);
     }
