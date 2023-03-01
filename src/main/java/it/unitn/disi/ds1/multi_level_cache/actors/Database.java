@@ -3,16 +3,17 @@ package it.unitn.disi.ds1.multi_level_cache.actors;
 import akka.actor.AbstractActor;
 import akka.actor.ActorRef;
 import akka.actor.Props;
+import it.unitn.disi.ds1.multi_level_cache.actors.utils.DataStore;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 
 public class Database extends AbstractActor {
 
     private List<ActorRef> l1Caches;
-    private Map<Integer, Integer> data = new HashMap<>();
+    // todo Think about a sequence number of the value here, e.g. number of writes: Map<Integer, Pair<Integer, Integer>>
+    private DataStore data = new DataStore();
 
     public Database() {
     }
@@ -27,17 +28,22 @@ public class Database extends AbstractActor {
     }
 
     private void onWriteMessage(WriteMessage message) {
-        System.out.printf("Database received write message of {%d: %d}\n", message.getKey(), message.getValue());
+        int key = message.getKey();
+        int value = message.getValue();;
+        System.out.printf("Database received write message of {%d: %d}\n", key, value);
 
         // 1. save new data
-        this.data.put(message.getKey(), message.getValue());
+        this.data.setValueForKey(key, value);
+        // we can be sure, since we set value previously
+        int updateCount = this.data.getUpdateCountForKey(key).get();
 
         // 2. send confirm to L1 sender
-        WriteConfirmMessage writeConfirmMessage = new WriteConfirmMessage(message.getUuid(), message.getKey(), message.getValue());
+        WriteConfirmMessage writeConfirmMessage = new WriteConfirmMessage(
+                message.getUuid(), message.getKey(), message.getValue(), updateCount);
         this.getSender().tell(writeConfirmMessage, this.getSelf());
 
         // 3. send refill to all other L1 caches
-        RefillMessage refillMessage = new RefillMessage(message.getKey(), message.getValue());
+        RefillMessage refillMessage = new RefillMessage(message.getKey(), message.getValue(), updateCount);
         for (ActorRef l1Cache: this.l1Caches) {
             if (l1Cache != this.getSender()) {
                 l1Cache.tell(refillMessage, this.getSelf());
@@ -48,10 +54,12 @@ public class Database extends AbstractActor {
     private void onReadMessage(ReadMessage message) {
         int key = message.getKey();
         System.out.printf("Database received read message for key %d\n", key);
-        if (this.data.containsKey(key)) {
-            int value = this.data.get(key);
-            System.out.printf("Requested value is %d, send fill message to L1 Cache\n", value);
-            FillMessage fillMessage = new FillMessage(key, value);
+
+        Optional<Integer> value = this.data.getValueForKey(key);
+        Optional<Integer> updateCount = this.data.getUpdateCountForKey(key);
+        if (value.isPresent() && updateCount.isPresent()) {
+            System.out.printf("Requested value is %d, send fill message to L1 Cache\n", value.get());
+            FillMessage fillMessage = new FillMessage(key, value.get(), updateCount.get());
             this.getSender().tell(fillMessage, this.getSelf());
         } else {
             System.out.printf("Database does not know about key %d\n", key);
