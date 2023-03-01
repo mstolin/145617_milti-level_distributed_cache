@@ -22,8 +22,8 @@ public class Database extends AbstractActor {
         return Props.create(Database.class, () -> new Database());
     }
 
-    private void onJoinL1Caches(JoinGroupMessage message) {
-        this.l1Caches = List.copyOf(message.getGroup());
+    private void onJoinL1Caches(JoinL1CachesMessage message) {
+        this.l1Caches = List.copyOf(message.getL1Caches());
         System.out.printf("Database joined group of %d L1 caches\n", this.l1Caches.size());
     }
 
@@ -71,7 +71,7 @@ public class Database extends AbstractActor {
     public Receive createReceive() {
        return this
                .receiveBuilder()
-               .match(JoinGroupMessage.class, this::onJoinL1Caches)
+               .match(JoinL1CachesMessage.class, this::onJoinL1Caches)
                .match(WriteMessage.class, this::onWriteMessage)
                .match(ReadMessage.class, this::onReadMessage)
                .build();

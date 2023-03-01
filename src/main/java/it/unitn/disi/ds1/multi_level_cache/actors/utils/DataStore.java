@@ -105,4 +105,8 @@ public class DataStore {
         return false;
     }
 
+    public void resetData() {
+        this.data = new HashMap<>();
+    }
+
 }

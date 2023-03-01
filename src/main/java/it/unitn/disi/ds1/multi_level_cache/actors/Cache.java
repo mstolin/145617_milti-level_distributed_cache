@@ -2,39 +2,49 @@ package it.unitn.disi.ds1.multi_level_cache.actors;
 
 import akka.actor.AbstractActor;
 import akka.actor.ActorRef;
+import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.actors.utils.DataStore;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
 
 import java.io.Serializable;
 import java.util.*;
 
-public abstract class Cache extends AbstractActor {
+public class Cache extends AbstractActor {
 
-    private Map<UUID, ActorRef> writeConfirmQueue = new HashMap<>();
-    private Map<Integer, ActorRef> readReplyQueue = new HashMap<>();
-    private Map<Integer, ActorRef> fillQueue = new HashMap<>();
-    private DataStore data = new DataStore();
+    private ActorRef database;
+    private ActorRef mainL1Cache;
+    /** Contains all L1 caches except the one defined in mainL1Cache */
+    private List<ActorRef> l1Caches;
+    private List<ActorRef> l2Caches;
     /**
      * Determines if this is the last level cache.
      * If true, this is the cache the clients talk to.
      */
-    protected boolean isLastLevelCache = false;
-    /**
-     * A list of all actors of the previous level.
-     * Empty if this is a last level cache.
-     */
-    private List<ActorRef> previousLevelCaches;
+    private final boolean isLastLevelCache;
+    private Map<UUID, ActorRef> writeConfirmQueue = new HashMap<>();
+    private Map<Integer, ActorRef> readReplyQueue = new HashMap<>();
+    private Map<Integer, ActorRef> fillQueue = new HashMap<>();
+    private DataStore data = new DataStore();
     /** This is either the next level cache or the database */
-    private ActorRef next;
+    private boolean hasCrashed = false;
 
     public final String id;
 
-    public Cache(String id) {
+    static public Props props(String id, boolean isLastLevelCache) {
+        return Props.create(Cache.class, () -> new Cache(id, isLastLevelCache));
+    }
+
+    public Cache(String id, boolean isLastLevelCache) {
         this.id = id;
+        this.isLastLevelCache = isLastLevelCache;
     }
 
     private void forwardMessageToNext(Serializable message) {
-        this.next.tell(message, this.getSelf());
+        if (this.isLastLevelCache) {
+            this.mainL1Cache.tell(message, this.getSelf());
+        } else {
+            this.database.tell(message, this.getSelf());
+        }
     }
 
     private void multicast(Serializable message, List<ActorRef> group) {
@@ -87,18 +97,32 @@ public abstract class Cache extends AbstractActor {
         }
     }
 
-    protected void onJoinNext(JoinActorMessage message) {
-        this.next = message.getActor();
-        System.out.printf("%s joined group of next actor\n", this.id);
+    protected void onJoinDatabase(JoinDatabaseMessage message) {
+        this.database = message.getDatabase();
+        System.out.printf("%s joined database\n", this.id);
     }
 
-    private void onJoinPreviousGroup(JoinGroupMessage message) {
-        this.previousLevelCaches = List.copyOf(message.getGroup());
-        System.out.printf("%s joined group of %d previous level caches\n",
-                this.id, this.previousLevelCaches.size());
+    protected void onJoinMainL1Cache(JoinMainL1CacheMessage message) {
+        this.mainL1Cache = message.getL1Cache();
+        System.out.printf("%s joined main L1 cache\n", this.id);
+    }
+
+    private void onJoinL1Caches(JoinL1CachesMessage message) {
+        this.l1Caches = message.getL1Caches();
+        System.out.printf("%s joined group of %d L1 caches\n", this.id, this.l1Caches.size());
+    }
+
+    private void onJoinL2Caches(JoinL2CachesMessage message) {
+        this.l2Caches = message.getL2Caches();
+        System.out.printf("%s joined group of %d L2 caches\n", this.id, this.l2Caches.size());
     }
 
     private void onWriteMessage(WriteMessage message) {
+        if (this.hasCrashed) {
+            // Can't do anything
+            return;
+        }
+
         UUID uuid = message.getUuid();
         System.out.printf("%s received write message (%s), forward to next\n", this.id, uuid.toString());
 
@@ -108,6 +132,11 @@ public abstract class Cache extends AbstractActor {
     }
 
     private void onWriteConfirmMessage(WriteConfirmMessage message) {
+        if (this.hasCrashed) {
+            // Can't do anything
+            return;
+        }
+
         UUID uuid = message.getWriteMessageUUID();
         int key = message.getKey();
         System.out.printf(
@@ -131,10 +160,10 @@ public abstract class Cache extends AbstractActor {
             // 2. Response confirm to sender
             Optional<ActorRef> sender = this.responseWriteConfirmQueue(uuid, message);
 
-            // 3. Send refill to all other lower level caches (if lower caches exist)
+            // 3. Send refill to all L2 caches (if lower caches exist)
             if (!this.isLastLevelCache && sender.isPresent()) {
                 RefillMessage reFillMessage = new RefillMessage(key, message.getValue(), message.getUpdateCount());
-                for (ActorRef cache: this.previousLevelCaches) {
+                for (ActorRef cache: this.l2Caches) {
                     if (cache != sender.get()) {
                         cache.tell(reFillMessage, this.getSelf());
                     }
@@ -146,6 +175,11 @@ public abstract class Cache extends AbstractActor {
     }
 
     private void onRefillMessage(RefillMessage message) {
+        if (this.hasCrashed) {
+            // Can't do anything
+            return;
+        }
+
         int key = message.getKey();
         System.out.printf(
                 "%s received refill message for key %d. Update if needed.\n",
@@ -164,12 +198,17 @@ public abstract class Cache extends AbstractActor {
 
         // 2. Now forward to previous level Caches
         if (!this.isLastLevelCache) {
-            System.out.printf("%s need to reply to last level, count: %d\n", this.id, this.previousLevelCaches.size());
-            this.multicast(message, this.previousLevelCaches);
+            System.out.printf("%s need to reply to L2 caches, count: %d\n", this.id, this.l2Caches.size());
+            this.multicast(message, this.l2Caches);
         }
     }
 
     private void onReadMessage(ReadMessage message) {
+        if (this.hasCrashed) {
+            // Can't do anything
+            return;
+        }
+
         int key = message.getKey();
         int updateCount = message.getUpdateCount();
 
@@ -198,6 +237,11 @@ public abstract class Cache extends AbstractActor {
     }
 
     private void onFillMessage(FillMessage message) {
+        if (this.hasCrashed) {
+            // Can't do anything
+            return;
+        }
+
         /* No need to check the received update count. At this point, the received value is at least equal
         to our known value. See onReadMessage why.
          */
@@ -210,17 +254,25 @@ public abstract class Cache extends AbstractActor {
         this.responseForFillOrReadReply(key);
     }
 
+    private void onCrashMessage(CrashMessage message) {
+        this.hasCrashed = true;
+        this.data.resetData();
+    }
+
     @Override
     public Receive createReceive() {
         return this
                 .receiveBuilder()
-                .match(JoinActorMessage.class, this::onJoinNext)
-                .match(JoinGroupMessage.class, this::onJoinPreviousGroup)
+                .match(JoinDatabaseMessage.class, this::onJoinDatabase)
+                .match(JoinMainL1CacheMessage.class, this::onJoinMainL1Cache)
+                .match(JoinL1CachesMessage.class, this::onJoinL1Caches)
+                .match(JoinL2CachesMessage.class, this::onJoinL2Caches)
                 .match(WriteMessage.class, this::onWriteMessage)
                 .match(WriteConfirmMessage.class, this::onWriteConfirmMessage)
                 .match(RefillMessage.class, this::onRefillMessage)
                 .match(ReadMessage.class, this::onReadMessage)
                 .match(FillMessage.class, this::onFillMessage)
+                .match(CrashMessage.class, this::onCrashMessage)
                 .build();
     }
 
