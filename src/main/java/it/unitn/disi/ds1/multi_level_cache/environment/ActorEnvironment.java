@@ -111,42 +111,4 @@ public class ActorEnvironment {
         return clients;
     }
 
-    public void makeClientRead(int clientIndex, int key) {
-        if (clientIndex > this.clients.size() - 1) {
-            // client doesn't exist
-            return;
-        }
-        ReadMessage readMessage = new ReadMessage(key);
-        ActorRef client = this.clients.get(clientIndex);
-        client.tell(readMessage, ActorRef.noSender());
-    }
-
-    public void makeClientReadAfter(long seconds, int clientIndex, int key) {
-        if (clientIndex > this.clients.size() - 1) {
-            // client doesn't exist
-            return;
-        }
-
-        ReadMessage readMessage = new ReadMessage(key);
-        ActorRef client = this.clients.get(clientIndex);
-
-        this.actorSystem.getScheduler().scheduleOnce(
-                Duration.ofSeconds(seconds),
-                client,
-                readMessage,
-                this.actorSystem.dispatcher(),
-                ActorRef.noSender()
-        );
-    }
-
-    public void makeClientWrite(int clientIndex, int key, int value) {
-        if (clientIndex > this.clients.size() - 1) {
-            // client doesn't exist
-            return;
-        }
-        WriteMessage writeMessage = new WriteMessage(key, value);
-        ActorRef client = this.clients.get(clientIndex);
-        client.tell(writeMessage, ActorRef.noSender());
-    }
-
 }

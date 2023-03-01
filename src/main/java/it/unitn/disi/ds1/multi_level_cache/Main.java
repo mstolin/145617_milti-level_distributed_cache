@@ -18,14 +18,24 @@ public class Main {
      */
     private static final Integer numberOfClients = 4;
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
         ActorEnvironment actorEnvironment = new ActorEnvironment(
                 "Multi-Level-Cache", numberOfL1Caches, numberOfL2Caches, numberOfClients);
 
         ClientWrapper firstClient = new ClientWrapper(actorEnvironment.getClients().get(0), actorEnvironment.getL2Caches());
         ClientWrapper secondClient = new ClientWrapper(actorEnvironment.getClients().get(1), actorEnvironment.getL2Caches());
-        firstClient.sendReadMessage(3);
-        secondClient.sendWriteMessage(3, 100);
+
+        System.out.println("### WRITE KEY 3 ###");
+        firstClient.sendWriteMessage(3, 100, 0);
+        Thread.sleep(4000);
+        System.out.println("### READ KEY 3 ###");
+        secondClient.sendReadMessage(3, 5);
+        Thread.sleep(4000);
+        System.out.println("### READ KEY 3 AGAIN ###");
+        secondClient.sendReadMessage(3, 5);
+
+        Thread.sleep(4000);
+        System.exit(0);
     }
 
 }

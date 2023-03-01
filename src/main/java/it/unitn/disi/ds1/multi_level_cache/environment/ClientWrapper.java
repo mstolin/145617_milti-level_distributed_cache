@@ -1,6 +1,8 @@
 package it.unitn.disi.ds1.multi_level_cache.environment;
 
 import akka.actor.ActorRef;
+import it.unitn.disi.ds1.multi_level_cache.messages.InstantiateReadMessage;
+import it.unitn.disi.ds1.multi_level_cache.messages.InstantiateWriteMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.ReadMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.WriteMessage;
 
@@ -33,13 +35,13 @@ public class ClientWrapper {
     }
 
     private void sendReadMessage(int key, ActorRef l2Cache) {
-        ReadMessage message = new ReadMessage(key);
-        this.actor.tell(message, l2Cache);
+        InstantiateReadMessage message = new InstantiateReadMessage(key, l2Cache);
+        this.actor.tell(message, ActorRef.noSender());
     }
 
     private void sendWriteMessage(int key, int value, ActorRef l2Cache) {
-        WriteMessage message = new WriteMessage(key, value);
-        this.actor.tell(message, l2Cache);
+        InstantiateWriteMessage message = new InstantiateWriteMessage(key, value, l2Cache);
+        this.actor.tell(message, ActorRef.noSender());
     }
 
     public void sendReadMessage(int key, int l2Index) throws NoSuchElementException {
