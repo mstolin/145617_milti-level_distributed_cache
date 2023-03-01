@@ -8,10 +8,16 @@ class DataEntry {
 
     private int value;
 
-    private int updateCount = 0;
+    /** The updateCount shows how often the value has been written. 1 by default.*/
+    private int updateCount = 1;
 
     public DataEntry(int value) {
         this.value = value;
+    }
+
+    public DataEntry(int value, int updateCount) {
+        this.value = value;
+        this.updateCount = updateCount;
     }
 
     public int getValue() {
@@ -20,6 +26,14 @@ class DataEntry {
 
     public int getUpdateCount() {
         return updateCount;
+    }
+
+    public void setValue(int value) {
+        this.value = value;
+    }
+
+    public void setUpdateCount(int updateCount) {
+        this.updateCount = updateCount;
     }
 
     public void updateValue(int value) {
@@ -51,6 +65,17 @@ public class DataStore {
         }
     }
 
+    public void setValueForKey(int key, int value, int updateCount) {
+        if (this.containsKey(key)) {
+            // update
+            this.getData(key).setValue(value);
+            this.getData(key).setUpdateCount(updateCount);
+        } else {
+            // set new
+            this.data.put(key, new DataEntry(value, updateCount));
+        }
+    }
+
     public Optional<Integer> getValueForKey(int key) {
         if (this.containsKey(key)) {
             int value = this.getData(key).getValue();
@@ -65,6 +90,19 @@ public class DataStore {
             return Optional.of(updateCount);
         }
         return Optional.empty();
+    }
+
+    public boolean isNewerOrEqual(int key, int updateCount) {
+        if (updateCount <= 0) {
+            // if it is 0, then it has never been written
+            return false;
+        }
+
+        Optional<Integer> currentUpdateCount = this.getUpdateCountForKey(key);
+        if (currentUpdateCount.isPresent()) {
+            return currentUpdateCount.get() >= updateCount;
+        }
+        return false;
     }
 
 }
