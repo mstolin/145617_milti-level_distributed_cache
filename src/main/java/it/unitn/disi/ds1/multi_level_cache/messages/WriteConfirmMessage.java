@@ -8,11 +8,13 @@ public class WriteConfirmMessage implements Serializable {
     private final UUID writeMessageUUID;
     private final int key;
     private final int value;
+    private final int updateCount;
 
-    public WriteConfirmMessage(UUID writeMessageUUID, int key, int value) {
+    public WriteConfirmMessage(UUID writeMessageUUID, int key, int value, int updateCount) {
         this.writeMessageUUID = writeMessageUUID;
         this.key = key;
         this.value = value;
+        this.updateCount = updateCount;
     }
 
     public UUID getWriteMessageUUID() {
@@ -26,4 +28,9 @@ public class WriteConfirmMessage implements Serializable {
     public int getValue() {
         return value;
     }
+
+    public int getUpdateCount() {
+        return updateCount;
+    }
+
 }

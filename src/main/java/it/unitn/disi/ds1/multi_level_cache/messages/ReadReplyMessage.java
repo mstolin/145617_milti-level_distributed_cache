@@ -8,9 +8,12 @@ public class ReadReplyMessage implements Serializable {
 
     private final int value;
 
-    public ReadReplyMessage(int key, int value) {
+    private final int updateCount;
+
+    public ReadReplyMessage(int key, int value, int updateCount) {
         this.key = key;
         this.value = value;
+        this.updateCount = updateCount;
     }
 
 
@@ -20,6 +23,10 @@ public class ReadReplyMessage implements Serializable {
 
     public int getValue() {
         return value;
+    }
+
+    public int getUpdateCount() {
+        return updateCount;
     }
 
 }

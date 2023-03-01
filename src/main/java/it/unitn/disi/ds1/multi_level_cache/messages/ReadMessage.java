@@ -6,12 +6,19 @@ public class ReadMessage implements Serializable {
 
     private final int key;
 
-    public ReadMessage(int key) {
+    private final int updateCount;
+
+    public ReadMessage(int key, int updateCount) {
         this.key = key;
+        this.updateCount = updateCount;
     }
 
     public int getKey() {
         return key;
+    }
+
+    public int getUpdateCount() {
+        return updateCount;
     }
 
 }
