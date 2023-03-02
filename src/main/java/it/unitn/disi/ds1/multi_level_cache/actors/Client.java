@@ -6,15 +6,15 @@ import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.actors.utils.DataStore;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
 
-import java.util.List;
-import java.util.Timer;
-import java.util.TimerTask;
+import java.io.Serializable;
+import java.util.*;
 
 public class Client extends AbstractActor {
 
     /** List of level 2 caches, the client knows about */
     private List<ActorRef> l2Caches;
     private DataStore data = new DataStore();
+    private Map<Serializable, ActorRef> messageQueue = new HashMap<>();
     private Timer timer;
     final String id;
 
@@ -26,13 +26,21 @@ public class Client extends AbstractActor {
         return Props.create(Client.class, () -> new Client(id));
     }
 
-    private void startTimeout() {
-        // todo startTimeout(message)
+    private Optional<ActorRef> getAnotherL2Cache(ActorRef currentL2Cache) {
+        for (ActorRef l2Cache: this.l2Caches) {
+            if (l2Cache != currentL2Cache) {
+                return Optional.of(l2Cache);
+            }
+        }
+        return Optional.empty();
+    }
+
+    private void startTimeout(Serializable message) {
         this.timer = new Timer();
         this.timer.schedule(new TimerTask() {
             @Override
             public void run() {
-                System.out.println("4 SEK SPAETER");
+                receiverTimedOut(message);
             }
         }, 4000);
     }
@@ -42,8 +50,19 @@ public class Client extends AbstractActor {
         this.timer = null;
     }
 
-    private void receiverTimedOut() {
+    private void receiverTimedOut(Serializable message) {
         // just use another L2 cache
+        Optional<ActorRef> l2Cache = this.getAnotherL2Cache(this.messageQueue.get(message));
+        if (l2Cache.isPresent()) {
+            // resend message
+            System.out.printf("%s resend message to another L2\n", this.id);
+            l2Cache.get().tell(message, this.getSelf());
+            this.startTimeout(message);
+        } else {
+            // Seems like no actor is available
+            System.out.printf("%s didn't found any available L2 caches\n", this.id);
+            this.stopTimeout();
+        }
     }
 
     private void onJoinL2Caches(JoinL2CachesMessage message) {
@@ -52,10 +71,18 @@ public class Client extends AbstractActor {
     }
 
     private void onInstantiateWriteMessage(InstantiateWriteMessage message) {
+        ActorRef l2Cache = message.getL2Cache();
+        if (!this.l2Caches.contains(l2Cache)) {
+            System.out.printf("%s The given L2 Cache is unknown\n", this.id);
+            return;
+        }
         System.out.printf("%s sends write message to L2 cache\n", this.id);
+
+        // todo add l2 cache to some queue
+
         WriteMessage writeMessage = new WriteMessage(message.getKey(), message.getValue());
-        message.getL2Cache().tell(writeMessage, this.getSelf());
-        this.startTimeout();
+        l2Cache.tell(writeMessage, this.getSelf());
+        this.startTimeout(writeMessage);
     }
 
     private void onWriteConfirmMessage(WriteConfirmMessage message) {
@@ -71,11 +98,19 @@ public class Client extends AbstractActor {
     }
 
     private void onInstantiateReadMessage(InstantiateReadMessage message) {
-        System.out.printf("%s send read message to L2 Cache\n", this.id);
+        ActorRef l2Cache = message.getL2Cache();
+        if (!this.l2Caches.contains(l2Cache)) {
+            System.out.printf("%s The given L2 Cache is unknown\n", this.id);
+            return;
+        }
         int key = message.getKey();
+        System.out.printf("%s send read message to L2 Cache for key %d\n", this.id, key);
+
         ReadMessage readMessage = new ReadMessage(key, this.data.getUpdateCountForKey(key).orElse(0));
-        message.getL2Cache().tell(readMessage, this.getSelf());
-        this.startTimeout();
+        this.messageQueue.put(readMessage, l2Cache);
+
+        l2Cache.tell(readMessage, this.getSelf());
+        this.startTimeout(readMessage);
     }
 
     private void onReadReplyMessage(ReadReplyMessage message) {
