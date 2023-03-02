@@ -47,11 +47,11 @@ public class ActorEnvironment {
             // get l2s
             int startOfL2s = i * numOfL2Caches;
             int endOfL2s = startOfL2s + numOfL2Caches;
-            List<ActorRef> l2CachesForL1 = this.l2Caches.subList(startOfL2s, endOfL2s); // TODO THERE IS A BUG L2-1-1 send to L1-2 should send to L1-1
+            List<ActorRef> l2CachesForL1 = this.l2Caches.subList(startOfL2s, endOfL2s);
             // tell l1 about l2s
             this.sendJoinL2CachesMessage(l1Cache, l2CachesForL1);
 
-            for (ActorRef l2Cache: l2Caches) {
+            for (ActorRef l2Cache: l2CachesForL1) {
                 // tell l2 about l1
                 this.sendJoinMainL1CacheMessage(l2Cache, l1Cache);
                 // tell l2 about the db
