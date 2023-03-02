@@ -7,6 +7,8 @@ import it.unitn.disi.ds1.multi_level_cache.messages.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.Random;
 
 public class ActorEnvironment {
 
@@ -58,7 +60,7 @@ public class ActorEnvironment {
                 this.sendJoinDatabaseMessage(l2Cache);
                 // tell l2 about other l1 caches
                 List<ActorRef> otherL1Caches = this.l1Caches.stream().filter((l1) -> l1 != l1Cache).toList();
-                this.sendJoinL1CachesMessage(l2Cache, otherL1Caches); // todo IS THIS NECESSAR?, CHECK IF L@ SENDS TO DB ON TIMEOUT
+                this.sendJoinL1CachesMessage(l2Cache, otherL1Caches); // todo IS THIS NECESSARY?, CHECK IF L1 SENDS TO DB ON TIMEOUT
             }
         }
 
@@ -68,22 +70,22 @@ public class ActorEnvironment {
         }
     }
 
-    public void sendJoinDatabaseMessage(ActorRef actor) {
+    private void sendJoinDatabaseMessage(ActorRef actor) {
         JoinDatabaseMessage message = new JoinDatabaseMessage(this.database);
         actor.tell(message, ActorRef.noSender());
     }
 
-    public void sendJoinMainL1CacheMessage(ActorRef actor, ActorRef mainL1Cache) {
+    private void sendJoinMainL1CacheMessage(ActorRef actor, ActorRef mainL1Cache) {
         JoinMainL1CacheMessage message = new JoinMainL1CacheMessage(mainL1Cache);
         actor.tell(message, ActorRef.noSender());
     }
 
-    public void sendJoinL1CachesMessage(ActorRef actor, List<ActorRef> l1Caches) {
+    private void sendJoinL1CachesMessage(ActorRef actor, List<ActorRef> l1Caches) {
         JoinL1CachesMessage message = new JoinL1CachesMessage(l1Caches);
         actor.tell(message, ActorRef.noSender());
     }
 
-    public void sendJoinL2CachesMessage(ActorRef actor, List<ActorRef> l2Caches) {
+    private void sendJoinL2CachesMessage(ActorRef actor, List<ActorRef> l2Caches) {
         JoinL2CachesMessage message = new JoinL2CachesMessage(l2Caches);
         actor.tell(message, ActorRef.noSender());
     }
@@ -132,16 +134,6 @@ public class ActorEnvironment {
         return String.format("Client-%d", id);
     }
 
-    /*private void sendJoinActorMessage(ActorRef receiver, ActorRef actorToJoin) {
-        JoinActorMessage joinActorMessage = new JoinActorMessage(actorToJoin);
-        receiver.tell(joinActorMessage, null);
-    }
-
-    private void sendJoinGroupMessage(ActorRef receiver, List<ActorRef> groupToJoin) {
-        JoinGroupMessage joinGroupMessage = new JoinGroupMessage(groupToJoin);
-        receiver.tell(joinGroupMessage, null);
-    }*/
-
     public ActorRef getDatabase() {
         return database;
     }
@@ -156,6 +148,56 @@ public class ActorEnvironment {
 
     public List<ActorRef> getClients() {
         return clients;
+    }
+
+    private Optional<ActorRef> getActorFromList(List<ActorRef> actors, int index) {
+        if (index >= actors.size()) {
+            return Optional.empty();
+        }
+        ActorRef actor = actors.get(index);
+        return Optional.of(actor);
+    }
+
+    public Optional<ActorRef> getClient(int index) {
+        return this.getActorFromList(this.clients, index);
+    }
+
+    public ActorRef getRandomClient() {
+        Random rand = new Random();
+        return this.clients.get(rand.nextInt(this.clients.size()));
+    }
+
+    public Optional<ActorRef> getL1Cache(int index) {
+        return this.getActorFromList(this.l1Caches, index);
+    }
+
+    public Optional<ActorRef> getL2Cache(int index) {
+        return this.getActorFromList(this.l2Caches, index);
+    }
+
+    public void makeClientWrite(ActorRef client, ActorRef l2Cache, int key, int value) {
+        InstantiateWriteMessage message = new InstantiateWriteMessage(key, value, l2Cache);
+        client.tell(message, ActorRef.noSender());
+    }
+
+    public void makeRandomClientWrite(ActorRef l2Cache, int key, int value) {
+        ActorRef randomClient = this.getRandomClient();
+        this.makeClientWrite(randomClient, l2Cache, key, value);
+    }
+
+    public void makeClientRead(ActorRef client, ActorRef l2Cache, int key) {
+        InstantiateReadMessage message = new InstantiateReadMessage(key, l2Cache);
+        client.tell(message, ActorRef.noSender());
+    }
+
+    public void makeRandomClientRead(ActorRef l2Cache, int key) {
+        ActorRef randomClient = this.getRandomClient();
+        this.makeClientRead(randomClient, l2Cache, key);
+    }
+
+    public void makeCacheCrash(ActorRef cache) {
+        CrashMessage message = new CrashMessage();
+        cache.tell(message, ActorRef.noSender());
     }
 
 }
