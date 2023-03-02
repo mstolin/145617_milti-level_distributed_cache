@@ -257,6 +257,7 @@ public class Cache extends AbstractActor {
     private void onCrashMessage(CrashMessage message) {
         this.hasCrashed = true;
         this.data.resetData();
+        System.out.printf("%s has crashed\n", this.id);
     }
 
     @Override
