@@ -13,9 +13,11 @@ public class Cache extends AbstractActor {
 
     private ActorRef database;
     private ActorRef mainL1Cache;
+    private Timer timer;
     /** Contains all L1 caches except the one defined in mainL1Cache */
     private List<ActorRef> l1Caches;
     private List<ActorRef> l2Caches;
+    private Serializable currentMessage;
     /**
      * Determines if this is the last level cache.
      * If true, this is the cache the clients talk to.
@@ -45,12 +47,26 @@ public class Cache extends AbstractActor {
         } else {
             this.database.tell(message, this.getSelf());
         }
+
+        // start timeout timer
+        this.currentMessage = message;
+        this.startTimeout();
     }
 
     private void multicast(Serializable message, List<ActorRef> group) {
         for (ActorRef actor: group) {
             actor.tell(message, this.getSelf());
         }
+
+        // todo think about timeout
+    }
+
+    private void crash() {
+        this.hasCrashed = true;
+        this.data.resetData();
+        this.currentMessage = null;
+        this.fillQueue = new HashMap<>();
+        this.readReplyQueue = new HashMap<>();
     }
 
     private Optional<ActorRef> responseWriteConfirmQueue(UUID uuid, WriteConfirmMessage message) {
@@ -94,6 +110,31 @@ public class Cache extends AbstractActor {
         } else {
             // answer read reply to client
             this.responseReadReplyMessage(key);
+        }
+    }
+
+    private void startTimeout() {
+        this.timer = new Timer();
+        this.timer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                receiverTimedOut();
+            }
+        }, 4000);
+    }
+
+    private void stopTimeout() {
+        this.timer.cancel();
+        this.timer = null;
+        this.currentMessage = null;
+    }
+
+    private void receiverTimedOut() {
+        if (this.isLastLevelCache) {
+            // l2 caches are supposed to call directly the database when l1 cache has crashed
+            this.database.tell(this.currentMessage, this.getSelf());
+        } else {
+
         }
     }
 
@@ -186,7 +227,7 @@ public class Cache extends AbstractActor {
                 this.id, key);
 
         // 1. Update if needed
-        if (this.data.containsKey(key)) {
+        if (this.data.containsKey(key) && !this.data.isNewerOrEqual(key, message.getUpdateCount())) {
             // we need to update
             System.out.printf("%s Update value: {%d :%d} (given UC: %d, my UC: %d)\n",
                     this.id, key, message.getValue(), message.getUpdateCount(), this.data.getUpdateCountForKey(key).get());
@@ -204,13 +245,14 @@ public class Cache extends AbstractActor {
     }
 
     private void onReadMessage(ReadMessage message) {
-        if (this.hasCrashed) {
+        if (this.hasCrashed || this.currentMessage != null) {
             // Can't do anything
             return;
         }
 
         int key = message.getKey();
         int updateCount = message.getUpdateCount();
+        System.out.printf("%s Received read message for key %d (UC: %d)\n", this.id, key, updateCount);
 
         // add sender to queue
         if (!this.isLastLevelCache) {
@@ -229,11 +271,13 @@ public class Cache extends AbstractActor {
             // response accordingly
             this.responseForFillOrReadReply(key);
         } else {
-            // We either know non or an old value, so forward message to next
+            // We either don't know the value or it's older, so forward message to next
             System.out.printf("%s does not know %d or has an older version (given UC: %d, my UC: %d), forward to next\n",
                     this.id, key, updateCount, this.data.getUpdateCountForKey(key).orElse(0));
             this.forwardMessageToNext(message);
         }
+
+
     }
 
     private void onFillMessage(FillMessage message) {
@@ -241,6 +285,8 @@ public class Cache extends AbstractActor {
             // Can't do anything
             return;
         }
+        // stop any existing timeout
+        this.stopTimeout();
 
         /* No need to check the received update count. At this point, the received value is at least equal
         to our known value. See onReadMessage why.
@@ -255,8 +301,7 @@ public class Cache extends AbstractActor {
     }
 
     private void onCrashMessage(CrashMessage message) {
-        this.hasCrashed = true;
-        this.data.resetData();
+        this.crash();
         System.out.printf("%s has crashed\n", this.id);
     }
 
