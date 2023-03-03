@@ -8,6 +8,7 @@ import it.unitn.disi.ds1.multi_level_cache.messages.*;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Random;
 
 public class Database extends AbstractActor {
 
@@ -16,10 +17,18 @@ public class Database extends AbstractActor {
     private DataStore data = new DataStore();
 
     public Database() {
+        this.setDefaultData(10);
     }
 
     static public Props props() {
         return Props.create(Database.class, () -> new Database());
+    }
+
+    private void setDefaultData(int size) {
+        for (int i = 0; i < size; i++) {
+            int value = new Random().nextInt(1000);
+            this.data.setValueForKey(i, value);
+        }
     }
 
     private void onJoinL1Caches(JoinL1CachesMessage message) {
