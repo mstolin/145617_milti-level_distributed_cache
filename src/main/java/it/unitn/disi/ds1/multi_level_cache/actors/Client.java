@@ -14,7 +14,9 @@ public class Client extends AbstractActor {
     /** List of level 2 caches, the client knows about */
     private List<ActorRef> l2Caches;
     private DataStore data = new DataStore();
-    private Map<Serializable, ActorRef> messageQueue = new HashMap<>();
+    //private Map<Serializable, ActorRef> messageQueue = new HashMap<>();
+    private Serializable currentMessage;
+    private ActorRef currentMessageReceiver;
     private Timer timer;
     final String id;
 
@@ -26,6 +28,10 @@ public class Client extends AbstractActor {
         return Props.create(Client.class, () -> new Client(id));
     }
 
+    private boolean canInstantiateNewConversation() {
+        return this.currentMessage != null || this.currentMessageReceiver != null;
+    }
+
     private Optional<ActorRef> getAnotherL2Cache(ActorRef currentL2Cache) {
         for (ActorRef l2Cache: this.l2Caches) {
             if (l2Cache != currentL2Cache) {
@@ -35,29 +41,33 @@ public class Client extends AbstractActor {
         return Optional.empty();
     }
 
-    private void startTimeout(Serializable message) {
+    private void startTimeout() {
         this.timer = new Timer();
+        // the delay has to be higher than the delay of the caches,
+        // otherwise it will timeout when a working L2 but is also
+        // waiting for crashed L1
         this.timer.schedule(new TimerTask() {
             @Override
             public void run() {
-                receiverTimedOut(message);
+                receiverTimedOut();
             }
-        }, 4000);
+        }, 10000);
     }
 
     private void stopTimeout() {
         this.timer.cancel();
         this.timer = null;
+        this.currentMessage = null;
+        this.currentMessageReceiver = null;
     }
 
-    private void receiverTimedOut(Serializable message) {
+    private void receiverTimedOut() {
         // just use another L2 cache
-        Optional<ActorRef> l2Cache = this.getAnotherL2Cache(this.messageQueue.get(message));
-        if (l2Cache.isPresent()) {
+        if (this.currentMessage != null && this.currentMessageReceiver != null) {
             // resend message
             System.out.printf("%s resend message to another L2\n", this.id);
-            l2Cache.get().tell(message, this.getSelf());
-            this.startTimeout(message);
+            this.currentMessageReceiver.tell(this.currentMessage, this.getSelf());
+            this.startTimeout();
         } else {
             // Seems like no actor is available
             System.out.printf("%s didn't found any available L2 caches\n", this.id);
@@ -71,6 +81,11 @@ public class Client extends AbstractActor {
     }
 
     private void onInstantiateWriteMessage(InstantiateWriteMessage message) {
+        if (this.canInstantiateNewConversation()) {
+            System.out.printf("%s can't instantiate new conversation, because it is waiting for response\n", this.id);
+            return;
+        }
+
         ActorRef l2Cache = message.getL2Cache();
         if (!this.l2Caches.contains(l2Cache)) {
             System.out.printf("%s The given L2 Cache is unknown\n", this.id);
@@ -82,7 +97,9 @@ public class Client extends AbstractActor {
 
         WriteMessage writeMessage = new WriteMessage(message.getKey(), message.getValue());
         l2Cache.tell(writeMessage, this.getSelf());
-        this.startTimeout(writeMessage);
+        this.currentMessage = writeMessage;
+        this.currentMessageReceiver = l2Cache;
+        this.startTimeout();
     }
 
     private void onWriteConfirmMessage(WriteConfirmMessage message) {
@@ -98,6 +115,11 @@ public class Client extends AbstractActor {
     }
 
     private void onInstantiateReadMessage(InstantiateReadMessage message) {
+        if (this.canInstantiateNewConversation()) {
+            System.out.printf("%s can't instantiate new conversation, because it is waiting for response\n", this.id);
+            return;
+        }
+
         ActorRef l2Cache = message.getL2Cache();
         if (!this.l2Caches.contains(l2Cache)) {
             System.out.printf("%s The given L2 Cache is unknown\n", this.id);
@@ -107,10 +129,11 @@ public class Client extends AbstractActor {
         System.out.printf("%s send read message to L2 Cache for key %d\n", this.id, key);
 
         ReadMessage readMessage = new ReadMessage(key, this.data.getUpdateCountForKey(key).orElse(0));
-        this.messageQueue.put(readMessage, l2Cache);
+        this.currentMessage = readMessage;
+        this.currentMessageReceiver = l2Cache;
 
         l2Cache.tell(readMessage, this.getSelf());
-        this.startTimeout(readMessage);
+        this.startTimeout();
     }
 
     private void onReadReplyMessage(ReadReplyMessage message) {
