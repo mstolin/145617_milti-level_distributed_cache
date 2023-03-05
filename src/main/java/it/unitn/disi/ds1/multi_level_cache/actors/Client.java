@@ -1,6 +1,5 @@
 package it.unitn.disi.ds1.multi_level_cache.actors;
 
-import akka.actor.AbstractActor;
 import akka.actor.ActorRef;
 import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.actors.utils.DataStore;
@@ -8,7 +7,7 @@ import it.unitn.disi.ds1.multi_level_cache.messages.*;
 
 import java.util.*;
 
-public class Client extends AbstractActor {
+public class Client extends Node {
 
     /** List of level 2 caches, the client knows about */
     private List<ActorRef> l2Caches;
@@ -18,15 +17,9 @@ public class Client extends AbstractActor {
     private boolean hasSentWriteMessage = false;
     /** Number of read messages the client is waiting for */
     private int currentReadCount = 0;
-    /** Timeout for the current write conversation */
-    private Timer writeTimeout;
-    /** Timeouts for all current read conversation */
-    private Map<Integer, Timer> readTimeouts = new HashMap<>();
-    /** The clients ID */
-    final String id;
 
     public Client(String id) {
-        this.id = id;
+        super(id);
     }
 
     static public Props props(String id) {
@@ -58,50 +51,6 @@ public class Client extends AbstractActor {
     }
 
     /**
-     * Initiates a timeout that triggers in 10 seconds.
-     *
-     * @return Timer that triggers the timeout
-     */
-    private Timer createTimeout() {
-        Timer timer = new Timer();
-        // the delay has to be higher than the delay of the caches,
-        // otherwise it will time out when a working L2 but is also
-        // waiting for crashed L1
-        String id = this.id;
-        timer.schedule(new TimerTask() {
-            @Override
-            public void run() {
-                System.out.printf("%s Message has timed out\n", id);
-            }
-        }, 10000);
-
-        return timer;
-    }
-
-    /**
-     * Stops the current write timeout, if it exists.
-     */
-    private void stopWriteTimeout() {
-        if (this.writeTimeout != null) {
-            this.writeTimeout.cancel();
-            this.writeTimeout = null;
-        }
-    }
-
-    /**
-     * Stops the read timeout for the given key, if the
-     * timeout exists.
-     *
-     * @param key Read key
-     */
-    private void stopReadTimeout(int key) {
-        if (this.readTimeouts.containsKey(key)) {
-            this.readTimeouts.get(key).cancel();
-            this.readTimeouts.remove(key);
-        }
-    }
-
-    /**
      * Sends a WriteMessage instance to the given L2 cache.
      * It also starts a write-timeout.
      *
@@ -112,8 +61,9 @@ public class Client extends AbstractActor {
     private void tellWriteMessage(ActorRef l2Cache, int key, int value) {
         WriteMessage writeMessage = new WriteMessage(key, value);
         l2Cache.tell(writeMessage, this.getSelf());
+        this.hasReceivedWriteConfirm = false;
         this.hasSentWriteMessage = true;
-        this.writeTimeout = this.createTimeout();
+        this.setTimeout(writeMessage, l2Cache);
     }
 
     /**
@@ -126,10 +76,7 @@ public class Client extends AbstractActor {
     private void tellReadMessage(ActorRef l2Cache, int key) {
         ReadMessage readMessage = new ReadMessage(key, this.data.getUpdateCountForKey(key).orElse(0));
         l2Cache.tell(readMessage, this.getSelf());
-        // start timeout
-        if (!this.readTimeouts.containsKey(key)) {
-            this.readTimeouts.put(key, this.createTimeout());
-        }
+        this.hasReceivedReadReply = false;
         // increase count
         this.currentReadCount = this.currentReadCount + 1;
     }
@@ -180,6 +127,7 @@ public class Client extends AbstractActor {
      * @param message The received WriteConfirmMessage
      */
     private void onWriteConfirmMessage(WriteConfirmMessage message) {
+        this.hasReceivedWriteConfirm = true;
         int key = message.getKey();
         int value = message.getValue();
         int updateCount = message.getUpdateCount();
@@ -187,8 +135,6 @@ public class Client extends AbstractActor {
                 this.id, key, value, updateCount, this.data.getUpdateCountForKey(key).orElse(0));
         // update value
         this.data.setValueForKey(key, value, updateCount);
-        // stop timeout
-        this.stopWriteTimeout();
         this.hasSentWriteMessage = false;
     }
 
@@ -226,6 +172,7 @@ public class Client extends AbstractActor {
      * @param message The received ReadMessage
      */
     private void onReadReplyMessage(ReadReplyMessage message) {
+        this.hasReceivedReadReply = true;
         int key = message.getKey();
         int value = message.getValue();
         int updateCount = message.getUpdateCount();
@@ -233,9 +180,19 @@ public class Client extends AbstractActor {
                 this.id, key, value, updateCount, this.data.getUpdateCountForKey(key).orElse(0));
         // update value
         this.data.setValueForKey(key, value, updateCount);
-        // stop timeout for key
         this.currentReadCount = this.currentReadCount - 1;
-        this.stopReadTimeout(key);
+    }
+
+    @Override
+    protected void onTimeout(TimeoutMessage message) {
+        if (message.getMessage() instanceof WriteMessage && !this.hasReceivedWriteConfirm) {
+            WriteMessage writeMessage = (WriteMessage) message.getMessage();
+            System.out.printf("%s - Timeout on WriteMessage for {%2d: %d}\n",
+                    this.id, writeMessage.getKey(), writeMessage.getValue());
+        } else if (message.getMessage() instanceof ReadMessage && !this.hasReceivedReadReply) {
+            ReadMessage readMessage = (ReadMessage) message.getMessage();
+            System.out.printf("%s - Timeout on ReadMessage for key %2d\n", this.id, readMessage.getKey());
+        }
     }
 
     @Override
@@ -247,6 +204,7 @@ public class Client extends AbstractActor {
                 .match(WriteConfirmMessage.class, this::onWriteConfirmMessage)
                 .match(InstantiateReadMessage.class, this::onInstantiateReadMessage)
                 .match(ReadReplyMessage.class, this::onReadReplyMessage)
+                .match(TimeoutMessage.class, this::onTimeout)
                 .build();
     }
 
