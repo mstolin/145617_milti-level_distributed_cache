@@ -1,6 +1,5 @@
 package it.unitn.disi.ds1.multi_level_cache.actors;
 
-import akka.actor.AbstractActor;
 import akka.actor.ActorRef;
 import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.actors.utils.DataStore;
@@ -9,43 +8,38 @@ import it.unitn.disi.ds1.multi_level_cache.messages.*;
 import java.io.Serializable;
 import java.util.*;
 
-public class Cache extends Node {
+public abstract class Cache extends Node {
 
     /** A direct reference to the database */
-    private ActorRef database;
+    protected ActorRef database;
     /**
      * A reference to the main L1 cache if this is a L2 cache.
      * Otherwise, null.
      */
-    private ActorRef mainL1Cache;
+    protected ActorRef mainL1Cache;
     /** Contains all L1 caches except the one defined in mainL1Cache */
-    private List<ActorRef> l1Caches;
+    private List<ActorRef> l1Caches; // todo still needed?
     /**
      * A collection if all underlying L2 caches.
      * Null if this cache is a L2 cache.
      */
-    private List<ActorRef> l2Caches;
+    protected List<ActorRef> l2Caches;
     /** The write-message this cache is currently handling */
-    private Optional<Serializable> currentWriteMessage = Optional.empty(); // todo still needed
+    protected Optional<Serializable> currentWriteMessage = Optional.empty();
     /** The sender of currentWriteMessage */
-    private Optional<ActorRef> currentWriteSender = Optional.empty();  // todo still needed
+    protected Optional<ActorRef> currentWriteSender = Optional.empty();
     /**
      * Whenever an actor sends a read message to this cache, the actor is saved to this map
      * so the cache can directly reply.
      * */
-    private Map<Serializable, ActorRef> currentReadMessages = new HashMap<>();  // todo still needed
+    protected Map<Integer, ActorRef> currentReadMessages = new HashMap<>(); // todo rename to current read sender
     /**
      * Determines if this is the last level cache.
      * If true, this is the cache the clients talk to.
      */
-    private final boolean isLastLevelCache;
-    private Map<Integer, ActorRef> fillQueue = new HashMap<>(); // todo check if still necessary
+    protected final boolean isLastLevelCache;
     /** The cached data */
-    private DataStore data = new DataStore();
-
-    static public Props props(String id, boolean isLastLevelCache) {
-        return Props.create(Cache.class, () -> new Cache(id, isLastLevelCache));
-    }
+    protected DataStore data = new DataStore();
 
     public Cache(String id, boolean isLastLevelCache) {
         super(id);
@@ -83,15 +77,7 @@ public class Cache extends Node {
         return this.currentWriteMessage.isEmpty() && this.currentReadMessages.isEmpty();
     }
 
-    private void forwardMessageToNext(Serializable message) {
-        if (this.isLastLevelCache) {
-            this.mainL1Cache.tell(message, this.getSelf());
-            this.setTimeout(message, this.mainL1Cache);
-        } else {
-            // no need for timeout, database can't crash
-            this.database.tell(message, this.getSelf());
-        }
-    }
+    abstract protected void forwardMessageToNext(Serializable message);
 
     private void forwardReadMessageToNext(Serializable message) {
         this.forwardMessageToNext(message);
@@ -109,82 +95,16 @@ public class Cache extends Node {
      * @param message
      * @param group
      */
-    private void multicast(Serializable message, List<ActorRef> group) {
+    protected void multicast(Serializable message, List<ActorRef> group) {
         for (ActorRef actor: group) {
             actor.tell(message, this.getSelf());
         }
         // todo think about timeout
     }
 
-    /**
-     * Crashes this actor. It also resets all data except the knowledge
-     * of other actors that are necessary.
-     */
-    @Override
-    protected void crash() {
-        super.crash();
-        this.data.resetData();
-        this.currentReadMessages = new HashMap<>();
-        this.currentWriteMessage = Optional.empty();
-        this.currentWriteSender = Optional.empty();
-        this.fillQueue = new HashMap<>();
-    }
+    abstract protected void multicastReFillMessage(int key, int value, int updateCount, ActorRef sender);
 
-    @Override
-    protected void onTimeout(TimeoutMessage message) {
-        if (this.isLastLevelCache) {
-            System.out.printf("%s - has timed out, forward message directly to DB\n");
-            this.database.tell(message, this.getSelf());
-        }
-    }
-
-    /**
-     * Sends a ReadReply message to the saved sender. A ReadReply message is only send
-     * back to the client. Therefore, no need to start a timeout, since a client is
-     * not supposed to crash.
-     *
-     * @param key The key received by the ReadMessage
-     */
-    private void responseReadReplyMessage(int key) {
-        Optional<Integer> value = this.data.getValueForKey(key);
-        Optional<Integer> updateCount = this.data.getUpdateCountForKey(key);
-
-        if (this.currentReadMessages.containsKey(key) && value.isPresent() && updateCount.isPresent()) {
-            // get client
-            ActorRef client = this.currentReadMessages.get(key);
-            this.currentReadMessages.remove(key);
-            // send message
-            ReadReplyMessage readReplyMessage = new ReadReplyMessage(key, value.get(), updateCount.get());
-            client.tell(readReplyMessage, this.getSelf());
-        }
-    }
-
-    private void responseFillMessage(int key) {
-        // todo here we need to check if l2 has crashed, then read reply directly back to client (need to add client to the msg)
-        Optional<Integer> value = this.data.getValueForKey(key);
-        Optional<Integer> updateCount = this.data.getUpdateCountForKey(key);
-
-        if (this.fillQueue.containsKey(key) && value.isPresent() && updateCount.isPresent()) {
-            ActorRef cache = this.fillQueue.get(key);
-            FillMessage fillMessage = new FillMessage(key, value.get(), updateCount.get());
-            cache.tell(fillMessage, this.getSelf());
-            this.fillQueue.remove(key);
-        }
-    }
-
-    private void sendReFillMessage(int key, int value, int updateCount) {
-
-    }
-
-    private void responseForFillOrReadReply(int key) {
-        if (!this.isLastLevelCache) {
-            // forward fill to l2 cache
-            this.responseFillMessage(key);
-        } else {
-            // answer read reply to client
-            this.responseReadReplyMessage(key);
-        }
-    }
+    abstract protected void responseForFillOrReadReply(int key);
 
     protected void onJoinDatabase(JoinDatabaseMessage message) {
         this.database = message.getDatabase();
@@ -253,12 +173,7 @@ public class Cache extends Node {
 
         // Send refill to all other L2 caches except the sender
         if (!this.isLastLevelCache) {
-            RefillMessage reFillMessage = new RefillMessage(key, message.getValue(), message.getUpdateCount());
-            for (ActorRef cache: this.l2Caches) {
-                if (cache != sender) {
-                    cache.tell(reFillMessage, this.getSelf());
-                }
-            }
+            this.multicastReFillMessage(key, value, updateCount, sender);
         }
     }
 
@@ -269,6 +184,8 @@ public class Cache extends Node {
         }
 
         int key = message.getKey();
+        int value = message.getValue();
+        int updateCount = message.getUpdateCount();
         System.out.printf(
                 "%s received refill message for key %d. Update if needed.\n",
                 this.id, key);
@@ -287,7 +204,7 @@ public class Cache extends Node {
         // 2. Now forward to previous level Caches
         if (!this.isLastLevelCache) {
             System.out.printf("%s need to reply to L2 caches, count: %d\n", this.id, this.l2Caches.size());
-            this.multicast(message, this.l2Caches);
+            this.multicastReFillMessage(key, value, updateCount, ActorRef.noSender());
         }
     }
 
@@ -301,13 +218,7 @@ public class Cache extends Node {
         System.out.printf("%s Received read message for key %d (UC: %d)\n", this.id, key, updateCount);
 
         // add sender to queue
-        if (!this.isLastLevelCache) {
-            // add l2 cache to fill queue
-            this.fillQueue.put(key, this.getSender());
-        } else {
-            // add to read reply queue, only for last level cache, so we can reply to client
-            this.currentReadMessages.put(key, this.getSender());
-        }
+        this.currentReadMessages.put(key, this.getSender());
 
         Optional<Integer> wanted = this.data.getValueForKey(key);
         // check if we own a more recent or an equal value
