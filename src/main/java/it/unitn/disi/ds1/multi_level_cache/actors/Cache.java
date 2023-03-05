@@ -9,89 +9,158 @@ import it.unitn.disi.ds1.multi_level_cache.messages.*;
 import java.io.Serializable;
 import java.util.*;
 
-public class Cache extends AbstractActor {
+public class Cache extends Node {
 
+    /** A direct reference to the database */
     private ActorRef database;
+    /**
+     * A reference to the main L1 cache if this is a L2 cache.
+     * Otherwise, null.
+     */
     private ActorRef mainL1Cache;
-    private Timer timer;
     /** Contains all L1 caches except the one defined in mainL1Cache */
     private List<ActorRef> l1Caches;
+    /**
+     * A collection if all underlying L2 caches.
+     * Null if this cache is a L2 cache.
+     */
     private List<ActorRef> l2Caches;
-    private Serializable currentMessage;
+    /** The write-message this cache is currently handling */
+    private Optional<Serializable> currentWriteMessage = Optional.empty(); // todo still needed
+    /** The sender of currentWriteMessage */
+    private Optional<ActorRef> currentWriteSender = Optional.empty();  // todo still needed
+    /**
+     * Whenever an actor sends a read message to this cache, the actor is saved to this map
+     * so the cache can directly reply.
+     * */
+    private Map<Serializable, ActorRef> currentReadMessages = new HashMap<>();  // todo still needed
     /**
      * Determines if this is the last level cache.
      * If true, this is the cache the clients talk to.
      */
     private final boolean isLastLevelCache;
-    private Map<UUID, ActorRef> writeConfirmQueue = new HashMap<>();
-    private Map<Integer, ActorRef> readReplyQueue = new HashMap<>();
-    private Map<Integer, ActorRef> fillQueue = new HashMap<>();
+    private Map<Integer, ActorRef> fillQueue = new HashMap<>(); // todo check if still necessary
+    /** The cached data */
     private DataStore data = new DataStore();
-    /** This is either the next level cache or the database */
-    private boolean hasCrashed = false;
-
-    public final String id;
 
     static public Props props(String id, boolean isLastLevelCache) {
         return Props.create(Cache.class, () -> new Cache(id, isLastLevelCache));
     }
 
     public Cache(String id, boolean isLastLevelCache) {
-        this.id = id;
+        super(id);
         this.isLastLevelCache = isLastLevelCache;
+    }
+
+    /**
+     * Updates the cache value for the given key if needed. The requirements are,
+     * that the key already exists and the received value is newer. This method
+     * should be called, whenever a ReFillMessage has been received.
+     *
+     * @param key Key of the value
+     * @param value The new value
+     * @param updateCount The update count of the received value
+     */
+    private void updateDataIfContained(int key, int value, int updateCount) {
+        if (this.data.containsKey(key) && !this.data.isNewerOrEqual(key, updateCount)) {
+            int currentUpdateCount = this.data.getUpdateCountForKey(key).orElse(0);
+            System.out.printf("%s Update value: {%d :%d} (given UC: %d, my UC: %d)\n",
+                    this.id, key, value, updateCount, currentUpdateCount);
+            this.data.setValueForKey(key, value, currentUpdateCount);
+        }
+    }
+
+    /**
+     * Returns a boolean that states if this cache is allowed to handle another message.
+     * The rule is; an actor can either handle a single write message or multiple read messages.
+     * @return
+     */
+    private boolean canHandleReadMessage() {
+        return this.currentWriteMessage.isEmpty();
+    }
+
+    private boolean canHandleWriteMessage() {
+        return this.currentWriteMessage.isEmpty() && this.currentReadMessages.isEmpty();
     }
 
     private void forwardMessageToNext(Serializable message) {
         if (this.isLastLevelCache) {
             this.mainL1Cache.tell(message, this.getSelf());
+            this.setTimeout(message, this.mainL1Cache);
         } else {
+            // no need for timeout, database can't crash
             this.database.tell(message, this.getSelf());
         }
-
-        // start timeout timer
-        this.currentMessage = message;
-        this.startTimeout();
     }
 
+    private void forwardReadMessageToNext(Serializable message) {
+        this.forwardMessageToNext(message);
+        this.hasReceivedReadReply = false;
+    }
+
+    private void forwardWriteMessageToNext(Serializable message) {
+        this.forwardMessageToNext(message);
+        this.hasReceivedWriteConfirm = false;
+    }
+
+    /**
+     * Sends a message to all actors in the given group.
+     *
+     * @param message
+     * @param group
+     */
     private void multicast(Serializable message, List<ActorRef> group) {
         for (ActorRef actor: group) {
             actor.tell(message, this.getSelf());
         }
-
         // todo think about timeout
     }
 
-    private void crash() {
-        this.hasCrashed = true;
+    /**
+     * Crashes this actor. It also resets all data except the knowledge
+     * of other actors that are necessary.
+     */
+    @Override
+    protected void crash() {
+        super.crash();
         this.data.resetData();
-        this.currentMessage = null;
+        this.currentReadMessages = new HashMap<>();
+        this.currentWriteMessage = Optional.empty();
+        this.currentWriteSender = Optional.empty();
         this.fillQueue = new HashMap<>();
-        this.readReplyQueue = new HashMap<>();
     }
 
-    private Optional<ActorRef> responseWriteConfirmQueue(UUID uuid, WriteConfirmMessage message) {
-        if (this.writeConfirmQueue.containsKey(uuid)) {
-            ActorRef actor = this.writeConfirmQueue.get(uuid);
-            actor.tell(message, this.getSelf());
-            this.writeConfirmQueue.remove(uuid);
-            return Optional.of(actor);
+    @Override
+    protected void onTimeout(TimeoutMessage message) {
+        if (this.isLastLevelCache) {
+            System.out.printf("%s - has timed out, forward message directly to DB\n");
+            this.database.tell(message, this.getSelf());
         }
-        return Optional.empty();
     }
 
+    /**
+     * Sends a ReadReply message to the saved sender. A ReadReply message is only send
+     * back to the client. Therefore, no need to start a timeout, since a client is
+     * not supposed to crash.
+     *
+     * @param key The key received by the ReadMessage
+     */
     private void responseReadReplyMessage(int key) {
         Optional<Integer> value = this.data.getValueForKey(key);
         Optional<Integer> updateCount = this.data.getUpdateCountForKey(key);
 
-        if (this.readReplyQueue.containsKey(key) && value.isPresent() && updateCount.isPresent()) {
-            ActorRef client = this.readReplyQueue.get(key);
+        if (this.currentReadMessages.containsKey(key) && value.isPresent() && updateCount.isPresent()) {
+            // get client
+            ActorRef client = this.currentReadMessages.get(key);
+            this.currentReadMessages.remove(key);
+            // send message
             ReadReplyMessage readReplyMessage = new ReadReplyMessage(key, value.get(), updateCount.get());
             client.tell(readReplyMessage, this.getSelf());
-            this.readReplyQueue.remove(key);
         }
     }
 
     private void responseFillMessage(int key) {
+        // todo here we need to check if l2 has crashed, then read reply directly back to client (need to add client to the msg)
         Optional<Integer> value = this.data.getValueForKey(key);
         Optional<Integer> updateCount = this.data.getUpdateCountForKey(key);
 
@@ -103,6 +172,10 @@ public class Cache extends AbstractActor {
         }
     }
 
+    private void sendReFillMessage(int key, int value, int updateCount) {
+
+    }
+
     private void responseForFillOrReadReply(int key) {
         if (!this.isLastLevelCache) {
             // forward fill to l2 cache
@@ -110,31 +183,6 @@ public class Cache extends AbstractActor {
         } else {
             // answer read reply to client
             this.responseReadReplyMessage(key);
-        }
-    }
-
-    private void startTimeout() {
-        this.timer = new Timer();
-        this.timer.schedule(new TimerTask() {
-            @Override
-            public void run() {
-                receiverTimedOut();
-            }
-        }, 4000);
-    }
-
-    private void stopTimeout() {
-        this.timer.cancel();
-        this.timer = null;
-        this.currentMessage = null;
-    }
-
-    private void receiverTimedOut() {
-        if (this.isLastLevelCache) {
-            // l2 caches are supposed to call directly the database when l1 cache has crashed
-            this.database.tell(this.currentMessage, this.getSelf());
-        } else {
-
         }
     }
 
@@ -149,27 +197,33 @@ public class Cache extends AbstractActor {
     }
 
     private void onJoinL1Caches(JoinL1CachesMessage message) {
-        this.l1Caches = message.getL1Caches();
+        this.l1Caches = List.copyOf(message.getL1Caches());
         System.out.printf("%s joined group of %d L1 caches\n", this.id, this.l1Caches.size());
     }
 
     private void onJoinL2Caches(JoinL2CachesMessage message) {
-        this.l2Caches = message.getL2Caches();
+        this.l2Caches = List.copyOf(message.getL2Caches());
         System.out.printf("%s joined group of %d L2 caches\n", this.id, this.l2Caches.size());
     }
 
+    /**
+     * Listener whenever this actor receives a WriteMessage. Then, this cache
+     * is supposed to forward the message to the next actor. For L1 caches, this is
+     * the DB, for L2 caches, the L1 cache.
+     *
+     * @param message The received write-message
+     */
     private void onWriteMessage(WriteMessage message) {
-        if (this.hasCrashed) {
+        if (this.hasCrashed && !this.canHandleWriteMessage()) {
             // Can't do anything
             return;
         }
+        System.out.printf("%s received write message, forward to next\n", this.id);
 
-        UUID uuid = message.getUuid();
-        System.out.printf("%s received write message (%s), forward to next\n", this.id, uuid.toString());
-
-        // Regardless of level, we add the sender to the write-confirm-queue
-        this.writeConfirmQueue.put(uuid, this.getSender());
-        this.forwardMessageToNext(message);
+        // Need to save the message and sender
+        this.currentWriteMessage = Optional.of(message);
+        this.currentWriteSender = Optional.of(this.getSender());
+        this.forwardWriteMessageToNext(message);
     }
 
     private void onWriteConfirmMessage(WriteConfirmMessage message) {
@@ -177,41 +231,34 @@ public class Cache extends AbstractActor {
             // Can't do anything
             return;
         }
+        if (this.currentWriteMessage.isEmpty() || this.currentWriteSender.isEmpty()) {
+            // todo error, no write message known
+            return;
+        }
+        this.hasReceivedWriteConfirm = true;
 
-        UUID uuid = message.getWriteMessageUUID();
         int key = message.getKey();
-        System.out.printf(
-                "%s received write confirm message (%s), forward to sender\n",
-                this.id, uuid.toString());
+        int value = message.getValue();
+        int updateCount = message.getUpdateCount();
+        System.out.printf("%s received write confirm message {%d: %d} (UC: %d), forward to sender\n",
+                this.id, value, updateCount);
 
-        if (this.writeConfirmQueue.containsKey(uuid)) {
-            /*
-            Message id is known. First, update cache, forward confirm to sender,
-            lastly remove message from our history.
-             */
-            System.out.printf("%s need to forward confirm message\n", this.id);
+        // Update value if needed
+        // todo Is this correct?
+        this.updateDataIfContained(key, value, updateCount);
 
-            // 1. Update value if needed
-            if (this.data.containsKey(key)) {
-                System.out.printf("%s Update value: {%d :%d} (given UC: %d, my UC: %d)\n",
-                        this.id, key, message.getValue(), message.getUpdateCount(), this.data.getUpdateCountForKey(key).get());
-                this.data.setValueForKey(key, message.getValue(), message.getUpdateCount());
-            }
+        // Response confirm to sender
+        ActorRef sender = this.currentWriteSender.get();
+        sender.tell(message, this.getSelf());
 
-            // 2. Response confirm to sender
-            Optional<ActorRef> sender = this.responseWriteConfirmQueue(uuid, message);
-
-            // 3. Send refill to all L2 caches (if lower caches exist)
-            if (!this.isLastLevelCache && sender.isPresent()) {
-                RefillMessage reFillMessage = new RefillMessage(key, message.getValue(), message.getUpdateCount());
-                for (ActorRef cache: this.l2Caches) {
-                    if (cache != sender.get()) {
-                        cache.tell(reFillMessage, this.getSelf());
-                    }
+        // Send refill to all other L2 caches except the sender
+        if (!this.isLastLevelCache) {
+            RefillMessage reFillMessage = new RefillMessage(key, message.getValue(), message.getUpdateCount());
+            for (ActorRef cache: this.l2Caches) {
+                if (cache != sender) {
+                    cache.tell(reFillMessage, this.getSelf());
                 }
             }
-        } else {
-            // todo Error this shouldn't be
         }
     }
 
@@ -245,11 +292,10 @@ public class Cache extends AbstractActor {
     }
 
     private void onReadMessage(ReadMessage message) {
-        if (this.hasCrashed || this.currentMessage != null) {
-            // Can't do anything
+        if (this.hasCrashed || !this.canHandleReadMessage()) {
+            // Not allowed to handle received message -> time out
             return;
         }
-
         int key = message.getKey();
         int updateCount = message.getUpdateCount();
         System.out.printf("%s Received read message for key %d (UC: %d)\n", this.id, key, updateCount);
@@ -260,7 +306,7 @@ public class Cache extends AbstractActor {
             this.fillQueue.put(key, this.getSender());
         } else {
             // add to read reply queue, only for last level cache, so we can reply to client
-            this.readReplyQueue.put(key, this.getSender());
+            this.currentReadMessages.put(key, this.getSender());
         }
 
         Optional<Integer> wanted = this.data.getValueForKey(key);
@@ -274,24 +320,27 @@ public class Cache extends AbstractActor {
             // We either don't know the value or it's older, so forward message to next
             System.out.printf("%s does not know %d or has an older version (given UC: %d, my UC: %d), forward to next\n",
                     this.id, key, updateCount, this.data.getUpdateCountForKey(key).orElse(0));
-            this.forwardMessageToNext(message);
+            this.forwardReadMessageToNext(message);
         }
-
-
     }
 
+    /**
+     * A fill message is received after a read message has been sent.
+     * @param message
+     */
     private void onFillMessage(FillMessage message) {
         if (this.hasCrashed) {
             // Can't do anything
             return;
         }
-        // stop any existing timeout
-        this.stopTimeout();
+        int key = message.getKey();
+
+        this.hasReceivedReadReply = true;
 
         /* No need to check the received update count. At this point, the received value is at least equal
         to our known value. See onReadMessage why.
          */
-        int key = message.getKey();
+
         System.out.printf("%s received fill message for {%d: %d} (given UC: %d, my UC: %d)\n",
                 this.id, message.getKey(), message.getValue(), message.getUpdateCount(), this.data.getUpdateCountForKey(key).orElse(0));
         // Update value
