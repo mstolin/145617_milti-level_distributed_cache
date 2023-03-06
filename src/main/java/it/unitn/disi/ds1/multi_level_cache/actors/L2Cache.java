@@ -29,7 +29,7 @@ public class L2Cache extends Cache {
     }
 
     @Override
-    protected void onTimeout(TimeoutMessage message) {
+    protected void onTimeoutMessage(TimeoutMessage message) {
         System.out.printf("%s - has timed out, forward message directly to DB\n");
         this.database.tell(message, this.getSelf());
     }

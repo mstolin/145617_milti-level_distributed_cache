@@ -155,8 +155,10 @@ public abstract class Cache extends Node {
             // todo error, no write message known
             return;
         }
+        // Disable timout
         this.hasReceivedWriteConfirm = true;
 
+        // print confirm
         int key = message.getKey();
         int value = message.getValue();
         int updateCount = message.getUpdateCount();
@@ -183,6 +185,7 @@ public abstract class Cache extends Node {
             return;
         }
 
+        // Print confirm
         int key = message.getKey();
         int value = message.getValue();
         int updateCount = message.getUpdateCount();
@@ -213,6 +216,7 @@ public abstract class Cache extends Node {
             // Not allowed to handle received message -> time out
             return;
         }
+        // print confirm
         int key = message.getKey();
         int updateCount = message.getUpdateCount();
         System.out.printf("%s Received read message for key %d (UC: %d)\n", this.id, key, updateCount);
@@ -244,25 +248,17 @@ public abstract class Cache extends Node {
             // Can't do anything
             return;
         }
-        int key = message.getKey();
-
+        // disable timout
         this.hasReceivedReadReply = true;
 
-        /* No need to check the received update count. At this point, the received value is at least equal
-        to our known value. See onReadMessage why.
-         */
-
+        // print confirm
+        int key = message.getKey();
         System.out.printf("%s received fill message for {%d: %d} (given UC: %d, my UC: %d)\n",
                 this.id, message.getKey(), message.getValue(), message.getUpdateCount(), this.data.getUpdateCountForKey(key).orElse(0));
         // Update value
         this.data.setValueForKey(key, message.getValue(), message.getUpdateCount());
         // response accordingly
         this.responseForFillOrReadReply(key);
-    }
-
-    private void onCrashMessage(CrashMessage message) {
-        this.crash();
-        System.out.printf("%s has crashed\n", this.id);
     }
 
     @Override
@@ -279,6 +275,7 @@ public abstract class Cache extends Node {
                 .match(ReadMessage.class, this::onReadMessage)
                 .match(FillMessage.class, this::onFillMessage)
                 .match(CrashMessage.class, this::onCrashMessage)
+                .match(TimeoutMessage.class, this::onTimeoutMessage)
                 .build();
     }
 

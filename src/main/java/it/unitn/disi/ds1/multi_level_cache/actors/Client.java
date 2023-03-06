@@ -127,14 +127,17 @@ public class Client extends Node {
      * @param message The received WriteConfirmMessage
      */
     private void onWriteConfirmMessage(WriteConfirmMessage message) {
-        this.hasReceivedWriteConfirm = true;
         int key = message.getKey();
         int value = message.getValue();
         int updateCount = message.getUpdateCount();
         System.out.printf("%s received write confirm for key %d: %d (new UC: %d, old UC: %d)\n",
                 this.id, key, value, updateCount, this.data.getUpdateCountForKey(key).orElse(0));
+
         // update value
         this.data.setValueForKey(key, value, updateCount);
+
+        // reset config
+        this.hasReceivedWriteConfirm = true;
         this.hasSentWriteMessage = false;
     }
 
@@ -172,19 +175,22 @@ public class Client extends Node {
      * @param message The received ReadMessage
      */
     private void onReadReplyMessage(ReadReplyMessage message) {
-        this.hasReceivedReadReply = true;
         int key = message.getKey();
         int value = message.getValue();
         int updateCount = message.getUpdateCount();
         System.out.printf("%s Received read reply {%d: %d} (new UC: %d, old UC: %d)\n",
                 this.id, key, value, updateCount, this.data.getUpdateCountForKey(key).orElse(0));
+
         // update value
         this.data.setValueForKey(key, value, updateCount);
+
+        // reset config
         this.currentReadCount = this.currentReadCount - 1;
+        this.hasReceivedReadReply = true;
     }
 
     @Override
-    protected void onTimeout(TimeoutMessage message) {
+    protected void onTimeoutMessage(TimeoutMessage message) {
         if (message.getMessage() instanceof WriteMessage && !this.hasReceivedWriteConfirm) {
             WriteMessage writeMessage = (WriteMessage) message.getMessage();
             System.out.printf("%s - Timeout on WriteMessage for {%2d: %d}\n",
@@ -204,7 +210,7 @@ public class Client extends Node {
                 .match(WriteConfirmMessage.class, this::onWriteConfirmMessage)
                 .match(InstantiateReadMessage.class, this::onInstantiateReadMessage)
                 .match(ReadReplyMessage.class, this::onReadReplyMessage)
-                .match(TimeoutMessage.class, this::onTimeout)
+                .match(TimeoutMessage.class, this::onTimeoutMessage)
                 .build();
     }
 

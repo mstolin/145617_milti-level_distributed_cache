@@ -16,7 +16,7 @@ public class L1Cache extends Cache {
     }
 
     @Override
-    protected void onTimeout(TimeoutMessage message) {
+    protected void onTimeoutMessage(TimeoutMessage message) {
         /*
         No need to implement. Can only time-out on DB and
         DB can't crash.
