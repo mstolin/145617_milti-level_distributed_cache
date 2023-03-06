@@ -4,6 +4,7 @@ import akka.actor.ActorRef;
 import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.messages.ReadReplyMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.TimeoutMessage;
+import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 
 import java.io.Serializable;
 import java.util.HashMap;
@@ -26,9 +27,9 @@ public class L2Cache extends Cache {
     }
 
     @Override
-    protected void forwardMessageToNext(Serializable message) {
+    protected void forwardMessageToNext(Serializable message, TimeoutType timeoutType) {
         this.mainL1Cache.tell(message, this.getSelf());
-        this.setTimeout(message, this.mainL1Cache);
+        this.setTimeout(message, this.mainL1Cache, timeoutType);
     }
 
     @Override

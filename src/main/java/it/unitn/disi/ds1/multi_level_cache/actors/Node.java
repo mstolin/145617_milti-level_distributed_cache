@@ -5,6 +5,7 @@ import akka.actor.ActorRef;
 import it.unitn.disi.ds1.multi_level_cache.messages.CrashMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.RecoveryMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.TimeoutMessage;
+import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 
 import java.io.Serializable;
 import java.time.Duration;
@@ -52,14 +53,14 @@ public abstract class Node extends AbstractActor {
     /**
      * Sends a TimeoutMessage to itself, after the given duration.
      */
-    protected void setTimeout(Serializable message, ActorRef receiver) {
+    protected void setTimeout(Serializable message, ActorRef receiver, TimeoutType timeoutType) {
         this.getContext()
                 .system()
                 .scheduler()
                 .scheduleOnce(
                         Duration.ofSeconds(TIMEOUT_SECONDS),
                         this.getSelf(),
-                        new TimeoutMessage(message, receiver),
+                        new TimeoutMessage(message, receiver, timeoutType),
                         this.getContext().system().dispatcher(),
                         this.getSelf()
                 );
@@ -89,11 +90,11 @@ public abstract class Node extends AbstractActor {
      *
      * @param message The received CrashMessage
      */
-    protected void onCrash(CrashMessage message) {
+    protected void onCrashMessage(CrashMessage message) {
         this.crash();
     }
 
-    protected abstract void onTimeout(TimeoutMessage message);
+    protected abstract void onTimeoutMessage(TimeoutMessage message);
 
     @Override
     public Receive createReceive() {

@@ -4,6 +4,7 @@ import akka.actor.ActorRef;
 import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.actors.utils.DataStore;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
+import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 
 import java.io.Serializable;
 import java.util.*;
@@ -50,7 +51,7 @@ public abstract class Cache extends Node {
 
     abstract protected void responseForFillOrReadReply(int key);
 
-    abstract protected void forwardMessageToNext(Serializable message);
+    abstract protected void forwardMessageToNext(Serializable message, TimeoutType timeoutType);
 
     protected void flush() {
         this.data.resetData();
@@ -97,12 +98,12 @@ public abstract class Cache extends Node {
     }
 
     private void forwardReadMessageToNext(Serializable message) {
-        this.forwardMessageToNext(message);
+        this.forwardMessageToNext(message, TimeoutType.READ);
         this.hasReceivedReadReply = false;
     }
 
     private void forwardWriteMessageToNext(Serializable message) {
-        this.forwardMessageToNext(message);
+        this.forwardMessageToNext(message, TimeoutType.WRITE);
         this.hasReceivedWriteConfirm = false;
     }
 
