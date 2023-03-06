@@ -4,6 +4,7 @@ import akka.actor.ActorRef;
 import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.actors.utils.DataStore;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
+import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 
 import java.util.*;
 
@@ -61,9 +62,11 @@ public class Client extends Node {
     private void tellWriteMessage(ActorRef l2Cache, int key, int value) {
         WriteMessage writeMessage = new WriteMessage(key, value);
         l2Cache.tell(writeMessage, this.getSelf());
+        // set config
         this.hasReceivedWriteConfirm = false;
         this.hasSentWriteMessage = true;
-        this.setTimeout(writeMessage, l2Cache);
+        // set timeout
+        this.setTimeout(writeMessage, l2Cache, TimeoutType.WRITE);
     }
 
     /**
@@ -76,9 +79,11 @@ public class Client extends Node {
     private void tellReadMessage(ActorRef l2Cache, int key) {
         ReadMessage readMessage = new ReadMessage(key, this.data.getUpdateCountForKey(key).orElse(0));
         l2Cache.tell(readMessage, this.getSelf());
+        // set config
         this.hasReceivedReadReply = false;
-        // increase count
         this.currentReadCount = this.currentReadCount + 1;
+        // set timeout
+        this.setTimeout(readMessage, l2Cache, TimeoutType.READ);
     }
 
     /**
@@ -191,11 +196,12 @@ public class Client extends Node {
 
     @Override
     protected void onTimeoutMessage(TimeoutMessage message) {
-        if (message.getMessage() instanceof WriteMessage && !this.hasReceivedWriteConfirm) {
+        TimeoutType type = message.getType();
+        if (type == TimeoutType.WRITE && !this.hasReceivedWriteConfirm) {
             WriteMessage writeMessage = (WriteMessage) message.getMessage();
             System.out.printf("%s - Timeout on WriteMessage for {%2d: %d}\n",
                     this.id, writeMessage.getKey(), writeMessage.getValue());
-        } else if (message.getMessage() instanceof ReadMessage && !this.hasReceivedReadReply) {
+        } else if (type == TimeoutType.READ && !this.hasReceivedReadReply) {
             ReadMessage readMessage = (ReadMessage) message.getMessage();
             System.out.printf("%s - Timeout on ReadMessage for key %2d\n", this.id, readMessage.getKey());
         }
