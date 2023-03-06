@@ -1,6 +1,5 @@
 package it.unitn.disi.ds1.multi_level_cache.actors;
 
-import akka.actor.AbstractActor;
 import akka.actor.ActorRef;
 import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.actors.utils.DataStore;
@@ -10,13 +9,13 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Random;
 
-public class Database extends AbstractActor {
+public class Database extends Node {
 
     private List<ActorRef> l1Caches;
-    // todo Think about a sequence number of the value here, e.g. number of writes: Map<Integer, Pair<Integer, Integer>>
     private DataStore data = new DataStore();
 
     public Database() {
+        super("Database");
         this.setDefaultData(10);
     }
 
@@ -27,7 +26,7 @@ public class Database extends AbstractActor {
     private void setDefaultData(int size) {
         for (int i = 0; i < size; i++) {
             int value = new Random().nextInt(1000);
-            this.data.setValueForKey(i, value);
+            this.data.setValueForKey(i, value, 0);
         }
     }
 
@@ -50,6 +49,7 @@ public class Database extends AbstractActor {
         WriteConfirmMessage writeConfirmMessage = new WriteConfirmMessage(
                 message.getUuid(), message.getKey(), message.getValue(), updateCount);
         this.getSender().tell(writeConfirmMessage, this.getSelf());
+        this.setTimeout(writeConfirmMessage, this.getSender());
 
         // 3. send refill to all other L1 caches
         RefillMessage refillMessage = new RefillMessage(message.getKey(), message.getValue(), updateCount);
@@ -67,13 +67,19 @@ public class Database extends AbstractActor {
         Optional<Integer> value = this.data.getValueForKey(key);
         Optional<Integer> updateCount = this.data.getUpdateCountForKey(key);
         if (value.isPresent() && updateCount.isPresent()) {
-            System.out.printf("Requested value is %d, send fill message to L1 Cache\n", value.get());
+            System.out.printf("Requested value is %d, send fill message to sender\n", value.get());
             FillMessage fillMessage = new FillMessage(key, value.get(), updateCount.get());
             this.getSender().tell(fillMessage, this.getSelf());
+            this.setTimeout(fillMessage, this.getSender());
         } else {
             System.out.printf("Database does not know about key %d\n", key);
             // todo send error response
         }
+    }
+
+    @Override
+    protected void onTimeoutMessage(TimeoutMessage message) {
+        System.out.println("Database time out");
     }
 
     @Override
