@@ -20,15 +20,6 @@ public class L2Cache extends Cache {
     }
 
     @Override
-    protected void crash() {
-        super.crash();
-        this.data.resetData();
-        this.currentReadMessages = new HashMap<>();
-        this.currentWriteMessage = Optional.empty();
-        this.currentWriteSender = Optional.empty();
-    }
-
-    @Override
     protected void onTimeoutMessage(TimeoutMessage message) {
         System.out.printf("%s - has timed out, forward message directly to DB\n");
         this.database.tell(message, this.getSelf());

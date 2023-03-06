@@ -46,6 +46,25 @@ public abstract class Cache extends Node {
         this.isLastLevelCache = isLastLevelCache;
     }
 
+    abstract protected void multicastReFillMessage(int key, int value, int updateCount, ActorRef sender);
+
+    abstract protected void responseForFillOrReadReply(int key);
+
+    abstract protected void forwardMessageToNext(Serializable message);
+
+    protected void flush() {
+        this.data.resetData();
+        this.currentReadMessages = new HashMap<>();
+        this.currentWriteMessage = Optional.empty();
+        this.currentWriteSender = Optional.empty();
+    }
+
+    @Override
+    protected void crash() {
+        super.crash();
+        this.flush();
+    }
+
     /**
      * Updates the cache value for the given key if needed. The requirements are,
      * that the key already exists and the received value is newer. This method
@@ -77,8 +96,6 @@ public abstract class Cache extends Node {
         return this.currentWriteMessage.isEmpty() && this.currentReadMessages.isEmpty();
     }
 
-    abstract protected void forwardMessageToNext(Serializable message);
-
     private void forwardReadMessageToNext(Serializable message) {
         this.forwardMessageToNext(message);
         this.hasReceivedReadReply = false;
@@ -102,16 +119,12 @@ public abstract class Cache extends Node {
         // todo think about timeout
     }
 
-    abstract protected void multicastReFillMessage(int key, int value, int updateCount, ActorRef sender);
-
-    abstract protected void responseForFillOrReadReply(int key);
-
-    protected void onJoinDatabase(JoinDatabaseMessage message) {
+    private void onJoinDatabase(JoinDatabaseMessage message) {
         this.database = message.getDatabase();
         System.out.printf("%s joined database\n", this.id);
     }
 
-    protected void onJoinMainL1Cache(JoinMainL1CacheMessage message) {
+    private void onJoinMainL1Cache(JoinMainL1CacheMessage message) {
         this.mainL1Cache = message.getL1Cache();
         System.out.printf("%s joined main L1 cache\n", this.id);
     }
@@ -261,6 +274,11 @@ public abstract class Cache extends Node {
         this.responseForFillOrReadReply(key);
     }
 
+    private void onFlushMessage(FlushMessage message) {
+        this.flush();
+        System.out.printf("%s - Flushed\n");
+    }
+
     @Override
     public Receive createReceive() {
         return this
@@ -276,6 +294,7 @@ public abstract class Cache extends Node {
                 .match(FillMessage.class, this::onFillMessage)
                 .match(CrashMessage.class, this::onCrashMessage)
                 .match(TimeoutMessage.class, this::onTimeoutMessage)
+                .match(FlushMessage.class, this::onFlushMessage)
                 .build();
     }
 
