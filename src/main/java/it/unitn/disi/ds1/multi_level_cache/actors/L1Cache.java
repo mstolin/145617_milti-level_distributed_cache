@@ -3,6 +3,7 @@ package it.unitn.disi.ds1.multi_level_cache.actors;
 import akka.actor.ActorRef;
 import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.messages.FillMessage;
+import it.unitn.disi.ds1.multi_level_cache.messages.FlushMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.RefillMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.TimeoutMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
@@ -59,6 +60,17 @@ public class L1Cache extends Cache {
             FillMessage fillMessage = new FillMessage(key, value.get(), updateCount.get());
             cache.tell(fillMessage, this.getSelf());
             this.currentReadMessages.remove(key);
+        }
+    }
+
+    @Override
+    protected void recover() {
+        super.recover();
+
+        // send flush to all L2s
+        if (this.hasCrashed) {
+            FlushMessage flushMessage = new FlushMessage(this.getSelf());
+            this.multicast(flushMessage, this.l2Caches);
         }
     }
 }
