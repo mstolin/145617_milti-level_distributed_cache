@@ -40,6 +40,19 @@ public abstract class Node extends AbstractActor {
                 .build();
     }
 
+    private void scheduleMessageToSelf(Serializable message, long seconds) {
+        this.getContext()
+                .system()
+                .scheduler()
+                .scheduleOnce(
+                        Duration.ofSeconds(seconds),
+                        this.getSelf(),
+                        message,
+                        this.getContext().system().dispatcher(),
+                        this.getSelf()
+                );
+    }
+
     /**
      * Listener that is triggered whenever this node receives
      * a RecoveryMessage. Then, this node recovers from a crash.
@@ -54,24 +67,21 @@ public abstract class Node extends AbstractActor {
      * Sends a TimeoutMessage to itself, after the given duration.
      */
     protected void setTimeout(Serializable message, ActorRef receiver, TimeoutType timeoutType) {
-        this.getContext()
-                .system()
-                .scheduler()
-                .scheduleOnce(
-                        Duration.ofSeconds(TIMEOUT_SECONDS),
-                        this.getSelf(),
-                        new TimeoutMessage(message, receiver, timeoutType),
-                        this.getContext().system().dispatcher(),
-                        this.getSelf()
-                );
+        TimeoutMessage timeoutMessage = new TimeoutMessage(message, receiver, timeoutType);
+        this.scheduleMessageToSelf(timeoutMessage, TIMEOUT_SECONDS);
     }
 
     /**
      * Crashes this node
      */
-    protected void crash() {
+    protected void crash(long recoverDelay) {
+        System.out.printf("%s - Crashed\n", this.id);
         this.hasCrashed = true;
         this.getContext().become(this.createReceiveForCrash());
+
+        if (recoverDelay > 0) {
+            this.scheduleMessageToSelf(new RecoveryMessage(), recoverDelay);
+        }
     }
 
     /**
@@ -79,6 +89,7 @@ public abstract class Node extends AbstractActor {
      */
     protected void recover() {
         if (this.hasCrashed) {
+            System.out.printf("%s - Recovered\n", this.id);
             this.hasCrashed = false;
             this.getContext().become(this.createReceive());
         }
@@ -91,7 +102,7 @@ public abstract class Node extends AbstractActor {
      * @param message The received CrashMessage
      */
     protected void onCrashMessage(CrashMessage message) {
-        this.crash();
+        this.crash(message.getRecoverAfterSeconds());
     }
 
     protected abstract void onTimeoutMessage(TimeoutMessage message);
