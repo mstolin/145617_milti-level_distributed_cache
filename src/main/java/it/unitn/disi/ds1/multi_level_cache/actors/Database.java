@@ -6,7 +6,6 @@ import it.unitn.disi.ds1.multi_level_cache.actors.utils.DataStore;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Random;
@@ -16,9 +15,6 @@ public class Database extends Node {
     private List<ActorRef> l1Caches;
     private List<ActorRef> l2Caches;
     private DataStore data = new DataStore();
-    private Optional<ActorRef> writeConfirmActor = Optional.empty();
-    private List<ActorRef> refillConfirmActors = new ArrayList<>();
-    private List<ActorRef> fillConfirmActors = new ArrayList<>();
 
     public Database() {
         super("Database");
@@ -61,7 +57,6 @@ public class Database extends Node {
         WriteConfirmMessage writeConfirmMessage = new WriteConfirmMessage(
                 message.getUuid(), message.getKey(), message.getValue(), updateCount);
         this.getSender().tell(writeConfirmMessage, this.getSelf());
-        this.writeConfirmActor = Optional.of(this.getSender());
         this.setTimeout(writeConfirmMessage, this.getSender(), TimeoutType.WRITE_CONFIRM);
 
         // 3. send refill to all other L1 caches
@@ -94,20 +89,7 @@ public class Database extends Node {
 
     @Override
     protected void onTimeoutMessage(TimeoutMessage message) {
-        System.out.println("Database - timed-out");
-
-
-        // a L1 cache has timed-out, therefore send flush message to all L2s
-        // todo make own method flushL2Caches()
-        FlushMessage flushMessage = new FlushMessage(message.getUnreachableActor());
-        for (ActorRef l2Cache: this.l2Caches) {
-            l2Cache.tell(flushMessage, this.getSelf());
-
-            /*
-            Wenn ein L1 crashs dann flush an alle L2, die check war das mein L1 dann flush.
-            Client wird so oder so timeouten und nachricht neu senden
-             */
-        }
+        // do nothing, DB is not supposed to time-out
     }
 
     @Override
