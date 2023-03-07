@@ -276,7 +276,7 @@ public abstract class Cache extends Node {
 
     private void onFlushMessage(FlushMessage message) {
         this.flush();
-        System.out.printf("%s - Flushed\n");
+        System.out.printf("%s - Flushed\n", this.id);
     }
 
     @Override
