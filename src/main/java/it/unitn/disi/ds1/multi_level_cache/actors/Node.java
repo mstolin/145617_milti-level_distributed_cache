@@ -13,7 +13,7 @@ import java.time.Duration;
 public abstract class Node extends AbstractActor {
 
     /** The timeout duration */
-    static final long TIMEOUT_SECONDS = 4;
+    static final long TIMEOUT_SECONDS = 2;
     /** Determines if this Node has crashed */
     protected boolean hasCrashed = false;
     /** Has this node received a reply for a previously sent ReadMessage */
@@ -64,11 +64,20 @@ public abstract class Node extends AbstractActor {
     }
 
     /**
+     * Returns the seconds used for a time-out.
+     *
+     * @return Seconds
+     */
+    protected long getTimeoutSeconds() {
+        return TIMEOUT_SECONDS;
+    }
+
+    /**
      * Sends a TimeoutMessage to itself, after the given duration.
      */
     protected void setTimeout(Serializable message, ActorRef receiver, TimeoutType timeoutType) {
         TimeoutMessage timeoutMessage = new TimeoutMessage(message, receiver, timeoutType);
-        this.scheduleMessageToSelf(timeoutMessage, TIMEOUT_SECONDS);
+        this.scheduleMessageToSelf(timeoutMessage, this.getTimeoutSeconds());
     }
 
     /**

@@ -10,6 +10,12 @@ import java.util.*;
 
 public class Client extends Node {
 
+    /**
+     * The timeout duration in seconds. It is important that the
+     * time-out delay for the client is slightly longer than the one
+     * for the caches.
+     */
+    static final long TIMEOUT_SECONDS = 4;
     /** List of level 2 caches, the client knows about */
     private List<ActorRef> l2Caches;
     /** Data the client knows about */
@@ -25,6 +31,11 @@ public class Client extends Node {
 
     static public Props props(String id) {
         return Props.create(Client.class, () -> new Client(id));
+    }
+
+    @Override
+    protected long getTimeoutSeconds() {
+        return TIMEOUT_SECONDS;
     }
 
     /**
