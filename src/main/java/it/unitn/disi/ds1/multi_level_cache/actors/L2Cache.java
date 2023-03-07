@@ -7,7 +7,6 @@ import it.unitn.disi.ds1.multi_level_cache.messages.TimeoutMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 
 import java.io.Serializable;
-import java.util.HashMap;
 import java.util.Optional;
 
 public class L2Cache extends Cache {
@@ -22,8 +21,8 @@ public class L2Cache extends Cache {
 
     @Override
     protected void onTimeoutMessage(TimeoutMessage message) {
-        System.out.printf("%s - has timed out, forward message directly to DB\n");
-        this.database.tell(message, this.getSelf());
+        System.out.printf("%s - has timed out, forward message directly to DB\n", this.id);
+        this.database.tell(message.getMessage(), this.getSelf());
     }
 
     @Override

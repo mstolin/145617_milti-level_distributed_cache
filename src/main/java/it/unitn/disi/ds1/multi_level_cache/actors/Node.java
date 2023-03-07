@@ -84,11 +84,11 @@ public abstract class Node extends AbstractActor {
      * Crashes this node
      */
     protected void crash(long recoverDelay) {
-        System.out.printf("%s - Crashed\n", this.id);
         this.hasCrashed = true;
         this.getContext().become(this.createReceiveForCrash());
 
         if (recoverDelay > 0) {
+            System.out.printf("%s - Recover after %d\n", this.id, recoverDelay);
             this.scheduleMessageToSelf(new RecoveryMessage(), recoverDelay);
         }
     }
@@ -111,6 +111,7 @@ public abstract class Node extends AbstractActor {
      * @param message The received CrashMessage
      */
     protected void onCrashMessage(CrashMessage message) {
+        System.out.printf("%s - Crash\n", this.id);
         this.crash(message.getRecoverAfterSeconds());
     }
 
