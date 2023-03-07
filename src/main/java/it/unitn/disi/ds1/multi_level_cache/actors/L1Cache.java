@@ -68,9 +68,8 @@ public class L1Cache extends Cache {
         super.recover();
 
         // send flush to all L2s
-        if (this.hasCrashed) {
-            FlushMessage flushMessage = new FlushMessage(this.getSelf());
-            this.multicast(flushMessage, this.l2Caches);
-        }
+        System.out.printf("%s - Flush all L2s\n", this.id);
+        FlushMessage flushMessage = new FlushMessage(this.getSelf());
+        this.multicast(flushMessage, this.l2Caches);
     }
 }
