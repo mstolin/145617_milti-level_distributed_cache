@@ -57,7 +57,6 @@ public class Database extends Node {
         WriteConfirmMessage writeConfirmMessage = new WriteConfirmMessage(
                 message.getUuid(), message.getKey(), message.getValue(), updateCount);
         this.getSender().tell(writeConfirmMessage, this.getSelf());
-        this.setTimeout(writeConfirmMessage, this.getSender(), TimeoutType.WRITE_CONFIRM);
 
         // 3. send refill to all other L1 caches
         // todo make own method
@@ -65,7 +64,6 @@ public class Database extends Node {
         for (ActorRef l1Cache: this.l1Caches) {
             if (l1Cache != this.getSender()) {
                 l1Cache.tell(refillMessage, this.getSelf());
-                this.setTimeout(refillMessage, l1Cache, TimeoutType.RE_FILL);
             }
         }
     }
@@ -80,7 +78,6 @@ public class Database extends Node {
             System.out.printf("Requested value is %d, send fill message to sender\n", value.get());
             FillMessage fillMessage = new FillMessage(key, value.get(), updateCount.get());
             this.getSender().tell(fillMessage, this.getSelf());
-            this.setTimeout(fillMessage, this.getSender(), TimeoutType.FILL);
         } else {
             System.out.printf("Database does not know about key %d\n", key);
             // todo send error response
