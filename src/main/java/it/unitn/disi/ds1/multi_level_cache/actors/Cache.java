@@ -1,7 +1,6 @@
 package it.unitn.disi.ds1.multi_level_cache.actors;
 
 import akka.actor.ActorRef;
-import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.actors.utils.DataStore;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
@@ -61,8 +60,8 @@ public abstract class Cache extends Node {
     }
 
     @Override
-    protected void crash() {
-        super.crash();
+    protected void crash(long recoverDelay) {
+        super.crash(recoverDelay);
         this.flush();
     }
 
