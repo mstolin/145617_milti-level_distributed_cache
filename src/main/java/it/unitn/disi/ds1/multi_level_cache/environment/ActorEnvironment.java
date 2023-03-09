@@ -94,7 +94,7 @@ public class ActorEnvironment {
         List<ActorRef> actors = new ArrayList<>();
         for (int i = 0; i < total; i++) {
             String id = this.genL1Id(i+1);
-            ActorRef actor = this.actorSystem.actorOf(Cache.props(id, false));
+            ActorRef actor = this.actorSystem.actorOf(L1Cache.props(id));
             actors.add(actor);
         }
         return List.copyOf(actors);
@@ -105,7 +105,7 @@ public class ActorEnvironment {
         for (int i = 0; i < l1Size; i++) {
             for (int j = 0; j < total; j++) {
                 String id = this.genL2Id(i+1, j+1);
-                ActorRef actor = this.actorSystem.actorOf(Cache.props(id, true));
+                ActorRef actor = this.actorSystem.actorOf(L2Cache.props(id));
                 actors.add(actor);
             }
         }
@@ -195,8 +195,8 @@ public class ActorEnvironment {
         this.makeClientRead(randomClient, l2Cache, key);
     }
 
-    public void makeCacheCrash(ActorRef cache) {
-        CrashMessage message = new CrashMessage();
+    public void makeCacheCrash(ActorRef cache, long recoverAfter) {
+        CrashMessage message = new CrashMessage(recoverAfter);
         cache.tell(message, ActorRef.noSender());
     }
 
