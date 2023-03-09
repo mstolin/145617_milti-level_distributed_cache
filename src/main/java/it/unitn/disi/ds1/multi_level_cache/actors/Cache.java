@@ -52,7 +52,9 @@ public abstract class Cache extends Node {
 
     abstract protected void forwardMessageToNext(Serializable message, TimeoutType timeoutType);
 
+    @Override
     protected void flush() {
+        super.flush();
         this.data.resetData();
         this.currentReadMessages = new HashMap<>();
         this.currentWriteMessage = Optional.empty();
@@ -63,6 +65,16 @@ public abstract class Cache extends Node {
     protected void crash(long recoverDelay) {
         super.crash(recoverDelay);
         this.flush();
+    }
+
+    @Override
+    protected boolean canInstantiateNewReadConversation() {
+        return super.canInstantiateNewReadConversation() && this.currentWriteMessage.isEmpty();
+    }
+
+    @Override
+    protected boolean canInstantiateNewWriteConversation() {
+        return super.canInstantiateNewWriteConversation() && this.currentWriteMessage.isEmpty() && this.currentReadMessages.isEmpty();
     }
 
     /**
@@ -83,40 +95,14 @@ public abstract class Cache extends Node {
         }
     }
 
-    /**
-     * Returns a boolean that states if this cache is allowed to handle another message.
-     * The rule is; an actor can either handle a single write message or multiple read messages.
-     * @return
-     */
-    private boolean canHandleReadMessage() {
-        return this.currentWriteMessage.isEmpty();
-    }
-
-    private boolean canHandleWriteMessage() {
-        return this.currentWriteMessage.isEmpty() && this.currentReadMessages.isEmpty();
-    }
-
-    private void forwardReadMessageToNext(Serializable message) {
+    private void forwardReadMessageToNext(ReadMessage message) {
         this.forwardMessageToNext(message, TimeoutType.READ);
-        this.hasReceivedReadReply = false;
+        this.addUnconfirmedReadMessage(message.getKey());
     }
 
     private void forwardWriteMessageToNext(Serializable message) {
         this.forwardMessageToNext(message, TimeoutType.WRITE);
-        this.hasReceivedWriteConfirm = false;
-    }
-
-    /**
-     * Sends a message to all actors in the given group.
-     *
-     * @param message
-     * @param group
-     */
-    protected void multicast(Serializable message, List<ActorRef> group) {
-        for (ActorRef actor: group) {
-            actor.tell(message, this.getSelf());
-        }
-        // todo think about timeout
+        this.isWaitingForWriteConfirm = true;
     }
 
     private void onJoinDatabase(JoinDatabaseMessage message) {
@@ -147,7 +133,7 @@ public abstract class Cache extends Node {
      * @param message The received write-message
      */
     private void onWriteMessage(WriteMessage message) {
-        if (this.hasCrashed && !this.canHandleWriteMessage()) {
+        if (!this.canInstantiateNewWriteConversation()) {
             // Can't do anything
             return;
         }
@@ -169,7 +155,7 @@ public abstract class Cache extends Node {
             return;
         }
         // Disable timout
-        this.hasReceivedWriteConfirm = true;
+        this.isWaitingForWriteConfirm = false;
 
         // print confirm
         int key = message.getKey();
@@ -225,7 +211,7 @@ public abstract class Cache extends Node {
     }
 
     private void onReadMessage(ReadMessage message) {
-        if (this.hasCrashed || !this.canHandleReadMessage()) {
+        if (!this.canInstantiateNewReadConversation()) {
             // Not allowed to handle received message -> time out
             return;
         }
@@ -261,13 +247,14 @@ public abstract class Cache extends Node {
             // Can't do anything
             return;
         }
-        // disable timout
-        this.hasReceivedReadReply = true;
-
-        // print confirm
         int key = message.getKey();
         System.out.printf("%s received fill message for {%d: %d} (given UC: %d, my UC: %d)\n",
                 this.id, message.getKey(), message.getValue(), message.getUpdateCount(), this.data.getUpdateCountForKey(key).orElse(0));
+
+        // disable timout
+        this.resetUnconfirmedReadMessage(key);
+        // todo resetReadConfig(key) like in client
+
         // Update value
         this.data.setValueForKey(key, message.getValue(), message.getUpdateCount());
         // response accordingly

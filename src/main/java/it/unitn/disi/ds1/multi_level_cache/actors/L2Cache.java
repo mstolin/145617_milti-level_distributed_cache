@@ -2,6 +2,7 @@ package it.unitn.disi.ds1.multi_level_cache.actors;
 
 import akka.actor.ActorRef;
 import akka.actor.Props;
+import it.unitn.disi.ds1.multi_level_cache.messages.ReadMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.ReadReplyMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.TimeoutMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
@@ -21,8 +22,18 @@ public class L2Cache extends Cache {
 
     @Override
     protected void onTimeoutMessage(TimeoutMessage message) {
-        System.out.printf("%s - has timed out, forward message directly to DB\n", this.id);
-        this.database.tell(message.getMessage(), this.getSelf());
+        if (message.getType() == TimeoutType.READ) {
+            ReadMessage readMessage = (ReadMessage) message.getMessage();
+            int key = readMessage.getKey();
+
+            System.out.printf("TIMED OUT FOR KEY %d, IS UNCONFIRMED %s\n", key, this.isReadUnconfirmed(key));
+
+            // if the key is in this map, then no ReadReply has been received for the key
+            if (this.isReadUnconfirmed(key)) {
+                System.out.printf("%s - has timed out for read, forward message directly to DB\n", this.id);
+                this.database.tell(message.getMessage(), this.getSelf());
+            }
+        }
     }
 
     @Override
