@@ -15,15 +15,13 @@ public class Client extends Node {
      * time-out delay for the client is slightly longer than the one
      * for the caches.
      */
-    static final long TIMEOUT_SECONDS = 4;
+    static final long TIMEOUT_SECONDS = 6;
+    /** Max. number to retry write or read operations */
+    static final int MAX_RETRY_COUNT = 3;
     /** List of level 2 caches, the client knows about */
     private List<ActorRef> l2Caches;
     /** Data the client knows about */
     private DataStore data = new DataStore();
-    /** Is the client waiting for a write-message */
-    private boolean hasSentWriteMessage = false;
-    /** Number of read messages the client is waiting for */
-    private int currentReadCount = 0;
 
     public Client(String id) {
         super(id);
@@ -39,27 +37,14 @@ public class Client extends Node {
     }
 
     /**
-     * Determines if this actor is allowed to instantiate a new conversation
-     * for write. The rule is, an actor either allowed to handle a single write message
-     * or multiple read messages at the same time. Therefore, no write or any read
-     * conversation is allowed.
+     * Returns a random actor from the given group.
      *
-     * @return Boolean that state if a write conversation is allowed
+     * @param group A group of actors
+     * @return A random instance from the given group
      */
-    private boolean canInstantiateNewWriteConversation() {
-        return !this.hasSentWriteMessage && this.currentReadCount <= 0;
-    }
-
-    /**
-     * Determines if this actor is allowed to instantiate a new conversation
-     * for read. The rule is, an actor either allowed to handle a single write message
-     * or multiple read messages at the same time. Therefore, no current write conversation
-     * is allowed.
-     *
-     * @return Boolean that state if a read conversation is allowed
-     */
-    private boolean canInstantiateNewReadConversation() {
-        return !this.hasSentWriteMessage;
+    private ActorRef getRandomActor(List<ActorRef> group) {
+        Random rand = new Random();
+        return group.get(rand.nextInt(group.size()));
     }
 
     /**
@@ -74,10 +59,33 @@ public class Client extends Node {
         WriteMessage writeMessage = new WriteMessage(key, value);
         l2Cache.tell(writeMessage, this.getSelf());
         // set config
-        this.hasReceivedWriteConfirm = false;
-        this.hasSentWriteMessage = true;
+        this.isWaitingForWriteConfirm = true;
         // set timeout
         this.setTimeout(writeMessage, l2Cache, TimeoutType.WRITE);
+    }
+
+    /**
+     * Resends a WriteMessage to a random actor that is not the given unreachable actor.
+     * Additionally, it increases the write-retry-count.
+     *
+     * @param unreachableActor The previously tried unreachable L2 cache
+     * @param key Key that has to be written
+     * @param value Value used to update the key
+     */
+    private void retryWriteMessage(ActorRef unreachableActor, int key, int value) {
+        List<ActorRef> workingL2Caches = this.l2Caches
+                .stream().filter((actorRef -> actorRef != unreachableActor)).toList();
+        ActorRef randomActor = this.getRandomActor(workingL2Caches);
+        this.tellWriteMessage(randomActor, key, value);
+        this.writeRetryCount = this.writeRetryCount + 1;
+    }
+
+    /**
+     * Resets all important configs to enable another write operation.
+     */
+    private void resetWriteConfig() {
+        this.isWaitingForWriteConfirm = false;
+        this.writeRetryCount = 0;
     }
 
     /**
@@ -91,10 +99,34 @@ public class Client extends Node {
         ReadMessage readMessage = new ReadMessage(key, this.data.getUpdateCountForKey(key).orElse(0));
         l2Cache.tell(readMessage, this.getSelf());
         // set config
-        this.hasReceivedReadReply = false;
-        this.currentReadCount = this.currentReadCount + 1;
+        this.addUnconfirmedReadMessage(key);
         // set timeout
         this.setTimeout(readMessage, l2Cache, TimeoutType.READ);
+    }
+
+    /**
+     * Resends a ReadMessage to a random L2 cache that is not the given unreachable actor.
+     * Additionally, it increases the retry count for the given key.
+     *
+     * @param unreachableActor The L2 cache that is unreachable
+     * @param key Key to be read
+     */
+    private void retryReadMessage(ActorRef unreachableActor, int key) {
+        List<ActorRef> workingL2Caches = this.l2Caches
+                .stream().filter((actorRef -> actorRef != unreachableActor)).toList();
+        ActorRef randomActor = this.getRandomActor(workingL2Caches);
+        this.tellReadMessage(randomActor, key);
+        this.increaseCountForUnconfirmedReadMessage(key);
+    }
+
+    /**
+     * Resets all important configs for the given key, so that this message can be
+     * redone.
+     *
+     * @param key Key to read
+     */
+    private void resetReadConfig(int key) {
+        this.resetUnconfirmedReadMessage(key);
     }
 
     /**
@@ -153,8 +185,7 @@ public class Client extends Node {
         this.data.setValueForKey(key, value, updateCount);
 
         // reset config
-        this.hasReceivedWriteConfirm = true;
-        this.hasSentWriteMessage = false;
+        this.resetWriteConfig();
     }
 
     /**
@@ -199,22 +230,49 @@ public class Client extends Node {
 
         // update value
         this.data.setValueForKey(key, value, updateCount);
-
         // reset config
-        this.currentReadCount = this.currentReadCount - 1;
-        this.hasReceivedReadReply = true;
+        this.resetReadConfig(key);
     }
 
     @Override
     protected void onTimeoutMessage(TimeoutMessage message) {
         TimeoutType type = message.getType();
-        if (type == TimeoutType.WRITE && !this.hasReceivedWriteConfirm) {
+        if (type == TimeoutType.WRITE && this.isWaitingForWriteConfirm) {
             WriteMessage writeMessage = (WriteMessage) message.getMessage();
+            int key = writeMessage.getKey();
+            int value = writeMessage.getValue();
             System.out.printf("%s - Timeout on WriteMessage for {%2d: %d}\n",
-                    this.id, writeMessage.getKey(), writeMessage.getValue());
-        } else if (type == TimeoutType.READ && !this.hasReceivedReadReply) {
+                    this.id, key, value);
+
+            // try again
+            if (this.writeRetryCount < MAX_RETRY_COUNT) {
+                ActorRef unreachableActor = message.getUnreachableActor();
+                this.retryWriteMessage(unreachableActor, writeMessage.getKey(), writeMessage.getValue());
+                System.out.printf("%s - Retried WriteMessage for {%d: %d} for the %dth time (max retries: %d)\n",
+                        this.id, key, value, this.writeRetryCount, MAX_RETRY_COUNT);
+            } else {
+                // abort retry
+                this.resetWriteConfig();
+            }
+        } else if (type == TimeoutType.READ) {
             ReadMessage readMessage = (ReadMessage) message.getMessage();
-            System.out.printf("%s - Timeout on ReadMessage for key %2d\n", this.id, readMessage.getKey());
+            int key = readMessage.getKey();
+
+            // if the key is in this map, then no ReadReply has been received for the key
+            if (this.isReadUnconfirmed(key)) {
+                System.out.printf("%s - Timeout on ReadMessage for key %2d\n", this.id, key);
+
+                // try again
+                int retryCountForKey = this.getRetryCountForRead(key);
+                if (retryCountForKey < MAX_RETRY_COUNT) {
+                    this.retryReadMessage(message.getUnreachableActor(), key);
+                    System.out.printf("%s - Retried ReadMessage for key %d for the %dth time (max retries: %d)\n",
+                            this.id, key, retryCountForKey, MAX_RETRY_COUNT);
+                } else {
+                    // abort retries
+                    this.resetReadConfig(key);
+                }
+            }
         }
     }
 
