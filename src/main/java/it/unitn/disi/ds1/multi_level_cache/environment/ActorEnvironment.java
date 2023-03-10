@@ -131,6 +131,10 @@ public class ActorEnvironment {
         return String.format("Client-%d", id);
     }
 
+    public ActorSystem getActorSystem() {
+        return this.actorSystem;
+    }
+
     public ActorRef getDatabase() {
         return database;
     }
