@@ -26,8 +26,6 @@ public class L2Cache extends Cache {
             ReadMessage readMessage = (ReadMessage) message.getMessage();
             int key = readMessage.getKey();
 
-            System.out.printf("TIMED OUT FOR KEY %d, IS UNCONFIRMED %s\n", key, this.isReadUnconfirmed(key));
-
             // if the key is in this map, then no ReadReply has been received for the key
             if (this.isReadUnconfirmed(key)) {
                 System.out.printf("%s - has timed out for read, forward message directly to DB\n", this.id);

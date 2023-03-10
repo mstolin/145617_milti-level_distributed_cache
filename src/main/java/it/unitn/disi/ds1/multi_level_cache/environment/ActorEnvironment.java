@@ -58,9 +58,6 @@ public class ActorEnvironment {
                 this.sendJoinMainL1CacheMessage(l2Cache, l1Cache);
                 // tell l2 about the db
                 this.sendJoinDatabaseMessage(l2Cache);
-                // tell l2 about other l1 caches
-                List<ActorRef> otherL1Caches = this.l1Caches.stream().filter((l1) -> l1 != l1Cache).toList();
-                this.sendJoinL1CachesMessage(l2Cache, otherL1Caches); // todo IS THIS NECESSARY?, CHECK IF L1 SENDS TO DB ON TIMEOUT
             }
         }
 

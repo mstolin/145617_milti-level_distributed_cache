@@ -17,8 +17,6 @@ public abstract class Cache extends Node {
      * Otherwise, null.
      */
     protected ActorRef mainL1Cache;
-    /** Contains all L1 caches except the one defined in mainL1Cache */
-    private List<ActorRef> l1Caches; // todo still needed?
     /**
      * A collection if all underlying L2 caches.
      * Null if this cache is a L2 cache.
@@ -113,11 +111,6 @@ public abstract class Cache extends Node {
     private void onJoinMainL1Cache(JoinMainL1CacheMessage message) {
         this.mainL1Cache = message.getL1Cache();
         System.out.printf("%s joined main L1 cache\n", this.id);
-    }
-
-    private void onJoinL1Caches(JoinL1CachesMessage message) {
-        this.l1Caches = List.copyOf(message.getL1Caches());
-        System.out.printf("%s joined group of %d L1 caches\n", this.id, this.l1Caches.size());
     }
 
     private void onJoinL2Caches(JoinL2CachesMessage message) {
@@ -272,7 +265,6 @@ public abstract class Cache extends Node {
                 .receiveBuilder()
                 .match(JoinDatabaseMessage.class, this::onJoinDatabase)
                 .match(JoinMainL1CacheMessage.class, this::onJoinMainL1Cache)
-                .match(JoinL1CachesMessage.class, this::onJoinL1Caches)
                 .match(JoinL2CachesMessage.class, this::onJoinL2Caches)
                 .match(WriteMessage.class, this::onWriteMessage)
                 .match(WriteConfirmMessage.class, this::onWriteConfirmMessage)
