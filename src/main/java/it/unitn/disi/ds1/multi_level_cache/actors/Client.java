@@ -15,7 +15,7 @@ public class Client extends Node {
      * time-out delay for the client is slightly longer than the one
      * for the caches.
      */
-    static final long TIMEOUT_SECONDS = 6;
+    static final long TIMEOUT_SECONDS = 8;
     /** Max. number to retry write or read operations */
     static final int MAX_RETRY_COUNT = 3;
     /** List of level 2 caches, the client knows about */
