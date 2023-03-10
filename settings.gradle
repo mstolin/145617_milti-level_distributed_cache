@@ -1,2 +1,3 @@
 rootProject.name = 'Multi-Level-Distributed-Cache'
-
+include 'src:test'
+findProject(':src:test')?.name = 'test'
