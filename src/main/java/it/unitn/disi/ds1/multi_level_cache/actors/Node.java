@@ -140,7 +140,6 @@ public abstract class Node extends AbstractActor {
      */
     protected void addUnconfirmedReadMessage(int key) {
         if (!this.unconfirmedReads.containsKey(key)) {
-            System.out.printf("%s - ADD KEY %d\n", this.id, key);
             this.unconfirmedReads.put(key, 0);
         }
     }
