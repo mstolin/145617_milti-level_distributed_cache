@@ -28,7 +28,7 @@ public class Database extends Node {
     private void setDefaultData(int size) {
         for (int i = 0; i < size; i++) {
             int value = new Random().nextInt(1000);
-            this.data.setValueForKey(i, value, 0);
+            this.data.setValueForKey(i, value, 1);
         }
     }
 
