@@ -187,7 +187,12 @@ public class ActorEnvironment {
     }
 
     public void makeClientRead(ActorRef client, ActorRef l2Cache, int key) {
-        InstantiateReadMessage message = new InstantiateReadMessage(key, l2Cache);
+        InstantiateReadMessage message = new InstantiateReadMessage(key, l2Cache, false);
+        client.tell(message, ActorRef.noSender());
+    }
+
+    public void makeClientCritRead(ActorRef client, ActorRef l2Cache, int key) {
+        InstantiateReadMessage message = new InstantiateReadMessage(key, l2Cache, true);
         client.tell(message, ActorRef.noSender());
     }
 
