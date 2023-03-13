@@ -7,4 +7,6 @@ public enum TimeoutType {
     READ_REPLY,
     RE_FILL,
     FILL,
+    CRIT_READ,
+    CRIT_WRITE,
 }
