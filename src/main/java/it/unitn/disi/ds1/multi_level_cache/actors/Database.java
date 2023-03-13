@@ -32,6 +32,19 @@ public class Database extends Node {
         }
     }
 
+    private void readAndResponseFill(int key, ActorRef sender) {
+        Optional<Integer> value = this.data.getValueForKey(key);
+        Optional<Integer> updateCount = this.data.getUpdateCountForKey(key);
+        if (value.isPresent() && updateCount.isPresent()) {
+            System.out.printf("Database - Requested value is %d, send fill message to sender\n", value.get());
+            FillMessage fillMessage = new FillMessage(key, value.get(), updateCount.get());
+            sender.tell(fillMessage, this.getSelf());
+        } else {
+            System.out.printf("Database does not know about key %d\n", key);
+            // todo send error response
+        }
+    }
+
     private void onJoinL1Caches(JoinL1CachesMessage message) {
         this.l1Caches = List.copyOf(message.getL1Caches());
         System.out.printf("Database joined group of %d L1 caches\n", this.l1Caches.size());
@@ -71,17 +84,13 @@ public class Database extends Node {
     private void onReadMessage(ReadMessage message) {
         int key = message.getKey();
         System.out.printf("Database received read message for key %d\n", key);
+        this.readAndResponseFill(key, this.getSender());
+    }
 
-        Optional<Integer> value = this.data.getValueForKey(key);
-        Optional<Integer> updateCount = this.data.getUpdateCountForKey(key);
-        if (value.isPresent() && updateCount.isPresent()) {
-            System.out.printf("Requested value is %d, send fill message to sender\n", value.get());
-            FillMessage fillMessage = new FillMessage(key, value.get(), updateCount.get());
-            this.getSender().tell(fillMessage, this.getSelf());
-        } else {
-            System.out.printf("Database does not know about key %d\n", key);
-            // todo send error response
-        }
+    private void onCritReadMessage(CritReadMessage message) {
+        int key = message.getKey();
+        System.out.printf("Database - Received crit read message for key %d\n", key);
+        this.readAndResponseFill(key, this.getSender());
     }
 
     @Override
@@ -97,6 +106,7 @@ public class Database extends Node {
                .match(JoinL2CachesMessage.class, this::onJoinL2Caches)
                .match(WriteMessage.class, this::onWriteMessage)
                .match(ReadMessage.class, this::onReadMessage)
+               .match(CritReadMessage.class, this::onCritReadMessage)
                .build();
     }
 

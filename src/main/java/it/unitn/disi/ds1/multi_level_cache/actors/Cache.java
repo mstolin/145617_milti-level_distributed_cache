@@ -93,9 +93,14 @@ public abstract class Cache extends Node {
         }
     }
 
-    private void forwardReadMessageToNext(ReadMessage message) {
+    private void forwardReadMessageToNext(Serializable message, int key) {
         this.forwardMessageToNext(message, TimeoutType.READ);
-        this.addUnconfirmedReadMessage(message.getKey());
+        this.addUnconfirmedReadMessage(key);
+    }
+
+    private void forwardCritReadMessageToNext(Serializable message, int key) {
+        this.forwardMessageToNext(message, TimeoutType.CRIT_READ);
+        this.addUnconfirmedReadMessage(key);
     }
 
     private void forwardWriteMessageToNext(Serializable message) {
@@ -130,7 +135,7 @@ public abstract class Cache extends Node {
             // Can't do anything
             return;
         }
-        System.out.printf("%s received write message, forward to next\n", this.id);
+        System.out.printf("%s - Received write message, forward to next\n", this.id);
 
         // Need to save the message and sender
         this.currentWriteMessage = Optional.of(message);
@@ -155,7 +160,7 @@ public abstract class Cache extends Node {
         int value = message.getValue();
         int updateCount = message.getUpdateCount();
         System.out.printf("%s received write confirm message {%d: %d} (UC: %d), forward to sender\n",
-                this.id, value, updateCount);
+                this.id, key, value, updateCount);
 
         // Update value if needed
         // todo Is this correct?
@@ -227,8 +232,25 @@ public abstract class Cache extends Node {
             // We either don't know the value or it's older, so forward message to next
             System.out.printf("%s does not know %d or has an older version (given UC: %d, my UC: %d), forward to next\n",
                     this.id, key, updateCount, this.data.getUpdateCountForKey(key).orElse(0));
-            this.forwardReadMessageToNext(message);
+            this.forwardReadMessageToNext(message, key);
         }
+    }
+
+    private void onCritReadMessage(CritReadMessage message) {
+        if (!this.canInstantiateNewReadConversation()) {
+            // Not allowed to handle received message -> time out
+            return;
+        }
+        // print confirm
+        int key = message.getKey();
+        int updateCount = message.getUpdateCount();
+        System.out.printf("%s - Received crit read message for key %d (UC: %d)\n", this.id, key, updateCount);
+
+        // add sender to queue
+        this.currentReadMessages.put(key, this.getSender());
+
+        // Forward to next
+        this.forwardCritReadMessageToNext(message, key);
     }
 
     /**
@@ -270,6 +292,7 @@ public abstract class Cache extends Node {
                 .match(WriteConfirmMessage.class, this::onWriteConfirmMessage)
                 .match(RefillMessage.class, this::onRefillMessage)
                 .match(ReadMessage.class, this::onReadMessage)
+                .match(CritReadMessage.class, this::onCritReadMessage)
                 .match(FillMessage.class, this::onFillMessage)
                 .match(CrashMessage.class, this::onCrashMessage)
                 .match(TimeoutMessage.class, this::onTimeoutMessage)

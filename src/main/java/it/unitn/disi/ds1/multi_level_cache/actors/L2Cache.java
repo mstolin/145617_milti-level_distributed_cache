@@ -2,6 +2,7 @@ package it.unitn.disi.ds1.multi_level_cache.actors;
 
 import akka.actor.ActorRef;
 import akka.actor.Props;
+import it.unitn.disi.ds1.multi_level_cache.messages.CritReadMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.ReadMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.ReadReplyMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.TimeoutMessage;
@@ -29,6 +30,15 @@ public class L2Cache extends Cache {
             // if the key is in this map, then no ReadReply has been received for the key
             if (this.isReadUnconfirmed(key)) {
                 System.out.printf("%s - has timed out for read, forward message directly to DB\n", this.id);
+                this.database.tell(message.getMessage(), this.getSelf());
+            }
+        } else if (message.getType() == TimeoutType.CRIT_READ) {
+            CritReadMessage critReadMessage = (CritReadMessage) message.getMessage();
+            int key = critReadMessage.getKey();
+
+            // if the key is in this map, then no ReadReply has been received for the key
+            if (this.isReadUnconfirmed(key)) {
+                System.out.printf("%s - has timed out for crit read, forward message directly to DB\n", this.id);
                 this.database.tell(message.getMessage(), this.getSelf());
             }
         }

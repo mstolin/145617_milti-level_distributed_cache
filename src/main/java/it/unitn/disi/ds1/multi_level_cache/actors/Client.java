@@ -105,6 +105,22 @@ public class Client extends Node {
     }
 
     /**
+     * Sends a CritReadMessage to the given L2 cache. Additionally, it increases the read count
+     * and start a timeout for the read message.
+     *
+     * @param l2Cache Target L2 cache
+     * @param key Key to be read
+     */
+    private void tellCritReadMessage(ActorRef l2Cache, int key) {
+        CritReadMessage critReadMessage = new CritReadMessage(key, this.data.getUpdateCountForKey(key).orElse(0));
+        l2Cache.tell(critReadMessage, this.getSelf());
+        // set config
+        this.addUnconfirmedReadMessage(key);
+        // set timeout
+        this.setTimeout(critReadMessage, l2Cache, TimeoutType.CRIT_READ);
+    }
+
+    /**
      * Resends a ReadMessage to a random L2 cache that is not the given unreachable actor.
      * Additionally, it increases the retry count for the given key.
      *
@@ -112,11 +128,19 @@ public class Client extends Node {
      * @param key Key to be read
      */
     private void retryReadMessage(ActorRef unreachableActor, int key) {
-        List<ActorRef> workingL2Caches = this.l2Caches
-                .stream().filter((actorRef -> actorRef != unreachableActor)).toList();
-        ActorRef randomActor = this.getRandomActor(workingL2Caches);
-        this.tellReadMessage(randomActor, key);
-        this.increaseCountForUnconfirmedReadMessage(key);
+        int retryCountForKey = this.getRetryCountForRead(key);
+        if (retryCountForKey < MAX_RETRY_COUNT) {
+            List<ActorRef> workingL2Caches = this.l2Caches
+                    .stream().filter((actorRef -> actorRef != unreachableActor)).toList();
+            ActorRef randomActor = this.getRandomActor(workingL2Caches);
+            this.tellReadMessage(randomActor, key);
+            this.increaseCountForUnconfirmedReadMessage(key);
+            System.out.printf("%s - Retried ReadMessage for key %d for the %dth time (max retries: %d)\n",
+                    this.id, key, retryCountForKey, MAX_RETRY_COUNT);
+        } else {
+            // abort retries
+            this.resetReadConfig(key);
+        }
     }
 
     /**
@@ -210,8 +234,13 @@ public class Client extends Node {
             return;
         }
 
-        System.out.printf("%s send read message to L2 Cache for key %d\n", this.id, key);
-        this.tellReadMessage(l2Cache, key);
+        if (message.isCritical()) {
+            System.out.printf("%s send critical read message to L2 Cache for key %d\n", this.id, key);
+            this.tellCritReadMessage(l2Cache, key);
+        } else {
+            System.out.printf("%s send read message to L2 Cache for key %d\n", this.id, key);
+            this.tellReadMessage(l2Cache, key);
+        }
     }
 
     /**
@@ -261,17 +290,15 @@ public class Client extends Node {
             // if the key is in this map, then no ReadReply has been received for the key
             if (this.isReadUnconfirmed(key)) {
                 System.out.printf("%s - Timeout on ReadMessage for key %2d\n", this.id, key);
+                this.retryReadMessage(message.getUnreachableActor(), key);
+            }
+        } else if (type == TimeoutType.CRIT_READ) {
+            CritReadMessage critReadMessage = (CritReadMessage) message.getMessage();
+            int key = critReadMessage.getKey();
 
-                // try again
-                int retryCountForKey = this.getRetryCountForRead(key);
-                if (retryCountForKey < MAX_RETRY_COUNT) {
-                    this.retryReadMessage(message.getUnreachableActor(), key);
-                    System.out.printf("%s - Retried ReadMessage for key %d for the %dth time (max retries: %d)\n",
-                            this.id, key, retryCountForKey, MAX_RETRY_COUNT);
-                } else {
-                    // abort retries
-                    this.resetReadConfig(key);
-                }
+            if (this.isReadUnconfirmed(key)) {
+                System.out.printf("%s - Timeout on CritReadMessage for key %2d\n", this.id, key);
+                this.retryReadMessage(message.getUnreachableActor(), key);
             }
         }
     }
