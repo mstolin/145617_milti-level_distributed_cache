@@ -2,7 +2,6 @@ package it.unitn.disi.ds1.multi_level_cache.actors;
 
 import akka.actor.ActorRef;
 import akka.actor.Props;
-import it.unitn.disi.ds1.multi_level_cache.actors.utils.DataStore;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 
@@ -20,8 +19,6 @@ public class Client extends Node {
     static final int MAX_RETRY_COUNT = 3;
     /** List of level 2 caches, the client knows about */
     private List<ActorRef> l2Caches;
-    /** Data the client knows about */
-    private DataStore data = new DataStore();
 
     public Client(String id) {
         super(id);

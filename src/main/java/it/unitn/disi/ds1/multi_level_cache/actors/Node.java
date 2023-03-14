@@ -2,6 +2,7 @@ package it.unitn.disi.ds1.multi_level_cache.actors;
 
 import akka.actor.AbstractActor;
 import akka.actor.ActorRef;
+import it.unitn.disi.ds1.multi_level_cache.actors.utils.DataStore;
 import it.unitn.disi.ds1.multi_level_cache.messages.CrashMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.RecoveryMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.TimeoutMessage;
@@ -17,6 +18,8 @@ public abstract class Node extends AbstractActor {
 
     /** The timeout duration */
     static final long TIMEOUT_SECONDS = 2;
+    /** Data the Node knows about */
+    protected DataStore data = new DataStore();
     /** Determines if this Node has crashed */
     protected boolean hasCrashed = false;
     /** Is this Node waiting for a write-confirm message */

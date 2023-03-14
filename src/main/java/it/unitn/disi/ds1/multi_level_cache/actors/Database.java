@@ -2,9 +2,7 @@ package it.unitn.disi.ds1.multi_level_cache.actors;
 
 import akka.actor.ActorRef;
 import akka.actor.Props;
-import it.unitn.disi.ds1.multi_level_cache.actors.utils.DataStore;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
-import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 
 import java.util.List;
 import java.util.Optional;
@@ -14,7 +12,6 @@ public class Database extends Node {
 
     private List<ActorRef> l1Caches;
     private List<ActorRef> l2Caches;
-    private DataStore data = new DataStore();
 
     public Database() {
         super("Database");

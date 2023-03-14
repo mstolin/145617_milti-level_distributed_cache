@@ -1,7 +1,6 @@
 package it.unitn.disi.ds1.multi_level_cache.actors;
 
 import akka.actor.ActorRef;
-import it.unitn.disi.ds1.multi_level_cache.actors.utils.DataStore;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 
@@ -36,8 +35,6 @@ public abstract class Cache extends Node {
      * If true, this is the cache the clients talk to.
      */
     protected final boolean isLastLevelCache;
-    /** The cached data */
-    protected DataStore data = new DataStore();
 
     public Cache(String id, boolean isLastLevelCache) {
         super(id);
