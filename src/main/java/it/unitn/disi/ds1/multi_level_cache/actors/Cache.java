@@ -75,6 +75,11 @@ public abstract class Cache extends Node {
         return super.canInstantiateNewWriteConversation() && this.currentWriteMessage.isEmpty() && this.currentReadMessages.isEmpty();
     }
 
+    private void saveWriteConfig(Serializable message, ActorRef sender) {
+        this.currentWriteMessage = Optional.of(message);
+        this.currentWriteSender = Optional.of(sender);
+    }
+
     /**
      * Updates the cache value for the given key if needed. The requirements are,
      * that the key already exists and the received value is newer. This method
@@ -138,8 +143,21 @@ public abstract class Cache extends Node {
         System.out.printf("%s - Received write message, forward to next\n", this.id);
 
         // Need to save the message and sender
-        this.currentWriteMessage = Optional.of(message);
-        this.currentWriteSender = Optional.of(this.getSender());
+        this.saveWriteConfig(message, this.getSender());
+
+        this.forwardWriteMessageToNext(message);
+    }
+
+    private void onCritWriteMessage(CritWriteMessage message) {
+        if (!this.canInstantiateNewWriteConversation()) {
+            // Can't do anything
+            return;
+        }
+        System.out.printf("%s - Received critical write message, forward to next\n", this.id);
+
+        // block for write
+        this.saveWriteConfig(message, this.getSender());
+
         this.forwardWriteMessageToNext(message);
     }
 
@@ -289,6 +307,7 @@ public abstract class Cache extends Node {
                 .match(JoinMainL1CacheMessage.class, this::onJoinMainL1Cache)
                 .match(JoinL2CachesMessage.class, this::onJoinL2Caches)
                 .match(WriteMessage.class, this::onWriteMessage)
+                .match(CritWriteMessage.class, this::onCritWriteMessage)
                 .match(WriteConfirmMessage.class, this::onWriteConfirmMessage)
                 .match(RefillMessage.class, this::onRefillMessage)
                 .match(ReadMessage.class, this::onReadMessage)
