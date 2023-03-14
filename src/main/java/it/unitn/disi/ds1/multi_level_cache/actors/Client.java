@@ -44,6 +44,7 @@ public class Client extends Node {
      */
     private ActorRef getRandomActor(List<ActorRef> group) {
         Random rand = new Random();
+        Collections.shuffle(group);
         return group.get(rand.nextInt(group.size()));
     }
 
@@ -65,19 +66,53 @@ public class Client extends Node {
     }
 
     /**
+     * Sends a CritWriteMessage instance to the given L2 cache.
+     * It also starts a write-timeout.
+     *
+     * @param l2Cache The choosen L2 cache actor
+     * @param key Key that has to be written
+     * @param value Value used to update the key
+     */
+    private void tellCritWriteMessage(ActorRef l2Cache, int key, int value) {
+        CritWriteMessage critWriteMessage = new CritWriteMessage(key, value);
+        l2Cache.tell(critWriteMessage, this.getSelf());
+        // set config
+        this.isWaitingForWriteConfirm = true;
+        // set timeout
+        this.setTimeout(critWriteMessage, l2Cache, TimeoutType.CRIT_WRITE);
+    }
+
+    /**
      * Resends a WriteMessage to a random actor that is not the given unreachable actor.
      * Additionally, it increases the write-retry-count.
      *
      * @param unreachableActor The previously tried unreachable L2 cache
      * @param key Key that has to be written
      * @param value Value used to update the key
+     * @param isCritical Determines if the message is of critical nature
      */
-    private void retryWriteMessage(ActorRef unreachableActor, int key, int value) {
-        List<ActorRef> workingL2Caches = this.l2Caches
-                .stream().filter((actorRef -> actorRef != unreachableActor)).toList();
-        ActorRef randomActor = this.getRandomActor(workingL2Caches);
-        this.tellWriteMessage(randomActor, key, value);
-        this.writeRetryCount = this.writeRetryCount + 1;
+    private void retryWriteMessage(ActorRef unreachableActor, int key, int value, boolean isCritical) {
+        if (this.writeRetryCount < MAX_RETRY_COUNT) {
+            // get random actor
+            List<ActorRef> workingL2Caches = this.l2Caches
+                    .stream().filter((actorRef -> actorRef != unreachableActor)).toList();
+            ActorRef randomActor = this.getRandomActor(workingL2Caches);
+
+            // send message
+            if (isCritical) {
+                this.tellCritWriteMessage(randomActor, key, value);
+                System.out.printf("%s - Retried CritWriteMessage for {%d: %d} for the %dth time (max retries: %d)\n",
+                        this.id, key, value, this.writeRetryCount, MAX_RETRY_COUNT);
+            } else {
+                this.tellWriteMessage(randomActor, key, value);
+                System.out.printf("%s - Retried WriteMessage for {%d: %d} for the %dth time (max retries: %d)\n",
+                        this.id, key, value, this.writeRetryCount, MAX_RETRY_COUNT);
+            }
+            this.writeRetryCount = this.writeRetryCount + 1;
+        } else {
+            // abort retry
+            this.resetWriteConfig();
+        }
     }
 
     /**
@@ -126,17 +161,27 @@ public class Client extends Node {
      *
      * @param unreachableActor The L2 cache that is unreachable
      * @param key Key to be read
+     * @param isCritical Determines if the message is of critical nature
      */
-    private void retryReadMessage(ActorRef unreachableActor, int key) {
+    private void retryReadMessage(ActorRef unreachableActor, int key, boolean isCritical) {
         int retryCountForKey = this.getRetryCountForRead(key);
         if (retryCountForKey < MAX_RETRY_COUNT) {
+            // get another actor (hoping it will work)
             List<ActorRef> workingL2Caches = this.l2Caches
                     .stream().filter((actorRef -> actorRef != unreachableActor)).toList();
             ActorRef randomActor = this.getRandomActor(workingL2Caches);
-            this.tellReadMessage(randomActor, key);
+
+            // send message
+            if (isCritical) {
+                this.tellCritReadMessage(randomActor, key);
+                System.out.printf("%s - Retried CritReadMessage for key %d for the %dth time (max retries: %d)\n",
+                        this.id, key, retryCountForKey, MAX_RETRY_COUNT);
+            } else {
+                this.tellReadMessage(randomActor, key);
+                System.out.printf("%s - Retried ReadMessage for key %d for the %dth time (max retries: %d)\n",
+                        this.id, key, retryCountForKey, MAX_RETRY_COUNT);
+            }
             this.increaseCountForUnconfirmedReadMessage(key);
-            System.out.printf("%s - Retried ReadMessage for key %d for the %dth time (max retries: %d)\n",
-                    this.id, key, retryCountForKey, MAX_RETRY_COUNT);
         } else {
             // abort retries
             this.resetReadConfig(key);
@@ -187,8 +232,13 @@ public class Client extends Node {
             return;
         }
 
-        System.out.printf("%s sends write message {%d: %d} to L2 cache\n", this.id, key, value);
-        this.tellWriteMessage(l2Cache, key, value);
+        if (message.isCritical()) {
+            System.out.printf("%s - Sends critical write message {%d: %d} to L2 cache\n", this.id, key, value);
+            this.tellCritWriteMessage(l2Cache, key, value);
+        } else {
+            System.out.printf("%s - Sends write message {%d: %d} to L2 cache\n", this.id, key, value);
+            this.tellWriteMessage(l2Cache, key, value);
+        }
     }
 
     /**
@@ -274,15 +324,7 @@ public class Client extends Node {
                     this.id, key, value);
 
             // try again
-            if (this.writeRetryCount < MAX_RETRY_COUNT) {
-                ActorRef unreachableActor = message.getUnreachableActor();
-                this.retryWriteMessage(unreachableActor, writeMessage.getKey(), writeMessage.getValue());
-                System.out.printf("%s - Retried WriteMessage for {%d: %d} for the %dth time (max retries: %d)\n",
-                        this.id, key, value, this.writeRetryCount, MAX_RETRY_COUNT);
-            } else {
-                // abort retry
-                this.resetWriteConfig();
-            }
+            this.retryWriteMessage(message.getUnreachableActor(), key, value, false);
         } else if (type == TimeoutType.READ) {
             ReadMessage readMessage = (ReadMessage) message.getMessage();
             int key = readMessage.getKey();
@@ -290,7 +332,7 @@ public class Client extends Node {
             // if the key is in this map, then no ReadReply has been received for the key
             if (this.isReadUnconfirmed(key)) {
                 System.out.printf("%s - Timeout on ReadMessage for key %2d\n", this.id, key);
-                this.retryReadMessage(message.getUnreachableActor(), key);
+                this.retryReadMessage(message.getUnreachableActor(), key, false);
             }
         } else if (type == TimeoutType.CRIT_READ) {
             CritReadMessage critReadMessage = (CritReadMessage) message.getMessage();
@@ -298,8 +340,17 @@ public class Client extends Node {
 
             if (this.isReadUnconfirmed(key)) {
                 System.out.printf("%s - Timeout on CritReadMessage for key %2d\n", this.id, key);
-                this.retryReadMessage(message.getUnreachableActor(), key);
+                this.retryReadMessage(message.getUnreachableActor(), key, true);
             }
+        } else if (type == TimeoutType.CRIT_WRITE) {
+            CritWriteMessage critWriteMessage = (CritWriteMessage) message.getMessage();
+            int key = critWriteMessage.getKey();
+            int value = critWriteMessage.getValue();
+            System.out.printf("%s - Timeout on CritWriteMessage for {%2d: %d}\n",
+                    this.id, key, value);
+
+            // try again
+            this.retryWriteMessage(message.getUnreachableActor(), key, value, true);
         }
     }
 
