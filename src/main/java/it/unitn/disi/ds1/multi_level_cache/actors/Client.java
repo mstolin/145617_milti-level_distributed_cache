@@ -23,6 +23,11 @@ public class Client extends Node {
     private int writeRetryCount = 0;
     /** Is this Node waiting for a write-confirm message */
     private boolean isWaitingForWriteConfirm = false;
+    /**
+     * All unconfirmed read operations for the given key.
+     * The value is the count of retries.
+     */
+    private Map<Integer, Integer> unconfirmedReads = new HashMap<>();
 
     public Client(String id) {
         super(id);
@@ -135,7 +140,7 @@ public class Client extends Node {
         ReadMessage readMessage = new ReadMessage(key, this.data.getUpdateCountForKey(key).orElse(0));
         l2Cache.tell(readMessage, this.getSelf());
         // set config
-        this.addUnconfirmedReadMessage(key);
+        this.addUnconfirmedReadMessage(key, l2Cache);
         // set timeout
         this.setTimeout(readMessage, l2Cache, TimeoutType.READ);
     }
@@ -151,7 +156,7 @@ public class Client extends Node {
         CritReadMessage critReadMessage = new CritReadMessage(key, this.data.getUpdateCountForKey(key).orElse(0));
         l2Cache.tell(critReadMessage, this.getSelf());
         // set config
-        this.addUnconfirmedReadMessage(key);
+        this.addUnconfirmedReadMessage(key, l2Cache);
         // set timeout
         this.setTimeout(critReadMessage, l2Cache, TimeoutType.CRIT_READ);
     }
@@ -195,8 +200,34 @@ public class Client extends Node {
      *
      * @param key Key to read
      */
-    private void resetReadConfig(int key) {
-        this.resetUnconfirmedReadMessage(key);
+    @Override
+    protected void resetReadConfig(int key) {
+        if (this.unconfirmedReads.containsKey(key)) {
+            this.unconfirmedReads.remove(key);
+        }
+    }
+
+    /**
+     * Returns the number of read retries for the given key.
+     * 0 as default value.
+     *
+     * @param key Key of the read
+     * @return Retry count
+     */
+    protected int getRetryCountForRead(int key) {
+        return this.unconfirmedReads.getOrDefault(key, 0);
+    }
+
+    /**
+     * Increases the read count for the given key by one.
+     *
+     * @param key Key of the read message
+     */
+    protected void increaseCountForUnconfirmedReadMessage(int key) {
+        if (this.unconfirmedReads.containsKey(key)) {
+            int retryCount = this.unconfirmedReads.getOrDefault(key, 0) + 1;
+            this.unconfirmedReads.put(key, retryCount);
+        }
     }
 
     /**
@@ -353,6 +384,18 @@ public class Client extends Node {
             // try again
             this.retryWriteMessage(message.getUnreachableActor(), key, value, true);
         }
+    }
+
+    @Override
+    protected void addUnconfirmedReadMessage(int key, ActorRef sender) {
+        if (!this.unconfirmedReads.containsKey(key)) {
+            this.unconfirmedReads.put(key, 0);
+        }
+    }
+
+    @Override
+    protected boolean isReadUnconfirmed(int key) {
+        return this.unconfirmedReads.containsKey(key);
     }
 
     @Override
