@@ -11,6 +11,8 @@ class DataEntry {
     /** The updateCount shows how often the value has been written. 1 by default.*/
     private int updateCount = 1;
 
+    private boolean isLocked = false;
+
     public DataEntry(int value) {
         this.value = value;
     }
@@ -41,6 +43,18 @@ class DataEntry {
         this.updateCount = this.updateCount + 1;
     }
 
+    public boolean isLocked() {
+        return isLocked;
+    }
+
+    public void lock() {
+        this.isLocked = true;
+    }
+
+    public void unLock() {
+        this.isLocked = false;
+    }
+
 }
 
 public class DataStore {
@@ -66,7 +80,7 @@ public class DataStore {
     }
 
     public void setValueForKey(int key, int value, int updateCount) {
-        if (this.containsKey(key)) {
+        if (this.containsKey(key) && !this.getData(key).isLocked()) {
             // update
             this.getData(key).setValue(value);
             this.getData(key).setUpdateCount(updateCount);
@@ -90,6 +104,31 @@ public class DataStore {
             return Optional.of(updateCount);
         }
         return Optional.empty();
+    }
+
+    public void lockValueForKey(int key) {
+        if (this.containsKey(key)) {
+            this.getData(key).lock();
+        }
+    }
+
+    public void unLockValueForKey(int key) {
+        if (this.containsKey(key)) {
+            this.getData(key).unLock();
+        }
+    }
+
+    public void unLockAll() {
+        for (DataEntry entry: this.data.values()) {
+            entry.unLock();
+        }
+    }
+
+    public boolean isLocked(int key) {
+        if (this.containsKey(key)) {
+            return this.getData(key).isLocked();
+        }
+        return false;
     }
 
     public boolean isNewerOrEqual(int key, int updateCount) {
