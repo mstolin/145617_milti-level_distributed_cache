@@ -6,6 +6,7 @@ import it.unitn.disi.ds1.multi_level_cache.messages.*;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 
 import java.io.Serializable;
+import java.util.List;
 import java.util.Optional;
 
 public class L1Cache extends Cache {
@@ -15,6 +16,10 @@ public class L1Cache extends Cache {
 
     public L1Cache(String id) {
         super(id, false);
+    }
+
+    static public Props props(String id) {
+        return Props.create(Cache.class, () -> new L1Cache(id));
     }
 
     private void resetCritWriteConfig() {
@@ -28,10 +33,6 @@ public class L1Cache extends Cache {
             // Some L2 has aborted so lets timeout as well
             this.resetCritWriteConfig();
         }
-    }
-
-    static public Props props(String id) {
-        return Props.create(Cache.class, () -> new L1Cache(id));
     }
 
     @Override
@@ -113,15 +114,16 @@ public class L1Cache extends Cache {
 
     @Override
     protected void responseForFillOrReadReply(int key) {
-        // todo here we need to check if l2 has crashed, then read reply directly back to client (need to add client to the msg)
-        Optional<Integer> value = this.data.getValueForKey(key);
-        Optional<Integer> updateCount = this.data.getUpdateCountForKey(key);
+        if (this.isReadUnconfirmed(key)) {
+            int value = this.data.getValueForKey(key).get();
+            int updateCount = this.data.getUpdateCountForKey(key).get();
 
-        if (this.currentReadMessages.containsKey(key) && value.isPresent() && updateCount.isPresent()) {
-            ActorRef cache = this.currentReadMessages.get(key);
-            FillMessage fillMessage = new FillMessage(key, value.get(), updateCount.get());
-            cache.tell(fillMessage, this.getSelf());
-            this.currentReadMessages.remove(key);
+            // multicast to L2s who have requested the key
+            List<ActorRef> requestedL2s = this.unconfirmedReads.get(key);
+            FillMessage fillMessage = new FillMessage(key, value, updateCount);
+            this.multicast(fillMessage, requestedL2s);
+            // afterwards reset for key
+            this.resetReadConfig(key);
         }
     }
 

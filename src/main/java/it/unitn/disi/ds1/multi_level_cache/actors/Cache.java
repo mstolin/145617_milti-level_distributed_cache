@@ -37,8 +37,8 @@ public abstract class Cache extends Node {
      * If true, this is the cache the clients talk to.
      */
     protected final boolean isLastLevelCache;
-    protected Map<Integer, List<ActorRef>> unconfirmedReadSender = new HashMap<>();
-    protected Map<Integer, List<ActorRef>> unconfirmedWriteSender = new HashMap<>();
+    protected Map<Integer, List<ActorRef>> unconfirmedReads = new HashMap<>();
+    protected Map<Integer, List<ActorRef>> unconfirmedWrites = new HashMap<>();
 
     public Cache(String id, boolean isLastLevelCache) {
         super(id);
@@ -106,6 +106,28 @@ public abstract class Cache extends Node {
         return !this.data.isLocked(key);
     }
 
+    @Override
+    protected void addUnconfirmedReadMessage(int key, ActorRef sender) {
+        if (this.unconfirmedReads.containsKey(key)) {
+            this.unconfirmedReads.get(key).add(sender);
+        } else {
+            List<ActorRef> actors = new ArrayList<>(List.of(sender));
+            this.unconfirmedReads.put(key, actors);
+        }
+    }
+
+    @Override
+    protected boolean isReadUnconfirmed(int key) {
+        return this.unconfirmedReads.containsKey(key);
+    }
+
+    @Override
+    protected void resetReadConfig(int key) {
+        if (this.unconfirmedReads.containsKey(key)) {
+            this.unconfirmedReads.remove(key);
+        }
+    }
+
     /**
      * Creates a Receive instance for when this Node has crashed.
      * THen, this Node will only handle RecoveryMessages.
@@ -143,12 +165,10 @@ public abstract class Cache extends Node {
 
     private void forwardReadMessageToNext(Serializable message, int key) {
         this.forwardMessageToNext(message, TimeoutType.READ);
-        this.addUnconfirmedReadMessage(key);
     }
 
     private void forwardCritReadMessageToNext(Serializable message, int key) {
         this.forwardMessageToNext(message, TimeoutType.CRIT_READ);
-        this.addUnconfirmedReadMessage(key);
     }
 
     private void forwardWriteMessageToNext(Serializable message) {
@@ -285,7 +305,7 @@ public abstract class Cache extends Node {
         System.out.printf("%s Received read message for key %d (UC: %d)\n", this.id, key, updateCount);
 
         // add sender to queue
-        this.currentReadMessages.put(key, this.getSender());
+        this.addUnconfirmedReadMessage(key, this.getSender());
 
         Optional<Integer> wanted = this.data.getValueForKey(key);
         // check if we own a more recent or an equal value
@@ -309,6 +329,9 @@ public abstract class Cache extends Node {
             // Not allowed to handle received message -> time out
             return;
         }
+        // add as unconfirmed
+        this.addUnconfirmedReadMessage(key, this.getSender());
+
         // print confirm
         int updateCount = message.getUpdateCount();
         System.out.printf("%s - Received crit read message for key %d (UC: %d)\n", this.id, key, updateCount);
@@ -334,8 +357,7 @@ public abstract class Cache extends Node {
                 this.id, message.getKey(), message.getValue(), message.getUpdateCount(), this.data.getUpdateCountForKey(key).orElse(0));
 
         // disable timout
-        this.resetUnconfirmedReadMessage(key);
-        // todo resetReadConfig(key) like in client
+        this.resetReadConfig(key);
 
         // Update value
         this.data.setValueForKey(key, message.getValue(), message.getUpdateCount());

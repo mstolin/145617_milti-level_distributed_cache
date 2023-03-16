@@ -6,6 +6,7 @@ import it.unitn.disi.ds1.multi_level_cache.messages.*;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 
 import java.io.Serializable;
+import java.util.List;
 import java.util.Optional;
 
 public class L2Cache extends Cache {
@@ -99,16 +100,17 @@ public class L2Cache extends Cache {
      */
     @Override
     protected void responseForFillOrReadReply(int key) {
-        Optional<Integer> value = this.data.getValueForKey(key);
-        Optional<Integer> updateCount = this.data.getUpdateCountForKey(key);
+        if (this.isReadUnconfirmed(key)) {
+            int value = this.data.getValueForKey(key).get();
+            int updateCount = this.data.getUpdateCountForKey(key).get();
 
-        if (this.currentReadMessages.containsKey(key) && value.isPresent() && updateCount.isPresent()) {
-            // get client
-            ActorRef client = this.currentReadMessages.get(key);
-            this.currentReadMessages.remove(key);
-            // send message
-            ReadReplyMessage readReplyMessage = new ReadReplyMessage(key, value.get(), updateCount.get());
-            client.tell(readReplyMessage, this.getSelf());
+
+            // multicast to clients who have requested the key
+            List<ActorRef> clients = this.unconfirmedReads.get(key);
+            ReadReplyMessage readReplyMessage = new ReadReplyMessage(key, value, updateCount);
+            this.multicast(readReplyMessage, clients);
+            // reset for key
+            this.resetReadConfig(key);
         }
     }
 }
