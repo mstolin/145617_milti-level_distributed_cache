@@ -69,7 +69,11 @@ public class DataStore {
         return this.data.containsKey(key);
     }
 
-    public void setValueForKey(int key, int value) {
+    public void setValueForKey(int key, int value) throws IllegalAccessException {
+        if (this.isLocked(key)) {
+            throw new IllegalAccessException();
+        }
+
         if (this.containsKey(key)) {
             // update
             this.getData(key).updateValue(value);
@@ -79,8 +83,12 @@ public class DataStore {
         }
     }
 
-    public void setValueForKey(int key, int value, int updateCount) {
-        if (this.containsKey(key) && !this.getData(key).isLocked()) {
+    public void setValueForKey(int key, int value, int updateCount) throws IllegalAccessException {
+        if (this.isLocked(key)) {
+            throw new IllegalAccessException();
+        }
+
+        if (this.containsKey(key)) {
             // update
             this.getData(key).setValue(value);
             this.getData(key).setUpdateCount(updateCount);
