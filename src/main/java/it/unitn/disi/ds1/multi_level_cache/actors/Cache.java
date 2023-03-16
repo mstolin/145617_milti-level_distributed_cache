@@ -21,6 +21,8 @@ public abstract class Cache extends Node {
      * Null if this cache is a L2 cache.
      */
     protected List<ActorRef> l2Caches;
+    /** Determines if this Node has crashed */
+    protected boolean hasCrashed = false;
     /** The write-message this cache is currently handling */
     protected Optional<Serializable> currentWriteMessage = Optional.empty();
     /** The sender of currentWriteMessage */
@@ -35,49 +37,85 @@ public abstract class Cache extends Node {
      * If true, this is the cache the clients talk to.
      */
     protected final boolean isLastLevelCache;
+    protected Map<Integer, List<ActorRef>> unconfirmedReadSender = new HashMap<>();
+    protected Map<Integer, List<ActorRef>> unconfirmedWriteSender = new HashMap<>();
 
     public Cache(String id, boolean isLastLevelCache) {
         super(id);
         this.isLastLevelCache = isLastLevelCache;
     }
 
-    abstract protected void multicastReFillMessage(int key, int value, int updateCount, ActorRef sender);
+    protected abstract void multicastReFillMessage(int key, int value, int updateCount, ActorRef sender);
 
-    abstract protected void responseForFillOrReadReply(int key);
+    protected abstract void responseForFillOrReadReply(int key);
 
-    abstract protected void forwardMessageToNext(Serializable message, TimeoutType timeoutType);
+    protected abstract void forwardMessageToNext(Serializable message, TimeoutType timeoutType);
 
-    abstract protected void onCritWriteRequestMessage(CritWriteRequestMessage message);
+    protected abstract void onCritWriteRequestMessage(CritWriteRequestMessage message);
 
-    abstract protected void onCritWriteVoteMessage(CritWriteVoteMessage message);
+    protected abstract void onCritWriteVoteMessage(CritWriteVoteMessage message);
 
-    abstract protected void onCritWriteAbortMessage(CritWriteAbortMessage message);
+    protected abstract void onCritWriteAbortMessage(CritWriteAbortMessage message);
 
-    abstract protected void onCritWriteCommitMessage(CritWriteCommitMessage message);
+    protected abstract void onCritWriteCommitMessage(CritWriteCommitMessage message);
 
-    @Override
+    /**
+     * Flushes all temporary data.
+     */
     protected void flush() {
-        super.flush();
         this.data.resetData();
         this.currentReadMessages = new HashMap<>();
         this.currentWriteMessage = Optional.empty();
         this.currentWriteSender = Optional.empty();
     }
 
-    @Override
+    /**
+     * Crashes this node
+     */
     protected void crash(long recoverDelay) {
-        super.crash(recoverDelay);
+        this.hasCrashed = true;
+        this.getContext().become(this.createReceiveForCrash());
+
+        if (recoverDelay > 0) {
+            System.out.printf("%s - Recover after %d\n", this.id, recoverDelay);
+            this.scheduleMessageToSelf(new RecoveryMessage(), recoverDelay);
+        }
+
         this.flush();
+    }
+
+    /**
+     * Recovers this node after it has crashed.
+     */
+    protected void recover() {
+        if (this.hasCrashed) {
+            System.out.printf("%s - Recovered\n", this.id);
+            this.hasCrashed = false;
+            this.getContext().become(this.createReceive());
+            this.data.unLockAll();
+        }
     }
 
     @Override
     protected boolean canInstantiateNewReadConversation(int key) {
-        return super.canInstantiateNewReadConversation(key) && this.currentWriteMessage.isEmpty(); // todo check das zweite
+        return !this.data.isLocked(key);
     }
 
     @Override
     protected boolean canInstantiateNewWriteConversation(int key) {
-        return super.canInstantiateNewWriteConversation(key) && this.currentWriteMessage.isEmpty() && this.currentReadMessages.isEmpty(); // todo check das alles mal
+        return !this.data.isLocked(key);
+    }
+
+    /**
+     * Creates a Receive instance for when this Node has crashed.
+     * THen, this Node will only handle RecoveryMessages.
+     *
+     * @return a Receive for crashed nodes
+     */
+    private Receive createReceiveForCrash() {
+        return this.receiveBuilder()
+                .match(RecoveryMessage.class, this::onRecoveryMessage)
+                .build();
     }
 
     private void saveWriteConfig(Serializable message, ActorRef sender) {
@@ -303,6 +341,27 @@ public abstract class Cache extends Node {
         this.data.setValueForKey(key, message.getValue(), message.getUpdateCount());
         // response accordingly
         this.responseForFillOrReadReply(key);
+    }
+
+    /**
+     * Listener that is triggered whenever a Node receives a
+     * CrashMessage.
+     *
+     * @param message The received CrashMessage
+     */
+    private void onCrashMessage(CrashMessage message) {
+        System.out.printf("%s - Crash\n", this.id);
+        this.crash(message.getRecoverAfterSeconds());
+    }
+
+    /**
+     * Listener that is triggered whenever this node receives
+     * a RecoveryMessage. Then, this node recovers from a crash.
+     *
+     * @param message The received RecoveryMessage.
+     */
+    private void onRecoveryMessage(RecoveryMessage message) {
+        this.recover();
     }
 
     private void onFlushMessage(FlushMessage message) {

@@ -3,8 +3,6 @@ package it.unitn.disi.ds1.multi_level_cache.actors;
 import akka.actor.AbstractActor;
 import akka.actor.ActorRef;
 import it.unitn.disi.ds1.multi_level_cache.actors.utils.DataStore;
-import it.unitn.disi.ds1.multi_level_cache.messages.CrashMessage;
-import it.unitn.disi.ds1.multi_level_cache.messages.RecoveryMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.TimeoutMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 
@@ -18,90 +16,19 @@ public abstract class Node extends AbstractActor {
 
     /** The timeout duration */
     static final long TIMEOUT_SECONDS = 2;
-    /** Data the Node knows about */
-    protected DataStore data = new DataStore();
-    /** Determines if this Node has crashed */
-    protected boolean hasCrashed = false;
-    /** Is this Node waiting for a write-confirm message */
-    protected boolean isWaitingForWriteConfirm = false;
-    /** WriteMessage retry count */
-    protected int writeRetryCount = 0;
     /**
      * All unconfirmed read operations for the given key.
      * The value is the count of retries.
      */
     private Map<Integer, Integer> unconfirmedReads = new HashMap<>();
+    /** Data the Node knows about */
+    protected DataStore data = new DataStore();
     /** ID of this node */
     public String id;
 
     public Node(String id) {
         super();
         this.id = id;
-    }
-
-    /**
-     * Creates a Receive instance for when this Node has crashed.
-     * THen, this Node will only handle RecoveryMessages.
-     *
-     * @return a Receive for crashed nodes
-     */
-    private Receive createReceiveForCrash() {
-        return this.receiveBuilder()
-                .match(RecoveryMessage.class, this::onRecovery)
-                .build();
-    }
-
-    private void scheduleMessageToSelf(Serializable message, long seconds) {
-        this.getContext()
-                .system()
-                .scheduler()
-                .scheduleOnce(
-                        Duration.ofSeconds(seconds),
-                        this.getSelf(),
-                        message,
-                        this.getContext().system().dispatcher(),
-                        this.getSelf()
-                );
-    }
-
-    /**
-     * Listener that is triggered whenever this node receives
-     * a RecoveryMessage. Then, this node recovers from a crash.
-     *
-     * @param message The received RecoveryMessage.
-     */
-    private void onRecovery(RecoveryMessage message) {
-        this.recover();
-    }
-
-    /**
-     * Sends a message to all actors in the given group.
-     *
-     * @param message The message to be sent
-     * @param group The receiving group of actors
-     */
-    protected void multicast(Serializable message, List<ActorRef> group) {
-        for (ActorRef actor: group) {
-            actor.tell(message, this.getSelf());
-        }
-    }
-
-    /**
-     * Returns the number of unconfirmed read operations.
-     *
-     * @return Number of unconfirmed read operations.
-     */
-    protected int getCurrentReadCount() {
-        return this.unconfirmedReads.size();
-    }
-
-    /**
-     * Returns the seconds used for a time-out.
-     *
-     * @return Seconds
-     */
-    protected long getTimeoutSeconds() {
-        return TIMEOUT_SECONDS;
     }
 
     /**
@@ -112,9 +39,7 @@ public abstract class Node extends AbstractActor {
      *
      * @return Boolean that state if a write conversation is allowed
      */
-    protected boolean canInstantiateNewWriteConversation(int key) {
-        return !this.hasCrashed && !this.isWaitingForWriteConfirm && this.getCurrentReadCount() <= 0 && !this.data.isLocked(key); // todo ueberprufen
-    }
+    protected abstract boolean canInstantiateNewWriteConversation(int key);
 
     /**
      * Determines if this actor is allowed to instantiate a new conversation
@@ -124,22 +49,9 @@ public abstract class Node extends AbstractActor {
      *
      * @return Boolean that state if a read conversation is allowed
      */
-    protected boolean canInstantiateNewReadConversation(int key) {
-        return !this.hasCrashed && !this.isWaitingForWriteConfirm && !this.data.isLocked(key); // todo ueberpruefen
-    }
+    protected abstract boolean canInstantiateNewReadConversation(int key);
 
-    /**
-     * Sends a TimeoutMessage to itself, after the given duration.
-     */
-    protected void setTimeout(Serializable message, ActorRef receiver, TimeoutType timeoutType) {
-        TimeoutMessage timeoutMessage = new TimeoutMessage(message, receiver, timeoutType);
-        this.scheduleMessageToSelf(timeoutMessage, this.getTimeoutSeconds());
-    }
-
-    protected void setMulticastTimeout(Serializable message, TimeoutType timeoutType) {
-        TimeoutMessage timeoutMessage = new TimeoutMessage(message, ActorRef.noSender(), timeoutType);
-        this.scheduleMessageToSelf(timeoutMessage, this.getTimeoutSeconds());
-    }
+    protected abstract void onTimeoutMessage(TimeoutMessage message);
 
     /**
      * Adds the key to the unconfirmed read list.
@@ -197,50 +109,51 @@ public abstract class Node extends AbstractActor {
     }
 
     /**
-     * Crashes this node
-     */
-    protected void crash(long recoverDelay) {
-        this.hasCrashed = true;
-        this.getContext().become(this.createReceiveForCrash());
-
-        if (recoverDelay > 0) {
-            System.out.printf("%s - Recover after %d\n", this.id, recoverDelay);
-            this.scheduleMessageToSelf(new RecoveryMessage(), recoverDelay);
-        }
-    }
-
-    /**
-     * Flushes all temp data
-     */
-    protected void flush() {
-        this.unconfirmedReads = new HashMap<>();
-        this.isWaitingForWriteConfirm = false;
-    }
-
-    /**
-     * Recovers this node after it has crashed.
-     */
-    protected void recover() {
-        if (this.hasCrashed) {
-            System.out.printf("%s - Recovered\n", this.id);
-            this.hasCrashed = false;
-            this.getContext().become(this.createReceive());
-            this.data.unLockAll();
-        }
-    }
-
-    /**
-     * Listener that is triggered whenever a Node receives a
-     * CrashMessage.
+     * Sends a message to all actors in the given group.
      *
-     * @param message The received CrashMessage
+     * @param message The message to be sent
+     * @param group The receiving group of actors
      */
-    protected void onCrashMessage(CrashMessage message) {
-        System.out.printf("%s - Crash\n", this.id);
-        this.crash(message.getRecoverAfterSeconds());
+    protected void multicast(Serializable message, List<ActorRef> group) {
+        for (ActorRef actor: group) {
+            actor.tell(message, this.getSelf());
+        }
     }
 
-    protected abstract void onTimeoutMessage(TimeoutMessage message);
+    /**
+     * Returns the seconds used for a time-out.
+     *
+     * @return Seconds
+     */
+    protected long getTimeoutSeconds() {
+        return TIMEOUT_SECONDS;
+    }
+
+    protected void scheduleMessageToSelf(Serializable message, long seconds) {
+        this.getContext()
+                .system()
+                .scheduler()
+                .scheduleOnce(
+                        Duration.ofSeconds(seconds),
+                        this.getSelf(),
+                        message,
+                        this.getContext().system().dispatcher(),
+                        this.getSelf()
+                );
+    }
+
+    /**
+     * Sends a TimeoutMessage to itself, after the given duration.
+     */
+    protected void setTimeout(Serializable message, ActorRef receiver, TimeoutType timeoutType) {
+        TimeoutMessage timeoutMessage = new TimeoutMessage(message, receiver, timeoutType);
+        this.scheduleMessageToSelf(timeoutMessage, this.getTimeoutSeconds());
+    }
+
+    protected void setMulticastTimeout(Serializable message, TimeoutType timeoutType) {
+        TimeoutMessage timeoutMessage = new TimeoutMessage(message, ActorRef.noSender(), timeoutType);
+        this.scheduleMessageToSelf(timeoutMessage, this.getTimeoutSeconds());
+    }
 
     @Override
     public Receive createReceive() {
