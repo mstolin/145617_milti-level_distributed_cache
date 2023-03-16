@@ -12,10 +12,13 @@ public class InstantiateWriteMessage implements Serializable {
 
     private final ActorRef l2Cache;
 
-    public InstantiateWriteMessage(int key, int value, ActorRef l2Cache) {
+    private final boolean isCritical;
+
+    public InstantiateWriteMessage(int key, int value, ActorRef l2Cache, boolean isCritical) {
         this.key = key;
         this.value = value;
         this.l2Cache = l2Cache;
+        this.isCritical = isCritical;
     }
 
     public int getKey() {
@@ -28,6 +31,10 @@ public class InstantiateWriteMessage implements Serializable {
 
     public ActorRef getL2Cache() {
         return l2Cache;
+    }
+
+    public boolean isCritical() {
+        return isCritical;
     }
 
 }
