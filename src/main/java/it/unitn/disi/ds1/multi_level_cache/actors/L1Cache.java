@@ -11,7 +11,7 @@ import java.util.Optional;
 
 public class L1Cache extends Cache {
 
-    private boolean hasRequestedCritWrite = false;
+    private Optional<Integer> requestedCritWriteKey = Optional.empty();
     private int critWriteVotingsCount = 0;
 
     public L1Cache(String id) {
@@ -22,22 +22,43 @@ public class L1Cache extends Cache {
         return Props.create(Cache.class, () -> new L1Cache(id));
     }
 
-    private void resetCritWriteConfig() {
-        this.hasRequestedCritWrite = false;
+    private void resetCritWriteConfig(int key) {
+        this.resetWriteConfig(key);
+        this.requestedCritWriteKey = Optional.empty();
         this.critWriteVotingsCount = 0;
-    }
-
-    @Override
-    protected void onTimeoutMessage(TimeoutMessage message) {
-        if (message.getType() == TimeoutType.CRIT_WRITE_REQUEST && this.hasRequestedCritWrite) {
-            // Some L2 has aborted so lets timeout as well
-            this.resetCritWriteConfig();
-        }
     }
 
     @Override
     protected void forwardMessageToNext(Serializable message, TimeoutType timeoutType) {
         this.database.tell(message, this.getSelf());
+    }
+
+    @Override
+    protected void onTimeoutMessage(TimeoutMessage message) {
+        if (message.getType() == TimeoutType.CRIT_WRITE_REQUEST) {
+            CritWriteRequestMessage requestMessage = (CritWriteRequestMessage) message.getMessage();
+            int key = requestMessage.getKey();
+
+            if (this.isWriteUnconfirmed(key)) {
+                // reset and just timeout
+                this.resetCritWriteConfig(key);
+            }
+        } else if (message.getType() == TimeoutType.WRITE) {
+            WriteMessage writeMessage = (WriteMessage) message.getMessage();
+            int key = writeMessage.getKey();
+
+            if (this.isWriteUnconfirmed(key)) {
+                // reset and timeout
+                this.resetWriteConfig(key);
+            }
+        } else if (message.getType() == TimeoutType.READ) {
+            ReadMessage readMessage = (ReadMessage) message.getMessage();
+            int key = readMessage.getKey();
+
+            if (this.isReadUnconfirmed(key)) {
+                this.resetReadConfig(key);
+            }
+        }
     }
 
     @Override
@@ -47,10 +68,10 @@ public class L1Cache extends Cache {
 
         // if everything isOk, forward to L2s, otherwise force timeout
         if (isOk) {
+            this.requestedCritWriteKey = Optional.of(key);
             // forward to L2s
             this.multicast(message, this.l2Caches);
             this.setMulticastTimeout(message, TimeoutType.CRIT_WRITE_REQUEST);
-            this.hasRequestedCritWrite = true;
         }
     }
 
@@ -58,7 +79,7 @@ public class L1Cache extends Cache {
     protected void onCritWriteVoteMessage(CritWriteVoteMessage message) {
         if (!message.isOk()) {
             // some L2 as aborted, abort as well and force timeout
-            this.resetCritWriteConfig();
+            this.resetCritWriteConfig(message.getKey());
             return;
         }
 
@@ -71,7 +92,7 @@ public class L1Cache extends Cache {
             CritWriteVoteMessage critWriteVoteMessage = new CritWriteVoteMessage(key, true);
             this.database.tell(critWriteVoteMessage, this.getSelf());
             // reset
-            this.resetCritWriteConfig();
+            this.resetCritWriteConfig(message.getKey());
         }
     }
 
@@ -80,6 +101,7 @@ public class L1Cache extends Cache {
         int key = message.getKey();
         // unlock value
         this.data.unLockValueForKey(key);
+        this.resetCritWriteConfig(key);
         // multicast abort to L2s
         this.multicast(message, this.l2Caches);
     }
@@ -91,11 +113,12 @@ public class L1Cache extends Cache {
         int updateCount = message.getUpdateCount();
 
         // update value
+        this.data.unLockValueForKey(key);
         this.data.setValueForKey(key, value, updateCount);
+        // reset critical write
+        this.resetCritWriteConfig(key);
         // multicast commit to all L2s
         this.multicast(message, this.l2Caches);
-        // reset critical write
-        this.resetCritWriteConfig();
     }
 
     @Override
@@ -128,9 +151,16 @@ public class L1Cache extends Cache {
     }
 
     @Override
+    protected void flush() {
+        super.flush();
+        if (this.requestedCritWriteKey.isPresent()) {
+            this.resetCritWriteConfig(this.requestedCritWriteKey.get());
+        }
+    }
+
+    @Override
     protected void recover() {
         super.recover();
-        this.resetCritWriteConfig();
 
         // send flush to all L2s
         System.out.printf("%s - Flush all L2s\n", this.id);

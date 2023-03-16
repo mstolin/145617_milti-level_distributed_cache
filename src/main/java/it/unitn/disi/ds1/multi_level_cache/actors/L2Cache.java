@@ -7,7 +7,6 @@ import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 
 import java.io.Serializable;
 import java.util.List;
-import java.util.Optional;
 
 public class L2Cache extends Cache {
 
@@ -20,7 +19,17 @@ public class L2Cache extends Cache {
     }
 
     @Override
+    protected void forwardMessageToNext(Serializable message, TimeoutType timeoutType) {
+        this.mainL1Cache.tell(message, this.getSelf());
+        this.setTimeout(message, this.mainL1Cache, timeoutType);
+    }
+
+    @Override
     protected void onTimeoutMessage(TimeoutMessage message) {
+        // forward message to DB, no need for timeout since DB can't timeout
+        /*
+        TODO Was ist wenn DB timeout wegen ein lock?
+         */
         if (message.getType() == TimeoutType.READ) {
             ReadMessage readMessage = (ReadMessage) message.getMessage();
             int key = readMessage.getKey();
@@ -28,7 +37,7 @@ public class L2Cache extends Cache {
             // if the key is in this map, then no ReadReply has been received for the key
             if (this.isReadUnconfirmed(key)) {
                 System.out.printf("%s - has timed out for read, forward message directly to DB\n", this.id);
-                this.database.tell(message.getMessage(), this.getSelf());
+                this.database.tell(readMessage, this.getSelf());
             }
         } else if (message.getType() == TimeoutType.CRIT_READ) {
             CritReadMessage critReadMessage = (CritReadMessage) message.getMessage();
@@ -37,15 +46,17 @@ public class L2Cache extends Cache {
             // if the key is in this map, then no ReadReply has been received for the key
             if (this.isReadUnconfirmed(key)) {
                 System.out.printf("%s - has timed out for crit read, forward message directly to DB\n", this.id);
-                this.database.tell(message.getMessage(), this.getSelf());
+                this.database.tell(critReadMessage, this.getSelf());
+            }
+        } else if (message.getType() == TimeoutType.WRITE) {
+            WriteMessage writeMessage = (WriteMessage) message.getMessage();
+            int key = writeMessage.getKey();
+
+            if (this.isWriteUnconfirmed(key)) {
+                System.out.printf("%s - has timed out for write, forward message directly to DB\n", this.id);
+                this.database.tell(writeMessage, this.getSelf());
             }
         }
-    }
-
-    @Override
-    protected void forwardMessageToNext(Serializable message, TimeoutType timeoutType) {
-        this.mainL1Cache.tell(message, this.getSelf());
-        this.setTimeout(message, this.mainL1Cache, timeoutType);
     }
 
     @Override
@@ -73,6 +84,7 @@ public class L2Cache extends Cache {
         int key = message.getKey();
         // just unlock
         this.data.unLockValueForKey(key);
+        this.resetWriteConfig(key);
     }
 
     @Override
@@ -81,7 +93,15 @@ public class L2Cache extends Cache {
         int key = message.getKey();
         int value = message.getValue();
         int updateCount = message.getUpdateCount();
+        this.data.unLockValueForKey(key);
         this.data.setValueForKey(key, value, updateCount);
+        // reset critical write
+        this.resetWriteConfig(key);
+        // response writeconfirm to client
+        /*
+        TODO Confirm hier an den client, aber loesche mal allgemein die UUID!
+         */
+        WriteConfirmMessage confirmMessage = new WriteConfirmMessage()
     }
 
     @Override
@@ -103,7 +123,6 @@ public class L2Cache extends Cache {
         if (this.isReadUnconfirmed(key)) {
             int value = this.data.getValueForKey(key).get();
             int updateCount = this.data.getUpdateCountForKey(key).get();
-
 
             // multicast to clients who have requested the key
             List<ActorRef> clients = this.unconfirmedReads.get(key);

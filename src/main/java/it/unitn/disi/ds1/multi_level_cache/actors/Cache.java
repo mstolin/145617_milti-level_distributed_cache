@@ -23,22 +23,13 @@ public abstract class Cache extends Node {
     protected List<ActorRef> l2Caches;
     /** Determines if this Node has crashed */
     protected boolean hasCrashed = false;
-    /** The write-message this cache is currently handling */
-    protected Optional<Serializable> currentWriteMessage = Optional.empty();
-    /** The sender of currentWriteMessage */
-    protected Optional<ActorRef> currentWriteSender = Optional.empty();
-    /**
-     * Whenever an actor sends a read message to this cache, the actor is saved to this map
-     * so the cache can directly reply.
-     * */
-    protected Map<Integer, ActorRef> currentReadMessages = new HashMap<>(); // todo rename to current read sender
     /**
      * Determines if this is the last level cache.
      * If true, this is the cache the clients talk to.
      */
     protected final boolean isLastLevelCache;
     protected Map<Integer, List<ActorRef>> unconfirmedReads = new HashMap<>();
-    protected Map<Integer, List<ActorRef>> unconfirmedWrites = new HashMap<>();
+    protected Map<Integer, ActorRef> unconfirmedWrites = new HashMap<>();
 
     public Cache(String id, boolean isLastLevelCache) {
         super(id);
@@ -64,9 +55,8 @@ public abstract class Cache extends Node {
      */
     protected void flush() {
         this.data.resetData();
-        this.currentReadMessages = new HashMap<>();
-        this.currentWriteMessage = Optional.empty();
-        this.currentWriteSender = Optional.empty();
+        this.unconfirmedReads = new HashMap<>();
+        this.unconfirmedWrites = new HashMap<>();
     }
 
     /**
@@ -96,14 +86,46 @@ public abstract class Cache extends Node {
         }
     }
 
+    protected void addUnconfirmedWrite(int key, ActorRef sender) {
+        if (!this.unconfirmedWrites.containsKey(key)) {
+            this.unconfirmedWrites.put(key, sender);
+        }
+    }
+
+    protected boolean isWriteUnconfirmed(int key) {
+        return !this.unconfirmedWrites.containsKey(key);
+    }
+
+    protected void resetWriteConfig(int key) {
+        // remove from unconfirmed
+        if (this.unconfirmedWrites.containsKey(key)) {
+            this.unconfirmedWrites.remove(key);
+        }
+        // unlock
+        this.data.unLockValueForKey(key);
+    }
+
+    /**
+     * A Cache a cannot handle the read conversation if the value is locked.
+     *
+     * @param key
+     * @return
+     */
     @Override
     protected boolean canInstantiateNewReadConversation(int key) {
         return !this.data.isLocked(key);
     }
 
+    /**
+     * A Cache cannot handle a new write conversation, if the value is locked
+     * or another actor has already requested to write this key.
+     *
+     * @param key
+     * @return
+     */
     @Override
     protected boolean canInstantiateNewWriteConversation(int key) {
-        return !this.data.isLocked(key);
+        return !this.data.isLocked(key) && !this.isWriteUnconfirmed(key);
     }
 
     @Override
@@ -140,11 +162,6 @@ public abstract class Cache extends Node {
                 .build();
     }
 
-    private void saveWriteConfig(Serializable message, ActorRef sender) {
-        this.currentWriteMessage = Optional.of(message);
-        this.currentWriteSender = Optional.of(sender);
-    }
-
     /**
      * Updates the cache value for the given key if needed. The requirements are,
      * that the key already exists and the received value is newer. This method
@@ -154,7 +171,7 @@ public abstract class Cache extends Node {
      * @param value The new value
      * @param updateCount The update count of the received value
      */
-    private void updateDataIfContained(int key, int value, int updateCount) {
+    private void updateDataIfContained(int key, int value, int updateCount) throws IllegalAccessException {
         if (this.data.containsKey(key) && !this.data.isNewerOrEqual(key, updateCount)) {
             int currentUpdateCount = this.data.getUpdateCountForKey(key).orElse(0);
             System.out.printf("%s Update value: {%d :%d} (given UC: %d, my UC: %d)\n",
@@ -173,7 +190,6 @@ public abstract class Cache extends Node {
 
     private void forwardWriteMessageToNext(Serializable message) {
         this.forwardMessageToNext(message, TimeoutType.WRITE);
-        this.isWaitingForWriteConfirm = true;
     }
 
     private void onJoinDatabase(JoinDatabaseMessage message) {
@@ -205,11 +221,12 @@ public abstract class Cache extends Node {
             // Can't do anything
             return;
         }
+
         System.out.printf("%s - Received write message, forward to next\n", this.id);
 
-        // Need to save the message and sender
-        this.saveWriteConfig(message, this.getSender());
-
+        // save as unconfirmed and forward
+        this.data.lockValueForKey(key);
+        this.addUnconfirmedWrite(key, this.getSender());
         this.forwardWriteMessageToNext(message);
     }
 
@@ -222,42 +239,45 @@ public abstract class Cache extends Node {
         }
         System.out.printf("%s - Received critical write message, forward to next\n", this.id);
 
-        // block for write
-        this.saveWriteConfig(message, this.getSender());
-        // simply forward
+        // save as unconfirmed and forward
+        this.addUnconfirmedWrite(key, this.getSender());
         this.forwardWriteMessageToNext(message);
     }
 
     private void onWriteConfirmMessage(WriteConfirmMessage message) {
-        if (this.hasCrashed) {
-            // Can't do anything
+        int key = message.getKey();
+        if (this.hasCrashed || !this.isWriteUnconfirmed(key)) {
+            // Either Node has crashed, or write is not known
             return;
         }
-        if (this.currentWriteMessage.isEmpty() || this.currentWriteSender.isEmpty()) {
-            // todo error, no write message known
-            return;
-        }
-        // Disable timout
-        this.isWaitingForWriteConfirm = false;
 
         // print confirm
-        int key = message.getKey();
         int value = message.getValue();
         int updateCount = message.getUpdateCount();
         System.out.printf("%s received write confirm message {%d: %d} (UC: %d), forward to sender\n",
                 this.id, key, value, updateCount);
 
-        // Update value if needed
-        // todo Is this correct?
-        this.updateDataIfContained(key, value, updateCount);
+        if (this.isWriteUnconfirmed(key)) {
+            // unlock the value
+            this.data.unLockValueForKey(key);
 
-        // Response confirm to sender
-        ActorRef sender = this.currentWriteSender.get();
-        sender.tell(message, this.getSelf());
+            // Update value if needed
+            try {
+                this.updateDataIfContained(key, value, updateCount);
+                // Response confirm to sender
+                ActorRef sender = this.unconfirmedWrites.get(key);
+                sender.tell(message, this.getSelf());
 
-        // Send refill to all other L2 caches except the sender
-        if (!this.isLastLevelCache) {
-            this.multicastReFillMessage(key, value, updateCount, sender);
+                // Send refill to all other L2 caches except the sender
+                if (!this.isLastLevelCache) {
+                    this.multicastReFillMessage(key, value, updateCount, sender);
+                }
+            } catch (IllegalAccessException e) {
+                // just timeout
+            } finally {
+                // reset
+                this.resetWriteConfig(key);
+            }
         }
     }
 
@@ -275,20 +295,24 @@ public abstract class Cache extends Node {
                 "%s received refill message for key %d. Update if needed.\n",
                 this.id, key);
 
-        // 1. Update if needed
+        // Update if needed
         if (this.data.containsKey(key) && !this.data.isNewerOrEqual(key, message.getUpdateCount())) {
-            // we need to update
-            System.out.printf("%s Update value: {%d :%d} (given UC: %d, my UC: %d)\n",
-                    this.id, key, message.getValue(), message.getUpdateCount(), this.data.getUpdateCountForKey(key).get());
-            this.data.setValueForKey(key, message.getValue(), message.getUpdateCount());
+            try {
+                this.data.setValueForKey(key, message.getValue(), message.getUpdateCount());
+            } catch (IllegalAccessException e) {
+                // Do nothing, if the data is locked then we don't update since critical write has priority
+            } finally {
+                System.out.printf("%s - Refilled value: {%d :%d} (given UC: %d, my UC: %d)\n",
+                        this.id, key, message.getValue(), message.getUpdateCount(), this.data.getUpdateCountForKey(key).get());
+            }
         } else {
             // never known this key, don't update
-            System.out.printf("%s never read/write key %d, therefore no update\n", this.id, key);
+            System.out.printf("%s - Never read/write key %d, therefore no update\n", this.id, key);
         }
 
-        // 2. Now forward to previous level Caches
+        // Forward to previous level Caches if needed
         if (!this.isLastLevelCache) {
-            System.out.printf("%s need to reply to L2 caches, count: %d\n", this.id, this.l2Caches.size());
+            System.out.printf("%s - Need to reply to L2 caches, count: %d\n", this.id, this.l2Caches.size());
             this.multicastReFillMessage(key, value, updateCount, ActorRef.noSender());
         }
     }
@@ -336,9 +360,6 @@ public abstract class Cache extends Node {
         int updateCount = message.getUpdateCount();
         System.out.printf("%s - Received crit read message for key %d (UC: %d)\n", this.id, key, updateCount);
 
-        // add sender to queue
-        this.currentReadMessages.put(key, this.getSender());
-
         // Forward to next
         this.forwardCritReadMessageToNext(message, key);
     }
@@ -356,13 +377,16 @@ public abstract class Cache extends Node {
         System.out.printf("%s received fill message for {%d: %d} (given UC: %d, my UC: %d)\n",
                 this.id, message.getKey(), message.getValue(), message.getUpdateCount(), this.data.getUpdateCountForKey(key).orElse(0));
 
-        // disable timout
-        this.resetReadConfig(key);
-
         // Update value
-        this.data.setValueForKey(key, message.getValue(), message.getUpdateCount());
-        // response accordingly
-        this.responseForFillOrReadReply(key);
+        try {
+            this.data.setValueForKey(key, message.getValue(), message.getUpdateCount());
+            this.responseForFillOrReadReply(key);
+        } catch (IllegalAccessException e) {
+            // Do nothing, critical write has higher priority, just timeout
+        } finally {
+            // reset
+            this.resetReadConfig(key);
+        }
     }
 
     /**
