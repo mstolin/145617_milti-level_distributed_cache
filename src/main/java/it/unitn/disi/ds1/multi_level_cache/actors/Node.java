@@ -8,19 +8,12 @@ import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 
 import java.io.Serializable;
 import java.time.Duration;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 public abstract class Node extends AbstractActor {
 
     /** The timeout duration */
     static final long TIMEOUT_SECONDS = 2;
-    /**
-     * All unconfirmed read operations for the given key.
-     * The value is the count of retries.
-     */
-    private Map<Integer, Integer> unconfirmedReads = new HashMap<>();
     /** Data the Node knows about */
     protected DataStore data = new DataStore();
     /** ID of this node */
@@ -58,11 +51,7 @@ public abstract class Node extends AbstractActor {
      *
      * @param key Key of the read message
      */
-    protected void addUnconfirmedReadMessage(int key) {
-        if (!this.unconfirmedReads.containsKey(key)) {
-            this.unconfirmedReads.put(key, 0);
-        }
-    }
+    protected abstract void addUnconfirmedReadMessage(int key, ActorRef sender);
 
     /**
      * Determines if an unconfirmed read message for the given key has been sent.
@@ -70,43 +59,14 @@ public abstract class Node extends AbstractActor {
      * @param key Key of the read
      * @return Boolean
      */
-    protected boolean isReadUnconfirmed(int key) {
-        return this.unconfirmedReads.containsKey(key);
-    }
-
-    /**
-     * Returns the number of read retries for the given key.
-     * 0 as default value.
-     *
-     * @param key Key of the read
-     * @return Retry count
-     */
-    protected int getRetryCountForRead(int key) {
-        return this.unconfirmedReads.getOrDefault(key, 0);
-    }
-
-    /**
-     * Increases the read count for the given key by one.
-     *
-     * @param key Key of the read message
-     */
-    protected void increaseCountForUnconfirmedReadMessage(int key) {
-        if (this.unconfirmedReads.containsKey(key)) {
-            int retryCount = this.unconfirmedReads.getOrDefault(key, 0) + 1;
-            this.unconfirmedReads.put(key, retryCount);
-        }
-    }
+    protected abstract boolean isReadUnconfirmed(int key);
 
     /**
      * Removed the key from the unconfirmed read list.
      *
      * @param key Key of the read message
      */
-    protected void resetUnconfirmedReadMessage(int key) {
-        if (this.unconfirmedReads.containsKey(key)) {
-            this.unconfirmedReads.remove(key);
-        }
-    }
+    protected abstract void resetReadConfig(int key);
 
     /**
      * Sends a message to all actors in the given group.
