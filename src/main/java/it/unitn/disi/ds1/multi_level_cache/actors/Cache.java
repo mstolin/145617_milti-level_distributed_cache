@@ -47,6 +47,14 @@ public abstract class Cache extends Node {
 
     abstract protected void forwardMessageToNext(Serializable message, TimeoutType timeoutType);
 
+    abstract protected void onCritWriteRequestMessage(CritWriteRequestMessage message);
+
+    abstract protected void onCritWriteVoteMessage(CritWriteVoteMessage message);
+
+    abstract protected void onCritWriteAbortMessage(CritWriteAbortMessage message);
+
+    abstract protected void onCritWriteCommitMessage(CritWriteCommitMessage message);
+
     @Override
     protected void flush() {
         super.flush();
@@ -63,13 +71,13 @@ public abstract class Cache extends Node {
     }
 
     @Override
-    protected boolean canInstantiateNewReadConversation() {
-        return super.canInstantiateNewReadConversation() && this.currentWriteMessage.isEmpty();
+    protected boolean canInstantiateNewReadConversation(int key) {
+        return super.canInstantiateNewReadConversation(key) && this.currentWriteMessage.isEmpty(); // todo check das zweite
     }
 
     @Override
-    protected boolean canInstantiateNewWriteConversation() {
-        return super.canInstantiateNewWriteConversation() && this.currentWriteMessage.isEmpty() && this.currentReadMessages.isEmpty();
+    protected boolean canInstantiateNewWriteConversation(int key) {
+        return super.canInstantiateNewWriteConversation(key) && this.currentWriteMessage.isEmpty() && this.currentReadMessages.isEmpty(); // todo check das alles mal
     }
 
     private void saveWriteConfig(Serializable message, ActorRef sender) {
@@ -133,7 +141,9 @@ public abstract class Cache extends Node {
      * @param message The received write-message
      */
     private void onWriteMessage(WriteMessage message) {
-        if (!this.canInstantiateNewWriteConversation()) {
+        int key = message.getKey();
+
+        if (!this.canInstantiateNewWriteConversation(key)) {
             // Can't do anything
             return;
         }
@@ -146,7 +156,9 @@ public abstract class Cache extends Node {
     }
 
     private void onCritWriteMessage(CritWriteMessage message) {
-        if (!this.canInstantiateNewWriteConversation()) {
+        int key = message.getKey();
+
+        if (!this.canInstantiateNewWriteConversation(key)) {
             // Can't do anything
             return;
         }
@@ -154,7 +166,7 @@ public abstract class Cache extends Node {
 
         // block for write
         this.saveWriteConfig(message, this.getSender());
-
+        // simply forward
         this.forwardWriteMessageToNext(message);
     }
 
@@ -224,12 +236,13 @@ public abstract class Cache extends Node {
     }
 
     private void onReadMessage(ReadMessage message) {
-        if (!this.canInstantiateNewReadConversation()) {
+        int key = message.getKey();
+
+        if (!this.canInstantiateNewReadConversation(key)) {
             // Not allowed to handle received message -> time out
             return;
         }
         // print confirm
-        int key = message.getKey();
         int updateCount = message.getUpdateCount();
         System.out.printf("%s Received read message for key %d (UC: %d)\n", this.id, key, updateCount);
 
@@ -252,12 +265,13 @@ public abstract class Cache extends Node {
     }
 
     private void onCritReadMessage(CritReadMessage message) {
-        if (!this.canInstantiateNewReadConversation()) {
+        int key = message.getKey();
+
+        if (!this.canInstantiateNewReadConversation(key)) {
             // Not allowed to handle received message -> time out
             return;
         }
         // print confirm
-        int key = message.getKey();
         int updateCount = message.getUpdateCount();
         System.out.printf("%s - Received crit read message for key %d (UC: %d)\n", this.id, key, updateCount);
 
@@ -305,6 +319,10 @@ public abstract class Cache extends Node {
                 .match(JoinL2CachesMessage.class, this::onJoinL2Caches)
                 .match(WriteMessage.class, this::onWriteMessage)
                 .match(CritWriteMessage.class, this::onCritWriteMessage)
+                .match(CritWriteRequestMessage.class, this::onCritWriteRequestMessage)
+                .match(CritWriteVoteMessage.class, this::onCritWriteVoteMessage)
+                .match(CritWriteAbortMessage.class, this::onCritWriteAbortMessage)
+                .match(CritWriteCommitMessage.class, this::onCritWriteCommitMessage)
                 .match(WriteConfirmMessage.class, this::onWriteConfirmMessage)
                 .match(RefillMessage.class, this::onRefillMessage)
                 .match(ReadMessage.class, this::onReadMessage)

@@ -112,8 +112,8 @@ public abstract class Node extends AbstractActor {
      *
      * @return Boolean that state if a write conversation is allowed
      */
-    protected boolean canInstantiateNewWriteConversation() {
-        return !this.hasCrashed && !this.isWaitingForWriteConfirm && this.getCurrentReadCount() <= 0;
+    protected boolean canInstantiateNewWriteConversation(int key) {
+        return !this.hasCrashed && !this.isWaitingForWriteConfirm && this.getCurrentReadCount() <= 0 && !this.data.isLocked(key); // todo ueberprufen
     }
 
     /**
@@ -124,8 +124,8 @@ public abstract class Node extends AbstractActor {
      *
      * @return Boolean that state if a read conversation is allowed
      */
-    protected boolean canInstantiateNewReadConversation() {
-        return !this.hasCrashed && !this.isWaitingForWriteConfirm;
+    protected boolean canInstantiateNewReadConversation(int key) {
+        return !this.hasCrashed && !this.isWaitingForWriteConfirm && !this.data.isLocked(key); // todo ueberpruefen
     }
 
     /**
@@ -133,6 +133,11 @@ public abstract class Node extends AbstractActor {
      */
     protected void setTimeout(Serializable message, ActorRef receiver, TimeoutType timeoutType) {
         TimeoutMessage timeoutMessage = new TimeoutMessage(message, receiver, timeoutType);
+        this.scheduleMessageToSelf(timeoutMessage, this.getTimeoutSeconds());
+    }
+
+    protected void setMulticastTimeout(Serializable message, TimeoutType timeoutType) {
+        TimeoutMessage timeoutMessage = new TimeoutMessage(message, ActorRef.noSender(), timeoutType);
         this.scheduleMessageToSelf(timeoutMessage, this.getTimeoutSeconds());
     }
 
@@ -220,6 +225,7 @@ public abstract class Node extends AbstractActor {
             System.out.printf("%s - Recovered\n", this.id);
             this.hasCrashed = false;
             this.getContext().become(this.createReceive());
+            this.data.unLockAll();
         }
     }
 

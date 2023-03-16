@@ -217,7 +217,7 @@ public class Client extends Node {
         int key = message.getKey();
         int value = message.getValue();
 
-        if (!this.canInstantiateNewWriteConversation()) {
+        if (!this.canInstantiateNewWriteConversation(key)) {
             System.out.printf("%s can't instantiate new write for {%d: %d}, because it is waiting for response\n",
                     this.id, key, value);
             return;
@@ -269,7 +269,7 @@ public class Client extends Node {
     private void onInstantiateReadMessage(InstantiateReadMessage message) {
         int key = message.getKey();
 
-        if (!this.canInstantiateNewReadConversation()) {
+        if (!this.canInstantiateNewReadConversation(key)) {
             System.out.printf("%s can't instantiate new read conversation for key %d, because it is waiting for response\n",
                     this.id, key);
             return;
