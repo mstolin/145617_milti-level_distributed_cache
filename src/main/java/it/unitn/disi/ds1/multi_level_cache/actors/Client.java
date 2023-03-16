@@ -19,6 +19,10 @@ public class Client extends Node {
     static final int MAX_RETRY_COUNT = 3;
     /** List of level 2 caches, the client knows about */
     private List<ActorRef> l2Caches;
+    /** WriteMessage retry count */
+    private int writeRetryCount = 0;
+    /** Is this Node waiting for a write-confirm message */
+    private boolean isWaitingForWriteConfirm = false;
 
     public Client(String id) {
         super(id);
@@ -349,6 +353,16 @@ public class Client extends Node {
             // try again
             this.retryWriteMessage(message.getUnreachableActor(), key, value, true);
         }
+    }
+
+    @Override
+    protected boolean canInstantiateNewReadConversation(int key) {
+        return !this.isWaitingForWriteConfirm || !this.isReadUnconfirmed(key);
+    }
+
+    @Override
+    protected boolean canInstantiateNewWriteConversation(int key) {
+        return !this.isWaitingForWriteConfirm;
     }
 
     @Override
