@@ -31,6 +31,13 @@ public class L1Cache extends Cache implements Coordinator {
     }
 
     @Override
+    protected void handleRefillMessage(RefillMessage message) {
+        // just multicast to all L2s
+        this.multicast(message, this.l2Caches);
+        this.resetWriteConfig(message.getKey());
+    }
+
+    @Override
     protected void handleTimeoutMessage(TimeoutMessage message) {
         if (message.getType() == TimeoutType.CRIT_WRITE_REQUEST) {
             CritWriteRequestMessage requestMessage = (CritWriteRequestMessage) message.getMessage();

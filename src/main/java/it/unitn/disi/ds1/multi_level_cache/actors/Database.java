@@ -83,20 +83,10 @@ public class Database extends Node implements Coordinator {
             // we can be sure it exists, since we set value previously
             int updateCount = this.data.getUpdateCountForKey(key).get();
 
-            // Send confirm to L1 sender
-            // todo make own method
-            WriteConfirmMessage writeConfirmMessage = new WriteConfirmMessage(
-                    message.getKey(), message.getValue(), updateCount);
-            this.getSender().tell(writeConfirmMessage, this.getSelf());
-
             // Send refill to all other L1 caches
             // todo make own method
             RefillMessage refillMessage = new RefillMessage(message.getKey(), message.getValue(), updateCount);
-            for (ActorRef l1Cache: this.l1Caches) {
-                if (l1Cache != this.getSender()) {
-                    l1Cache.tell(refillMessage, this.getSelf());
-                }
-            }
+            this.multicast(refillMessage, this.l1Caches);
 
             // Unlock value
             this.data.unLockValueForKey(key);

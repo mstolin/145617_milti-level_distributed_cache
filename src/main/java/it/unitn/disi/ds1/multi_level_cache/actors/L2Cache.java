@@ -25,6 +25,21 @@ public class L2Cache extends Cache {
     }
 
     @Override
+    protected void handleRefillMessage(RefillMessage message) {
+        int key = message.getKey();
+        if (this.isWriteUnconfirmed(key)) {
+            // tell client write confirm
+            ActorRef client = this.unconfirmedWrites.get(key);
+            int value = message.getValue();
+            int updateCount = message.getUpdateCount();
+            WriteConfirmMessage confirmMessage = new WriteConfirmMessage(key, value, updateCount);
+            client.tell(confirmMessage, this.getSelf());
+            // reset timeout
+            this.resetWriteConfig(key);
+        }
+    }
+
+    @Override
     protected void handleTimeoutMessage(TimeoutMessage message) {
         // forward message to DB, no need for timeout since DB can't timeout
         /*

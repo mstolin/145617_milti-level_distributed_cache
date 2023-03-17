@@ -36,6 +36,8 @@ public abstract class Cache extends Node {
 
     protected abstract void forwardMessageToNext(Serializable message, TimeoutType timeoutType);
 
+    protected abstract void handleRefillMessage(RefillMessage message);
+
     protected abstract void handleTimeoutMessage(TimeoutMessage message);
 
     protected abstract void handleCritWriteMessage(CritWriteMessage message);
@@ -91,7 +93,7 @@ public abstract class Cache extends Node {
     }
 
     protected boolean isWriteUnconfirmed(int key) {
-        return !this.unconfirmedWrites.containsKey(key);
+        return this.unconfirmedWrites.containsKey(key);
     }
 
     protected void resetWriteConfig(int key) { // todo rename abortWrite
@@ -274,41 +276,6 @@ public abstract class Cache extends Node {
         }
     }
 
-    private void onWriteConfirmMessage(WriteConfirmMessage message) {
-        int key = message.getKey();
-        if (this.hasCrashed || !this.isWriteUnconfirmed(key)) {
-            // Either Node has crashed, or write is not known
-            return;
-        }
-
-        // print confirm
-        int value = message.getValue();
-        int updateCount = message.getUpdateCount();
-        System.out.printf("%s received write confirm message {%d: %d} (UC: %d), forward to sender\n",
-                this.id, key, value, updateCount);
-
-        if (this.isWriteUnconfirmed(key)) {
-            // unlock the value
-            this.data.unLockValueForKey(key);
-
-            // Update value if needed
-            try {
-                this.updateDataIfContained(key, value, updateCount);
-                // Response confirm to sender
-                ActorRef sender = this.unconfirmedWrites.get(key);
-                sender.tell(message, this.getSelf());
-
-                // Send refill to all other L2 caches except the sender
-                this.multicastReFillMessageIfNeeded(key, value, updateCount, sender);
-            } catch (IllegalAccessException e) {
-                // just timeout
-            } finally {
-                // reset
-                this.resetWriteConfig(key);
-            }
-        }
-    }
-
     private void onRefillMessage(RefillMessage message) {
         if (this.hasCrashed) {
             // Can't do anything
@@ -317,29 +284,22 @@ public abstract class Cache extends Node {
 
         // Print confirm
         int key = message.getKey();
-        int value = message.getValue();
-        int updateCount = message.getUpdateCount();
         System.out.printf(
-                "%s received refill message for key %d. Update if needed.\n",
+                "%s - Received refill message for key %d. Update if needed.\n",
                 this.id, key);
 
-        // Update if needed
         if (this.data.containsKey(key) && !this.data.isNewerOrEqual(key, message.getUpdateCount())) {
             try {
                 this.data.setValueForKey(key, message.getValue(), message.getUpdateCount());
-
-                // Forward to previous level Caches if needed
-                this.multicastReFillMessageIfNeeded(key, value, updateCount, ActorRef.noSender());
             } catch (IllegalAccessException e) {
                 // Do nothing, if the data is locked then we don't update since critical write has priority
             } finally {
                 System.out.printf("%s - Refilled value: {%d :%d} (given UC: %d, my UC: %d)\n",
                         this.id, key, message.getValue(), message.getUpdateCount(), this.data.getUpdateCountForKey(key).get());
             }
-        } else {
-            // never known this key, don't update
-            System.out.printf("%s - Never read/write key %d, therefore no update\n", this.id, key);
         }
+
+        this.handleRefillMessage(message);
     }
 
     private void onReadMessage(ReadMessage message) {
@@ -456,7 +416,6 @@ public abstract class Cache extends Node {
                 .match(CritWriteVoteMessage.class, this::onCritWriteVoteMessage)
                 .match(CritWriteAbortMessage.class, this::onCritWriteAbortMessage)
                 .match(CritWriteCommitMessage.class, this::onCritWriteCommitMessage)
-                .match(WriteConfirmMessage.class, this::onWriteConfirmMessage)
                 .match(RefillMessage.class, this::onRefillMessage)
                 .match(ReadMessage.class, this::onReadMessage)
                 .match(CritReadMessage.class, this::onCritReadMessage)
