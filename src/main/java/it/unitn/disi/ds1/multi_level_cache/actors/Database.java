@@ -7,8 +7,9 @@ import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 
 import java.util.*;
 
-public class Database extends ACCoordinator {
+public class Database extends Node implements Coordinator {
 
+    private final ACCoordinator acCoordinator = new ACCoordinator(this);
     private List<ActorRef> l1Caches;
     private List<ActorRef> l2Caches;
     private Map<Integer, List<ActorRef>> unconfirmedReads = new HashMap<>();
@@ -119,10 +120,7 @@ public class Database extends ACCoordinator {
         this.multicast(critWriteRequestMessage, this.l1Caches);
         this.setMulticastTimeout(critWriteRequestMessage, TimeoutType.CRIT_WRITE_REQUEST);
         // set crit write config
-        this.critWriteKey = Optional.of(key);
-        this.critWriteValue = Optional.of(value);
-        this.hasRequestedCritWrite = true;
-        this.critWriteVotingCount = 0;
+        this.acCoordinator.setCritWriteConfig(key, value);
 
         /*
         1. Send CritWriteRequestMessage to all L1s + timeout
@@ -172,14 +170,12 @@ public class Database extends ACCoordinator {
     }
 
     @Override
-    protected boolean haveAllParticipantsVoted() {
-        return this.critWriteVotingCount == this.l1Caches.size();
+    public boolean haveAllParticipantsVoted(int voteCount) {
+        return voteCount == this.l1Caches.size();
     }
 
     @Override
-    protected void onVoteOk(int key) {
-        int value = this.critWriteValue.get();
-
+    public void onVoteOk(int key, int value) {
         // update value
         try {
             this.data.setValueForKey(key, value);
@@ -196,8 +192,9 @@ public class Database extends ACCoordinator {
     }
 
     @Override
-    protected void abortCritWrite(int key) {
-        super.abortCritWrite(key);
+    public void abortCritWrite(int key) {
+        this.acCoordinator.resetCritWriteConfig(key);
+        this.data.unLockValueForKey(key);
         // multicast abort message
         CritWriteAbortMessage abortMessage = new CritWriteAbortMessage(key);
         this.multicast(abortMessage, this.l1Caches);
@@ -215,7 +212,7 @@ public class Database extends ACCoordinator {
 
     @Override
     protected void onTimeoutMessage(TimeoutMessage message) {
-        if (message.getType() == TimeoutType.CRIT_WRITE_REQUEST && this.hasRequestedCritWrite) {
+        if (message.getType() == TimeoutType.CRIT_WRITE_REQUEST && this.acCoordinator.hasRequestedCritWrite()) {
             CritWriteRequestMessage requestMessage = (CritWriteRequestMessage) message.getMessage();
             this.abortCritWrite(requestMessage.getKey());
         }
@@ -252,7 +249,7 @@ public class Database extends ACCoordinator {
                .match(JoinL2CachesMessage.class, this::onJoinL2Caches)
                .match(WriteMessage.class, this::onWriteMessage)
                .match(CritWriteMessage.class, this::onCritWriteMessage)
-               .match(CritWriteVoteMessage.class, this::onCritWriteVoteMessage)
+               .match(CritWriteVoteMessage.class, acCoordinator::onCritWriteVoteMessage)
                .match(ReadMessage.class, this::onReadMessage)
                .match(CritReadMessage.class, this::onCritReadMessage)
                .match(TimeoutMessage.class, this::onTimeoutMessage)
