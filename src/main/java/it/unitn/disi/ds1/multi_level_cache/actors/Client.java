@@ -287,11 +287,14 @@ public class Client extends Node {
         System.out.printf("%s received write confirm for key %d: %d (new UC: %d, old UC: %d)\n",
                 this.id, key, value, updateCount, this.data.getUpdateCountForKey(key).orElse(0));
 
-        // update value
-        this.data.setValueForKey(key, value, updateCount);
-
-        // reset config
-        this.resetWriteConfig();
+        try {
+            // update value
+            this.data.setValueForKey(key, value, updateCount);
+            // reset config
+            this.resetWriteConfig();
+        } catch (IllegalAccessException e) {
+            // nothing todo, timeout will handle it
+        }
     }
 
     /**
@@ -339,14 +342,17 @@ public class Client extends Node {
         System.out.printf("%s Received read reply {%d: %d} (new UC: %d, old UC: %d)\n",
                 this.id, key, value, updateCount, this.data.getUpdateCountForKey(key).orElse(0));
 
-        // update value
-        this.data.setValueForKey(key, value, updateCount);
-        // reset config
-        this.resetReadConfig(key);
+        try {
+            // update value
+            this.data.setValueForKey(key, value, updateCount);
+            // reset config
+            this.resetReadConfig(key);
+        } catch (IllegalAccessException e) {
+            // nothing todo, timeout will handle it
+        }
     }
 
-    @Override
-    protected void onTimeoutMessage(TimeoutMessage message) {
+    private void onTimeoutMessage(TimeoutMessage message) {
         TimeoutType type = message.getType();
         if (type == TimeoutType.WRITE && this.isWaitingForWriteConfirm) {
             WriteMessage writeMessage = (WriteMessage) message.getMessage();
