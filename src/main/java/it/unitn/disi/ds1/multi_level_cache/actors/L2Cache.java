@@ -93,15 +93,24 @@ public class L2Cache extends Cache {
         int key = message.getKey();
         int value = message.getValue();
         int updateCount = message.getUpdateCount();
+
+        // update
         this.data.unLockValueForKey(key);
-        this.data.setValueForKey(key, value, updateCount);
+        try {
+            this.data.setValueForKey(key, value, updateCount);
+        } catch (IllegalAccessException e) {
+            // nothing going on here, value is unlocked anyway
+        }
+
+        // response to client if needed
+        if (this.isWriteUnconfirmed(key)) {
+            ActorRef client = this.unconfirmedWrites.get(key);
+            WriteConfirmMessage confirmMessage = new WriteConfirmMessage(key, value, updateCount);
+            client.tell(confirmMessage, this.getSelf());
+        }
+
         // reset critical write
         this.resetWriteConfig(key);
-        // response writeconfirm to client
-        /*
-        TODO Confirm hier an den client, aber loesche mal allgemein die UUID!
-         */
-        WriteConfirmMessage confirmMessage = new WriteConfirmMessage()
     }
 
     @Override
