@@ -7,12 +7,10 @@ import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 
 import java.io.Serializable;
 import java.util.List;
-import java.util.Optional;
 
-public class L1Cache extends Cache {
+public class L1Cache extends Cache implements Coordinator {
 
-    private Optional<Integer> requestedCritWriteKey = Optional.empty();
-    private int critWriteVotingsCount = 0;
+    private final ACCoordinator acCoordinator = new ACCoordinator(this);
 
     public L1Cache(String id) {
         super(id);
@@ -24,8 +22,7 @@ public class L1Cache extends Cache {
 
     private void resetCritWriteConfig(int key) {
         this.resetWriteConfig(key);
-        this.requestedCritWriteKey = Optional.empty();
-        this.critWriteVotingsCount = 0;
+        this.acCoordinator.resetCritWriteConfig();
     }
 
     @Override
@@ -62,10 +59,14 @@ public class L1Cache extends Cache {
     }
 
     @Override
+    protected void handleCritWriteMessage(CritWriteMessage message) {
+        this.acCoordinator.setCritWriteConfig(message.getValue());
+    }
+
+    @Override
     protected void handleCritWriteRequestMessage(CritWriteRequestMessage message, boolean isOk) {
         if (isOk) {
             // iff everything is ok, then multicast the request to all L2s
-            this.requestedCritWriteKey = Optional.of(message.getKey());
             this.multicast(message, this.l2Caches);
             this.setMulticastTimeout(message, TimeoutType.CRIT_WRITE_REQUEST);
         }
@@ -73,23 +74,7 @@ public class L1Cache extends Cache {
 
     @Override
     protected void handleCritWriteVoteMessage(CritWriteVoteMessage message) {
-        if (!message.isOk()) {
-            // some L2 as aborted, abort as well and force timeout
-            this.resetCritWriteConfig(message.getKey());
-            return;
-        }
-
-        // increase the count
-        this.critWriteVotingsCount = this.critWriteVotingsCount + 1;
-        if (this.critWriteVotingsCount == this.l2Caches.size()) {
-            int key = message.getKey();
-            // got OK vote from all L2s, lock and answer back to DB
-            this.data.lockValueForKey(key);
-            CritWriteVoteMessage critWriteVoteMessage = new CritWriteVoteMessage(key, true);
-            this.database.tell(critWriteVoteMessage, this.getSelf());
-            // reset
-            this.resetCritWriteConfig(message.getKey());
-        }
+        this.acCoordinator.onCritWriteVoteMessage(message);
     }
 
     @Override
@@ -141,9 +126,7 @@ public class L1Cache extends Cache {
     @Override
     protected void flush() {
         super.flush();
-        if (this.requestedCritWriteKey.isPresent()) {
-            this.resetCritWriteConfig(this.requestedCritWriteKey.get());
-        }
+        this.acCoordinator.resetCritWriteConfig();
     }
 
     @Override
@@ -154,5 +137,25 @@ public class L1Cache extends Cache {
         System.out.printf("%s - Flush all L2s\n", this.id);
         FlushMessage flushMessage = new FlushMessage(this.getSelf());
         this.multicast(flushMessage, this.l2Caches);
+    }
+
+    @Override
+    public boolean haveAllParticipantsVoted(int voteCount) {
+        return voteCount == this.l2Caches.size();
+    }
+
+    @Override
+    public void onVoteOk(int key, int value) {
+        // got OK vote from all L2s, lock and answer back to DB
+        this.data.lockValueForKey(key);
+        CritWriteVoteMessage critWriteVoteMessage = new CritWriteVoteMessage(key, true);
+        this.database.tell(critWriteVoteMessage, this.getSelf());
+        // reset
+        this.resetCritWriteConfig(key);
+    }
+
+    @Override
+    public void abortCritWrite(int key) {
+        this.resetCritWriteConfig(key);
     }
 }
