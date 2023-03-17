@@ -44,8 +44,6 @@ public abstract class Node extends AbstractActor {
      */
     protected abstract boolean canInstantiateNewReadConversation(int key);
 
-    protected abstract void onTimeoutMessage(TimeoutMessage message);
-
     /**
      * Adds the key to the unconfirmed read list.
      *
