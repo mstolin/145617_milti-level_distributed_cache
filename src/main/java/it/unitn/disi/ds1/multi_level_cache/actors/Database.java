@@ -120,7 +120,7 @@ public class Database extends Node implements Coordinator {
         this.multicast(critWriteRequestMessage, this.l1Caches);
         this.setMulticastTimeout(critWriteRequestMessage, TimeoutType.CRIT_WRITE_REQUEST);
         // set crit write config
-        this.acCoordinator.setCritWriteConfig(key, value);
+        this.acCoordinator.setCritWriteConfig(value);
 
         /*
         1. Send CritWriteRequestMessage to all L1s + timeout
@@ -193,7 +193,7 @@ public class Database extends Node implements Coordinator {
 
     @Override
     public void abortCritWrite(int key) {
-        this.acCoordinator.resetCritWriteConfig(key);
+        this.acCoordinator.resetCritWriteConfig();
         this.data.unLockValueForKey(key);
         // multicast abort message
         CritWriteAbortMessage abortMessage = new CritWriteAbortMessage(key);
@@ -208,14 +208,6 @@ public class Database extends Node implements Coordinator {
     @Override
     protected boolean canInstantiateNewReadConversation(int key) {
         return !this.data.isLocked(key);
-    }
-
-    @Override
-    protected void onTimeoutMessage(TimeoutMessage message) {
-        if (message.getType() == TimeoutType.CRIT_WRITE_REQUEST && this.acCoordinator.hasRequestedCritWrite()) {
-            CritWriteRequestMessage requestMessage = (CritWriteRequestMessage) message.getMessage();
-            this.abortCritWrite(requestMessage.getKey());
-        }
     }
 
     @Override
@@ -239,6 +231,13 @@ public class Database extends Node implements Coordinator {
             this.unconfirmedReads.remove(key);
         }
         this.data.unLockValueForKey(key);
+    }
+
+    private void onTimeoutMessage(TimeoutMessage message) {
+        if (message.getType() == TimeoutType.CRIT_WRITE_REQUEST && this.acCoordinator.hasRequestedCritWrite()) {
+            CritWriteRequestMessage requestMessage = (CritWriteRequestMessage) message.getMessage();
+            this.abortCritWrite(requestMessage.getKey());
+        }
     }
 
     @Override
