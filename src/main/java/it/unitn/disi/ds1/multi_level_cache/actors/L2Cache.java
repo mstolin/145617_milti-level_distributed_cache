@@ -60,6 +60,13 @@ public class L2Cache extends Cache {
     }
 
     @Override
+    protected void handleCritWriteMessage(CritWriteMessage message) {
+        /*
+        nothing special todo here, all important happening in Cache
+         */
+    }
+
+    @Override
     protected void handleCritWriteRequestMessage(CritWriteRequestMessage message, boolean isOk) {
         int key = message.getKey();
         if (isOk) {
@@ -73,7 +80,9 @@ public class L2Cache extends Cache {
 
     @Override
     protected void handleCritWriteVoteMessage(CritWriteVoteMessage message) {
-        // Do nothing here
+        /*
+        Do nothing here, L2 only sends vote messages
+         */
     }
 
     @Override
