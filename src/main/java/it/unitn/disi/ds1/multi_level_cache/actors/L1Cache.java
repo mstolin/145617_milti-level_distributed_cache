@@ -31,6 +31,12 @@ public class L1Cache extends Cache implements Coordinator {
     }
 
     @Override
+    protected void handleWriteMessage(WriteMessage message) {
+        // just forward to DB
+        this.forwardMessageToNext(message, TimeoutType.WRITE);
+    }
+
+    @Override
     protected void handleRefillMessage(RefillMessage message) {
         // just multicast to all L2s
         this.multicast(message, this.l2Caches);
@@ -116,7 +122,7 @@ public class L1Cache extends Cache implements Coordinator {
     }
 
     @Override
-    protected void responseForFillOrReadReply(int key) {
+    protected void handleFill(int key) {
         if (this.isReadUnconfirmed(key)) {
             int value = this.data.getValueForKey(key).get();
             int updateCount = this.data.getUpdateCountForKey(key).get();
