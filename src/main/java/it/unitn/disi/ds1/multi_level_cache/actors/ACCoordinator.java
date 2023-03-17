@@ -9,7 +9,6 @@ public class ACCoordinator <T extends Coordinator> {
     private final Coordinator coordinator;
     private boolean hasRequestedCritWrite = false;
     private int critWriteVotingCount = 0;
-    private Optional<Integer> critWriteKey = Optional.empty();
     private Optional<Integer> critWriteValue = Optional.empty();
 
     public ACCoordinator(Coordinator coordinator) {
@@ -20,28 +19,22 @@ public class ACCoordinator <T extends Coordinator> {
         return hasRequestedCritWrite;
     }
 
-    public void setCritWriteConfig(int key, int value) {
-        this.critWriteKey = Optional.of(key);
+    public void setCritWriteConfig(int value) {
         this.critWriteValue = Optional.of(value);
         this.hasRequestedCritWrite = true;
     }
 
-    public void resetCritWriteConfig(int key) {
+    public void resetCritWriteConfig() {
         this.hasRequestedCritWrite = false;
         this.critWriteVotingCount = 0;
-        this.critWriteKey = Optional.empty();
         this.critWriteValue = Optional.empty();
-    }
-
-    public void abortCritWrite(int key) {
-        this.resetCritWriteConfig(key);
     }
 
     public void onCritWriteVoteMessage(CritWriteVoteMessage message) {
         int key = message.getKey();
         if (!message.isOk()) {
             // abort
-            this.abortCritWrite(key);
+            this.coordinator.abortCritWrite(key);
             return;
         }
 
