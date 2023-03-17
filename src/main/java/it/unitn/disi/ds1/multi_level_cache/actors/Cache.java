@@ -32,9 +32,11 @@ public abstract class Cache extends Node {
 
     protected abstract void multicastReFillMessageIfNeeded(int key, int value, int updateCount, ActorRef sender);
 
-    protected abstract void responseForFillOrReadReply(int key);
+    protected abstract void handleFill(int key);
 
     protected abstract void forwardMessageToNext(Serializable message, TimeoutType timeoutType);
+
+    protected abstract void handleWriteMessage(WriteMessage message);
 
     protected abstract void handleRefillMessage(RefillMessage message);
 
@@ -70,8 +72,6 @@ public abstract class Cache extends Node {
             System.out.printf("%s - Recover after %d\n", this.id, recoverDelay);
             this.scheduleMessageToSelf(new RecoveryMessage(), recoverDelay);
         }
-
-        this.flush();
     }
 
     /**
@@ -113,7 +113,7 @@ public abstract class Cache extends Node {
      */
     @Override
     protected boolean canInstantiateNewReadConversation(int key) {
-        return !this.data.isLocked(key);
+        return !this.hasCrashed && !this.data.isLocked(key);
     }
 
     /**
@@ -125,7 +125,7 @@ public abstract class Cache extends Node {
      */
     @Override
     protected boolean canInstantiateNewWriteConversation(int key) {
-        return !this.data.isLocked(key) && !this.isWriteUnconfirmed(key);
+        return !this.hasCrashed && !this.data.isLocked(key) && !this.isWriteUnconfirmed(key);
     }
 
     @Override
@@ -188,10 +188,6 @@ public abstract class Cache extends Node {
         this.forwardMessageToNext(message, TimeoutType.CRIT_READ);
     }
 
-    private void forwardWriteMessageToNext(Serializable message) {
-        this.forwardMessageToNext(message, TimeoutType.WRITE);
-    }
-
     private void onJoinDatabase(JoinDatabaseMessage message) {
         this.database = message.getDatabase();
         System.out.printf("%s joined database\n", this.id);
@@ -221,13 +217,11 @@ public abstract class Cache extends Node {
             // Can't do anything
             return;
         }
-
         System.out.printf("%s - Received write message, forward to next\n", this.id);
 
-        // save as unconfirmed and forward
         this.data.lockValueForKey(key);
-        this.addUnconfirmedWrite(key, this.getSender());
-        this.forwardWriteMessageToNext(message);
+
+        this.handleWriteMessage(message);
     }
 
     private void onCritWriteMessage(CritWriteMessage message) {
@@ -240,27 +234,39 @@ public abstract class Cache extends Node {
         System.out.printf("%s - Received critical write message, forward to next\n", this.id);
 
         this.handleCritWriteMessage(message);
-
-        // save as unconfirmed and forward
-        this.addUnconfirmedWrite(key, this.getSender());
-        this.forwardWriteMessageToNext(message);
     }
 
     private void onCritWriteRequestMessage(CritWriteRequestMessage message) {
+        if (this.hasCrashed) {
+            return;
+        }
+
         int key = message.getKey();
         boolean isOk = !this.data.isLocked(key) && !this.isWriteUnconfirmed(key);
         this.handleCritWriteRequestMessage(message, isOk);
     }
 
     private void onCritWriteVoteMessage(CritWriteVoteMessage message) {
+        if (this.hasCrashed) {
+            return;
+        }
+
         this.handleCritWriteVoteMessage(message);
     }
 
     private void onCritWriteAbortMessage(CritWriteAbortMessage message) {
+        if (this.hasCrashed) {
+            return;
+        }
+
         this.handleCritWriteAbortMessage(message);
     }
 
     private void onCritWriteCommitMessage(CritWriteCommitMessage message) {
+        if (this.hasCrashed) {
+            return;
+        }
+
         // just update the value
         int key = message.getKey();
         int value = message.getValue();
@@ -322,7 +328,7 @@ public abstract class Cache extends Node {
             System.out.printf("%s knows an equal or more recent value: {%d :%d} (given UC: %d, my UC: %d)\n",
                     this.id, key, wanted.get(), updateCount, this.data.getUpdateCountForKey(key).get());
             // response accordingly
-            this.responseForFillOrReadReply(key);
+            this.handleFill(key);
         } else {
             // We either don't know the value or it's older, so forward message to next
             System.out.printf("%s does not know %d or has an older version (given UC: %d, my UC: %d), forward to next\n",
@@ -365,7 +371,7 @@ public abstract class Cache extends Node {
         // Update value
         try {
             this.data.setValueForKey(key, message.getValue(), message.getUpdateCount());
-            this.responseForFillOrReadReply(key);
+            this.handleFill(key);
             // reset
             this.resetReadConfig(key);
         } catch (IllegalAccessException e) {
@@ -382,6 +388,7 @@ public abstract class Cache extends Node {
     private void onCrashMessage(CrashMessage message) {
         System.out.printf("%s - Crash\n", this.id);
         this.crash(message.getRecoverAfterSeconds());
+        this.flush();
     }
 
     /**
@@ -399,6 +406,10 @@ public abstract class Cache extends Node {
     }
 
     private void onFlushMessage(FlushMessage message) {
+        if (this.hasCrashed) {
+            return;
+        }
+
         this.flush();
         System.out.printf("%s - Flushed\n", this.id);
     }
