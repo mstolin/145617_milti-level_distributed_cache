@@ -22,7 +22,6 @@ public abstract class Cache extends Node {
      */
     protected List<ActorRef> l2Caches;
     /** Determines if this Node has crashed */
-    protected boolean hasCrashed = false;
     protected Map<Integer, List<ActorRef>> unconfirmedReads = new HashMap<>();
     protected Map<Integer, ActorRef> unconfirmedWrites = new HashMap<>();
 
@@ -64,8 +63,7 @@ public abstract class Cache extends Node {
     /**
      * Crashes this node
      */
-    protected void crash(long recoverDelay) {
-        this.hasCrashed = true;
+    protected void recoverAfter(long recoverDelay) {
         this.getContext().become(this.createReceiveForCrash());
 
         if (recoverDelay > 0) {
@@ -78,12 +76,8 @@ public abstract class Cache extends Node {
      * Recovers this node after it has crashed.
      */
     protected void recover() {
-        if (this.hasCrashed) {
-            System.out.printf("%s - Recovered\n", this.id);
-            this.hasCrashed = false;
-            this.getContext().become(this.createReceive());
-            this.data.unLockAll();
-        }
+        System.out.printf("%s - Recovered\n", this.id);
+        this.getContext().become(this.createReceive());
     }
 
     protected void addUnconfirmedWrite(int key, ActorRef sender) {
@@ -113,7 +107,7 @@ public abstract class Cache extends Node {
      */
     @Override
     protected boolean canInstantiateNewReadConversation(int key) {
-        return !this.hasCrashed && !this.data.isLocked(key);
+        return !this.data.isLocked(key);
     }
 
     /**
@@ -125,7 +119,7 @@ public abstract class Cache extends Node {
      */
     @Override
     protected boolean canInstantiateNewWriteConversation(int key) {
-        return !this.hasCrashed && !this.data.isLocked(key) && !this.isWriteUnconfirmed(key);
+        return !this.data.isLocked(key) && !this.isWriteUnconfirmed(key);
     }
 
     @Override
@@ -237,36 +231,20 @@ public abstract class Cache extends Node {
     }
 
     private void onCritWriteRequestMessage(CritWriteRequestMessage message) {
-        if (this.hasCrashed) {
-            return;
-        }
-
         int key = message.getKey();
         boolean isOk = !this.data.isLocked(key) && !this.isWriteUnconfirmed(key);
         this.handleCritWriteRequestMessage(message, isOk);
     }
 
     private void onCritWriteVoteMessage(CritWriteVoteMessage message) {
-        if (this.hasCrashed) {
-            return;
-        }
-
         this.handleCritWriteVoteMessage(message);
     }
 
     private void onCritWriteAbortMessage(CritWriteAbortMessage message) {
-        if (this.hasCrashed) {
-            return;
-        }
-
         this.handleCritWriteAbortMessage(message);
     }
 
     private void onCritWriteCommitMessage(CritWriteCommitMessage message) {
-        if (this.hasCrashed) {
-            return;
-        }
-
         // just update the value
         int key = message.getKey();
         int value = message.getValue();
@@ -283,11 +261,6 @@ public abstract class Cache extends Node {
     }
 
     private void onRefillMessage(RefillMessage message) {
-        if (this.hasCrashed) {
-            // Can't do anything
-            return;
-        }
-
         // Print confirm
         int key = message.getKey();
         System.out.printf(
@@ -360,10 +333,6 @@ public abstract class Cache extends Node {
      * @param message
      */
     private void onFillMessage(FillMessage message) {
-        if (this.hasCrashed) {
-            // Can't do anything
-            return;
-        }
         int key = message.getKey();
         System.out.printf("%s received fill message for {%d: %d} (given UC: %d, my UC: %d)\n",
                 this.id, message.getKey(), message.getValue(), message.getUpdateCount(), this.data.getUpdateCountForKey(key).orElse(0));
@@ -387,7 +356,7 @@ public abstract class Cache extends Node {
      */
     private void onCrashMessage(CrashMessage message) {
         System.out.printf("%s - Crash\n", this.id);
-        this.crash(message.getRecoverAfterSeconds());
+        this.recoverAfter(message.getRecoverAfterSeconds());
         this.flush();
     }
 
@@ -406,10 +375,6 @@ public abstract class Cache extends Node {
     }
 
     private void onFlushMessage(FlushMessage message) {
-        if (this.hasCrashed) {
-            return;
-        }
-
         this.flush();
         System.out.printf("%s - Flushed\n", this.id);
     }
