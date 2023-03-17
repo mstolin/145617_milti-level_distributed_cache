@@ -25,6 +25,14 @@ public class L2Cache extends Cache {
     }
 
     @Override
+    protected void handleWriteMessage(WriteMessage message) {
+        // add client to lust
+        this.addUnconfirmedWrite(message.getKey(), this.getSender());
+        // forward to L1
+        this.forwardMessageToNext(message, TimeoutType.WRITE);
+    }
+
+    @Override
     protected void handleRefillMessage(RefillMessage message) {
         int key = message.getKey();
         if (this.isWriteUnconfirmed(key)) {
@@ -138,7 +146,7 @@ public class L2Cache extends Cache {
      * @param key The key received by the ReadMessage
      */
     @Override
-    protected void responseForFillOrReadReply(int key) {
+    protected void handleFill(int key) {
         if (this.isReadUnconfirmed(key)) {
             int value = this.data.getValueForKey(key).get();
             int updateCount = this.data.getUpdateCountForKey(key).get();
