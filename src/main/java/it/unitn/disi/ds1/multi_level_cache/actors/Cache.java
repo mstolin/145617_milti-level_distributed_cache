@@ -299,6 +299,12 @@ public abstract class Cache extends Node {
         if (this.data.containsKey(key) && !this.data.isNewerOrEqual(key, message.getUpdateCount())) {
             try {
                 this.data.setValueForKey(key, message.getValue(), message.getUpdateCount());
+
+                // Forward to previous level Caches if needed
+                if (!this.isLastLevelCache) {
+                    System.out.printf("%s - Need to reply to L2 caches, count: %d\n", this.id, this.l2Caches.size());
+                    this.multicastReFillMessage(key, value, updateCount, ActorRef.noSender());
+                }
             } catch (IllegalAccessException e) {
                 // Do nothing, if the data is locked then we don't update since critical write has priority
             } finally {
@@ -308,12 +314,6 @@ public abstract class Cache extends Node {
         } else {
             // never known this key, don't update
             System.out.printf("%s - Never read/write key %d, therefore no update\n", this.id, key);
-        }
-
-        // Forward to previous level Caches if needed
-        if (!this.isLastLevelCache) {
-            System.out.printf("%s - Need to reply to L2 caches, count: %d\n", this.id, this.l2Caches.size());
-            this.multicastReFillMessage(key, value, updateCount, ActorRef.noSender());
         }
     }
 
@@ -381,11 +381,10 @@ public abstract class Cache extends Node {
         try {
             this.data.setValueForKey(key, message.getValue(), message.getUpdateCount());
             this.responseForFillOrReadReply(key);
-        } catch (IllegalAccessException e) {
-            // Do nothing, critical write has higher priority, just timeout
-        } finally {
             // reset
             this.resetReadConfig(key);
+        } catch (IllegalAccessException e) {
+            // Do nothing, critical write has higher priority, just timeout
         }
     }
 

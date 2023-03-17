@@ -98,19 +98,19 @@ public class L2Cache extends Cache {
         this.data.unLockValueForKey(key);
         try {
             this.data.setValueForKey(key, value, updateCount);
+
+            // response to client if needed
+            if (this.isWriteUnconfirmed(key)) {
+                ActorRef client = this.unconfirmedWrites.get(key);
+                WriteConfirmMessage confirmMessage = new WriteConfirmMessage(key, value, updateCount);
+                client.tell(confirmMessage, this.getSelf());
+            }
+
+            // reset critical write
+            this.resetWriteConfig(key);
         } catch (IllegalAccessException e) {
             // nothing going on here, value is unlocked anyway
         }
-
-        // response to client if needed
-        if (this.isWriteUnconfirmed(key)) {
-            ActorRef client = this.unconfirmedWrites.get(key);
-            WriteConfirmMessage confirmMessage = new WriteConfirmMessage(key, value, updateCount);
-            client.tell(confirmMessage, this.getSelf());
-        }
-
-        // reset critical write
-        this.resetWriteConfig(key);
     }
 
     @Override

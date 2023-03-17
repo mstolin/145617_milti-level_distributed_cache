@@ -114,11 +114,16 @@ public class L1Cache extends Cache {
 
         // update value
         this.data.unLockValueForKey(key);
-        this.data.setValueForKey(key, value, updateCount);
-        // reset critical write
-        this.resetCritWriteConfig(key);
-        // multicast commit to all L2s
-        this.multicast(message, this.l2Caches);
+        try {
+            this.data.setValueForKey(key, value, updateCount);
+
+            // reset critical write
+            this.resetCritWriteConfig(key);
+            // multicast commit to all L2s
+            this.multicast(message, this.l2Caches);
+        } catch (IllegalAccessException e) {
+            // ignore, has been unlocked previously
+        }
     }
 
     @Override
