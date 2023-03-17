@@ -23,32 +23,28 @@ public abstract class Cache extends Node {
     protected List<ActorRef> l2Caches;
     /** Determines if this Node has crashed */
     protected boolean hasCrashed = false;
-    /**
-     * Determines if this is the last level cache.
-     * If true, this is the cache the clients talk to.
-     */
-    protected final boolean isLastLevelCache;
     protected Map<Integer, List<ActorRef>> unconfirmedReads = new HashMap<>();
     protected Map<Integer, ActorRef> unconfirmedWrites = new HashMap<>();
 
-    public Cache(String id, boolean isLastLevelCache) {
+    public Cache(String id) {
         super(id);
-        this.isLastLevelCache = isLastLevelCache;
     }
 
-    protected abstract void multicastReFillMessage(int key, int value, int updateCount, ActorRef sender);
+    protected abstract void multicastReFillMessageIfNeeded(int key, int value, int updateCount, ActorRef sender);
 
     protected abstract void responseForFillOrReadReply(int key);
 
     protected abstract void forwardMessageToNext(Serializable message, TimeoutType timeoutType);
 
-    protected abstract void onCritWriteRequestMessage(CritWriteRequestMessage message);
+    protected abstract void handleTimeoutMessage(TimeoutMessage message);
 
-    protected abstract void onCritWriteVoteMessage(CritWriteVoteMessage message);
+    protected abstract void handleCritWriteRequestMessage(CritWriteRequestMessage message, boolean isOk);
 
-    protected abstract void onCritWriteAbortMessage(CritWriteAbortMessage message);
+    protected abstract void handleCritWriteVoteMessage(CritWriteVoteMessage message);
 
-    protected abstract void onCritWriteCommitMessage(CritWriteCommitMessage message);
+    protected abstract void handleCritWriteAbortMessage(CritWriteAbortMessage message);
+
+    protected abstract void handleCritWriteCommitMessage(CritWriteCommitMessage message);
 
     /**
      * Flushes all temporary data.
@@ -96,7 +92,7 @@ public abstract class Cache extends Node {
         return !this.unconfirmedWrites.containsKey(key);
     }
 
-    protected void resetWriteConfig(int key) {
+    protected void resetWriteConfig(int key) { // todo rename abortWrite
         // remove from unconfirmed
         if (this.unconfirmedWrites.containsKey(key)) {
             this.unconfirmedWrites.remove(key);
@@ -244,6 +240,36 @@ public abstract class Cache extends Node {
         this.forwardWriteMessageToNext(message);
     }
 
+    private void onCritWriteRequestMessage(CritWriteRequestMessage message) {
+        int key = message.getKey();
+        boolean isOk = !this.data.isLocked(key) && !this.isWriteUnconfirmed(key);
+        this.handleCritWriteRequestMessage(message, isOk);
+    }
+
+    private void onCritWriteVoteMessage(CritWriteVoteMessage message) {
+        this.handleCritWriteVoteMessage(message);
+    }
+
+    private void onCritWriteAbortMessage(CritWriteAbortMessage message) {
+        this.handleCritWriteAbortMessage(message);
+    }
+
+    private void onCritWriteCommitMessage(CritWriteCommitMessage message) {
+        // just update the value
+        int key = message.getKey();
+        int value = message.getValue();
+        int updateCount = message.getUpdateCount();
+
+        // unlock and update
+        this.data.unLockValueForKey(key);
+        try {
+            this.data.setValueForKey(key, value, updateCount);
+            this.handleCritWriteCommitMessage(message);
+        } catch (IllegalAccessException e) {
+            // nothing going on here, value is unlocked anyway
+        }
+    }
+
     private void onWriteConfirmMessage(WriteConfirmMessage message) {
         int key = message.getKey();
         if (this.hasCrashed || !this.isWriteUnconfirmed(key)) {
@@ -269,9 +295,7 @@ public abstract class Cache extends Node {
                 sender.tell(message, this.getSelf());
 
                 // Send refill to all other L2 caches except the sender
-                if (!this.isLastLevelCache) {
-                    this.multicastReFillMessage(key, value, updateCount, sender);
-                }
+                this.multicastReFillMessageIfNeeded(key, value, updateCount, sender);
             } catch (IllegalAccessException e) {
                 // just timeout
             } finally {
@@ -301,10 +325,7 @@ public abstract class Cache extends Node {
                 this.data.setValueForKey(key, message.getValue(), message.getUpdateCount());
 
                 // Forward to previous level Caches if needed
-                if (!this.isLastLevelCache) {
-                    System.out.printf("%s - Need to reply to L2 caches, count: %d\n", this.id, this.l2Caches.size());
-                    this.multicastReFillMessage(key, value, updateCount, ActorRef.noSender());
-                }
+                this.multicastReFillMessageIfNeeded(key, value, updateCount, ActorRef.noSender());
             } catch (IllegalAccessException e) {
                 // Do nothing, if the data is locked then we don't update since critical write has priority
             } finally {
@@ -407,6 +428,10 @@ public abstract class Cache extends Node {
      */
     private void onRecoveryMessage(RecoveryMessage message) {
         this.recover();
+    }
+
+    private void onTimeoutMessage(TimeoutMessage message) {
+        this.handleTimeoutMessage(message);
     }
 
     private void onFlushMessage(FlushMessage message) {

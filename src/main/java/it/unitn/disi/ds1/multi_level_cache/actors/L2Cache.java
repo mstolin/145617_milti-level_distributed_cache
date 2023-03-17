@@ -11,7 +11,7 @@ import java.util.List;
 public class L2Cache extends Cache {
 
     public L2Cache(String id) {
-        super(id, true);
+        super(id);
     }
 
     static public Props props(String id) {
@@ -25,7 +25,7 @@ public class L2Cache extends Cache {
     }
 
     @Override
-    protected void onTimeoutMessage(TimeoutMessage message) {
+    protected void handleTimeoutMessage(TimeoutMessage message) {
         // forward message to DB, no need for timeout since DB can't timeout
         /*
         TODO Was ist wenn DB timeout wegen ein lock?
@@ -60,61 +60,47 @@ public class L2Cache extends Cache {
     }
 
     @Override
-    protected void onCritWriteRequestMessage(CritWriteRequestMessage message) {
+    protected void handleCritWriteRequestMessage(CritWriteRequestMessage message, boolean isOk) {
         int key = message.getKey();
-        boolean isOk = !this.data.isLocked(key);
-
         if (isOk) {
-            // lock data
+            // just lock data
             this.data.lockValueForKey(key);
         }
-
         // answer back
         CritWriteVoteMessage critWriteVoteOkMessage = new CritWriteVoteMessage(key, isOk);
         this.mainL1Cache.tell(critWriteVoteOkMessage, this.getSelf());
     }
 
     @Override
-    protected void onCritWriteVoteMessage(CritWriteVoteMessage message) {
+    protected void handleCritWriteVoteMessage(CritWriteVoteMessage message) {
         // Do nothing here
     }
 
     @Override
-    protected void onCritWriteAbortMessage(CritWriteAbortMessage message) {
-        int key = message.getKey();
-        // just unlock
-        this.data.unLockValueForKey(key);
-        this.resetWriteConfig(key);
+    protected void handleCritWriteAbortMessage(CritWriteAbortMessage message) {
+        this.resetWriteConfig(message.getKey());
     }
 
     @Override
-    protected void onCritWriteCommitMessage(CritWriteCommitMessage message) {
+    protected void handleCritWriteCommitMessage(CritWriteCommitMessage message) {
         // just update the value
         int key = message.getKey();
         int value = message.getValue();
         int updateCount = message.getUpdateCount();
 
-        // update
-        this.data.unLockValueForKey(key);
-        try {
-            this.data.setValueForKey(key, value, updateCount);
-
-            // response to client if needed
-            if (this.isWriteUnconfirmed(key)) {
-                ActorRef client = this.unconfirmedWrites.get(key);
-                WriteConfirmMessage confirmMessage = new WriteConfirmMessage(key, value, updateCount);
-                client.tell(confirmMessage, this.getSelf());
-            }
-
-            // reset critical write
-            this.resetWriteConfig(key);
-        } catch (IllegalAccessException e) {
-            // nothing going on here, value is unlocked anyway
+        // response to client if needed
+        if (this.isWriteUnconfirmed(key)) {
+            ActorRef client = this.unconfirmedWrites.get(key);
+            WriteConfirmMessage confirmMessage = new WriteConfirmMessage(key, value, updateCount);
+            client.tell(confirmMessage, this.getSelf());
         }
+
+        // reset critical write
+        this.resetWriteConfig(key);
     }
 
     @Override
-    protected void multicastReFillMessage(int key, int value, int updateCount, ActorRef sender) {
+    protected void multicastReFillMessageIfNeeded(int key, int value, int updateCount, ActorRef sender) {
         /*
         No need to implement. L2 cache does not send ReFill message.
          */

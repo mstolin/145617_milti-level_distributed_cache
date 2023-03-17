@@ -15,7 +15,7 @@ public class L1Cache extends Cache {
     private int critWriteVotingsCount = 0;
 
     public L1Cache(String id) {
-        super(id, false);
+        super(id);
     }
 
     static public Props props(String id) {
@@ -34,7 +34,7 @@ public class L1Cache extends Cache {
     }
 
     @Override
-    protected void onTimeoutMessage(TimeoutMessage message) {
+    protected void handleTimeoutMessage(TimeoutMessage message) {
         if (message.getType() == TimeoutType.CRIT_WRITE_REQUEST) {
             CritWriteRequestMessage requestMessage = (CritWriteRequestMessage) message.getMessage();
             int key = requestMessage.getKey();
@@ -62,21 +62,17 @@ public class L1Cache extends Cache {
     }
 
     @Override
-    protected void onCritWriteRequestMessage(CritWriteRequestMessage message) {
-        int key = message.getKey();
-        boolean isOk = !this.data.isLocked(key);
-
-        // if everything isOk, forward to L2s, otherwise force timeout
+    protected void handleCritWriteRequestMessage(CritWriteRequestMessage message, boolean isOk) {
         if (isOk) {
-            this.requestedCritWriteKey = Optional.of(key);
-            // forward to L2s
+            // iff everything is ok, then multicast the request to all L2s
+            this.requestedCritWriteKey = Optional.of(message.getKey());
             this.multicast(message, this.l2Caches);
             this.setMulticastTimeout(message, TimeoutType.CRIT_WRITE_REQUEST);
         }
     }
 
     @Override
-    protected void onCritWriteVoteMessage(CritWriteVoteMessage message) {
+    protected void handleCritWriteVoteMessage(CritWriteVoteMessage message) {
         if (!message.isOk()) {
             // some L2 as aborted, abort as well and force timeout
             this.resetCritWriteConfig(message.getKey());
@@ -97,37 +93,24 @@ public class L1Cache extends Cache {
     }
 
     @Override
-    protected void onCritWriteAbortMessage(CritWriteAbortMessage message) {
+    protected void handleCritWriteAbortMessage(CritWriteAbortMessage message) {
         int key = message.getKey();
-        // unlock value
-        this.data.unLockValueForKey(key);
+        // reset/abort
         this.resetCritWriteConfig(key);
         // multicast abort to L2s
         this.multicast(message, this.l2Caches);
     }
 
     @Override
-    protected void onCritWriteCommitMessage(CritWriteCommitMessage message) {
-        int key = message.getKey();
-        int value = message.getValue();
-        int updateCount = message.getUpdateCount();
-
-        // update value
-        this.data.unLockValueForKey(key);
-        try {
-            this.data.setValueForKey(key, value, updateCount);
-
-            // reset critical write
-            this.resetCritWriteConfig(key);
-            // multicast commit to all L2s
-            this.multicast(message, this.l2Caches);
-        } catch (IllegalAccessException e) {
-            // ignore, has been unlocked previously
-        }
+    protected void handleCritWriteCommitMessage(CritWriteCommitMessage message) {
+        // reset critical write
+        this.resetCritWriteConfig(message.getKey());
+        // multicast commit to all L2s
+        this.multicast(message, this.l2Caches);
     }
 
     @Override
-    protected void multicastReFillMessage(int key, int value, int updateCount, ActorRef sender) {
+    protected void multicastReFillMessageIfNeeded(int key, int value, int updateCount, ActorRef sender) {
         RefillMessage reFillMessage = new RefillMessage(key, value, updateCount);
 
         if (sender != ActorRef.noSender()) {
