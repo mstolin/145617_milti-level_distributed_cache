@@ -7,15 +7,11 @@ import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 
 import java.util.*;
 
-public class Database extends Node {
+public class Database extends ACCoordinator {
 
     private List<ActorRef> l1Caches;
     private List<ActorRef> l2Caches;
     private Map<Integer, List<ActorRef>> unconfirmedReads = new HashMap<>();
-    private boolean hasRequestedCritWrite = false;
-    private int critWriteVotingCount = 0;
-    private Optional<Integer> critWriteKey = Optional.empty();
-    private Optional<Integer> critWriteValue = Optional.empty();
 
     public Database() {
         super("Database");
@@ -54,24 +50,6 @@ public class Database extends Node {
             System.out.printf("Database does not know about key %d\n", key);
             // todo send error response
         }
-    }
-
-    private void resetCritWriteConfig() {
-        this.critWriteKey = Optional.empty();
-        this.critWriteValue = Optional.empty();
-        this.hasRequestedCritWrite = false;
-        this.critWriteVotingCount = 0;
-    }
-
-    private void abortCritWrite() {
-        int key = this.critWriteKey.get();
-        // unlock
-        this.data.unLockValueForKey(key);
-        // multicast abort message
-        CritWriteAbortMessage abortMessage = new CritWriteAbortMessage(key);
-        this.multicast(abortMessage, this.l1Caches);
-        // reset
-        this.resetCritWriteConfig();
     }
 
     private void onJoinL1Caches(JoinL1CachesMessage message) {
@@ -169,38 +147,6 @@ public class Database extends Node {
         // ODER bei L1 und L2 nach VOTE_OK antwort timeout, wenn timeout dann abort, wenn commit dann update
     }
 
-    private void onCritWriteVoteMessage(CritWriteVoteMessage message) {
-        if (!message.isOk()) {
-            // abort
-            this.abortCritWrite();
-            return;
-        }
-
-        if (this.hasRequestedCritWrite) {
-            // increment count
-            this.critWriteVotingCount = this.critWriteVotingCount + 1;
-            // check if all L1s have answered
-            if (this.critWriteVotingCount == this.l1Caches.size()) {
-                int key = message.getKey();
-                int value = this.critWriteValue.get();
-
-                // all L1s have answered OK
-                try {
-                    this.data.setValueForKey(key, value);
-
-                    int updateCount = this.data.getUpdateCountForKey(key).get();
-                    this.data.lockValueForKey(key);
-                    // now all participants have locked the data, then send a commit message to update the value
-                    // todo make own method
-                    CritWriteCommitMessage commitMessage = new CritWriteCommitMessage(key, value, updateCount);
-                    this.multicast(commitMessage, this.l1Caches);
-                } catch (IllegalAccessException e) {
-                    // already locked -> force timeout
-                }
-            }
-        }
-    }
-
     private void onReadMessage(ReadMessage message) {
         int key = message.getKey();
         System.out.printf("Database - Received read message for key %d\n", key);
@@ -226,8 +172,40 @@ public class Database extends Node {
     }
 
     @Override
+    protected boolean haveAllParticipantsVoted() {
+        return this.critWriteVotingCount == this.l1Caches.size();
+    }
+
+    @Override
+    protected void onVoteOk(int key) {
+        int value = this.critWriteValue.get();
+
+        // update value
+        try {
+            this.data.setValueForKey(key, value);
+
+            int updateCount = this.data.getUpdateCountForKey(key).get();
+            this.data.lockValueForKey(key);
+            // now all participants have locked the data, then send a commit message to update the value
+            // todo make own method
+            CritWriteCommitMessage commitMessage = new CritWriteCommitMessage(key, value, updateCount);
+            this.multicast(commitMessage, this.l1Caches);
+        } catch (IllegalAccessException e) {
+            // already locked -> force timeout
+        }
+    }
+
+    @Override
+    protected void abortCritWrite(int key) {
+        super.abortCritWrite(key);
+        // multicast abort message
+        CritWriteAbortMessage abortMessage = new CritWriteAbortMessage(key);
+        this.multicast(abortMessage, this.l1Caches);
+    }
+
+    @Override
     protected boolean canInstantiateNewWriteConversation(int key) {
-        return !this.data.isLocked(key);
+        return !this.data.isLocked(key); // todo isWriteUnconfirmed
     }
 
     @Override
@@ -238,7 +216,8 @@ public class Database extends Node {
     @Override
     protected void onTimeoutMessage(TimeoutMessage message) {
         if (message.getType() == TimeoutType.CRIT_WRITE_REQUEST && this.hasRequestedCritWrite) {
-            this.abortCritWrite();
+            CritWriteRequestMessage requestMessage = (CritWriteRequestMessage) message.getMessage();
+            this.abortCritWrite(requestMessage.getKey());
         }
     }
 
