@@ -38,6 +38,8 @@ public abstract class Cache extends Node {
 
     protected abstract void handleTimeoutMessage(TimeoutMessage message);
 
+    protected abstract void handleCritWriteMessage(CritWriteMessage message);
+
     protected abstract void handleCritWriteRequestMessage(CritWriteRequestMessage message, boolean isOk);
 
     protected abstract void handleCritWriteVoteMessage(CritWriteVoteMessage message);
@@ -234,6 +236,8 @@ public abstract class Cache extends Node {
             return;
         }
         System.out.printf("%s - Received critical write message, forward to next\n", this.id);
+
+        this.handleCritWriteMessage(message);
 
         // save as unconfirmed and forward
         this.addUnconfirmedWrite(key, this.getSender());
