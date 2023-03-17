@@ -5,14 +5,13 @@ import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 
-import java.util.List;
-import java.util.Optional;
-import java.util.Random;
+import java.util.*;
 
 public class Database extends Node {
 
     private List<ActorRef> l1Caches;
     private List<ActorRef> l2Caches;
+    private Map<Integer, List<ActorRef>> unconfirmedReads = new HashMap<>();
     private boolean hasRequestedCritWrite = false;
     private int critWriteVotingCount = 0;
     private Optional<Integer> critWriteKey = Optional.empty();
@@ -20,27 +19,37 @@ public class Database extends Node {
 
     public Database() {
         super("Database");
-        this.setDefaultData(10);
+
+        try {
+            this.setDefaultData(10);
+        } catch (IllegalAccessException e) {
+            System.out.printf("%s - Wasn't able to set default data\n", this.id);
+        }
+
     }
 
     static public Props props() {
         return Props.create(Database.class, () -> new Database());
     }
 
-    private void setDefaultData(int size) {
+    private void setDefaultData(int size) throws IllegalAccessException {
         for (int i = 0; i < size; i++) {
             int value = new Random().nextInt(1000);
             this.data.setValueForKey(i, value, 1);
         }
     }
 
-    private void readAndResponseFill(int key, ActorRef sender) {
+    private void responseFill(int key) {
         Optional<Integer> value = this.data.getValueForKey(key);
         Optional<Integer> updateCount = this.data.getUpdateCountForKey(key);
-        if (value.isPresent() && updateCount.isPresent()) {
+        if (this.isReadUnconfirmed(key) && value.isPresent() && updateCount.isPresent()) {
             System.out.printf("Database - Requested value is %d, send fill message to sender\n", value.get());
+            // multicast to everyone who has requested the value
+            List<ActorRef> senders = this.unconfirmedReads.get(key);
             FillMessage fillMessage = new FillMessage(key, value.get(), updateCount.get());
-            sender.tell(fillMessage, this.getSelf());
+            this.multicast(fillMessage, senders);
+            // reset the config
+            this.resetReadConfig(key);
         } else {
             System.out.printf("Database does not know about key %d\n", key);
             // todo send error response
@@ -85,31 +94,36 @@ public class Database extends Node {
             return; // todo send error
         }
 
-        // Lock data
-        this.data.lockValueForKey(key);
+        try {
+            // write data
+            this.data.setValueForKey(key, value);
 
-        // Write data
-        this.data.setValueForKey(key, value);
-        // we can be sure it exists, since we set value previously
-        int updateCount = this.data.getUpdateCountForKey(key).get();
+            // Lock data until write confirm and refill has been sent
+            this.data.lockValueForKey(key);
 
-        // Send confirm to L1 sender
-        // todo make own method
-        WriteConfirmMessage writeConfirmMessage = new WriteConfirmMessage(
-                message.getUuid(), message.getKey(), message.getValue(), updateCount);
-        this.getSender().tell(writeConfirmMessage, this.getSelf());
+            // we can be sure it exists, since we set value previously
+            int updateCount = this.data.getUpdateCountForKey(key).get();
 
-        // Send refill to all other L1 caches
-        // todo make own method
-        RefillMessage refillMessage = new RefillMessage(message.getKey(), message.getValue(), updateCount);
-        for (ActorRef l1Cache: this.l1Caches) {
-            if (l1Cache != this.getSender()) {
-                l1Cache.tell(refillMessage, this.getSelf());
+            // Send confirm to L1 sender
+            // todo make own method
+            WriteConfirmMessage writeConfirmMessage = new WriteConfirmMessage(
+                    message.getKey(), message.getValue(), updateCount);
+            this.getSender().tell(writeConfirmMessage, this.getSelf());
+
+            // Send refill to all other L1 caches
+            // todo make own method
+            RefillMessage refillMessage = new RefillMessage(message.getKey(), message.getValue(), updateCount);
+            for (ActorRef l1Cache: this.l1Caches) {
+                if (l1Cache != this.getSender()) {
+                    l1Cache.tell(refillMessage, this.getSelf());
+                }
             }
-        }
 
-        // Unlock value
-        this.data.unLockValueForKey(key);
+            // Unlock value
+            this.data.unLockValueForKey(key);
+        } catch(IllegalAccessException e) {
+            // force timeout, either locked by another write or critical write
+        }
     }
 
     private void onCritWriteMessage(CritWriteMessage message) {
@@ -121,9 +135,6 @@ public class Database extends Node {
             System.out.printf("Database - Can't write key %d is locked\n", key);
             return; // todo send error
         }
-
-        // lock value
-        this.data.lockValueForKey(key);
 
         // Multicast vote request to all L1s // todo make own method
         CritWriteRequestMessage critWriteRequestMessage = new CritWriteRequestMessage(key);
@@ -168,31 +179,60 @@ public class Database extends Node {
         if (this.hasRequestedCritWrite) {
             // increment count
             this.critWriteVotingCount = this.critWriteVotingCount + 1;
+            // check if all L1s have answered
             if (this.critWriteVotingCount == this.l1Caches.size()) {
                 int key = message.getKey();
                 int value = this.critWriteValue.get();
+
                 // all L1s have answered OK
-                this.data.setValueForKey(key, value);
-                int updateCount = this.data.getUpdateCountForKey(key).get();
-                this.data.lockValueForKey(key);
-                // now all participants have locked the data, then send a commit message to update the value
-                // todo make own method
-                CritWriteCommitMessage commitMessage = new CritWriteCommitMessage(key, value, updateCount);
-                this.multicast(commitMessage, this.l1Caches);
+                try {
+                    this.data.setValueForKey(key, value);
+
+                    int updateCount = this.data.getUpdateCountForKey(key).get();
+                    this.data.lockValueForKey(key);
+                    // now all participants have locked the data, then send a commit message to update the value
+                    // todo make own method
+                    CritWriteCommitMessage commitMessage = new CritWriteCommitMessage(key, value, updateCount);
+                    this.multicast(commitMessage, this.l1Caches);
+                } catch (IllegalAccessException e) {
+                    // already locked -> force timeout
+                }
             }
         }
     }
 
     private void onReadMessage(ReadMessage message) {
         int key = message.getKey();
-        System.out.printf("Database received read message for key %d\n", key);
-        this.readAndResponseFill(key, this.getSender());
+        System.out.printf("Database - Received read message for key %d\n", key);
+
+        // add read as unconfirmed
+        this.addUnconfirmedReadMessage(key, this.getSender());
+        // lock value until fill has been sent
+        this.data.lockValueForKey(key);
+        // send fill message
+        this.responseFill(key);
     }
 
     private void onCritReadMessage(CritReadMessage message) {
         int key = message.getKey();
         System.out.printf("Database - Received crit read message for key %d\n", key);
-        this.readAndResponseFill(key, this.getSender());
+
+        // add read as unconfirmed
+        this.addUnconfirmedReadMessage(key, this.getSender());
+        // lock value until fill has been sent
+        this.data.lockValueForKey(key);
+        // send fill message
+        this.responseFill(key);
+    }
+
+    @Override
+    protected boolean canInstantiateNewWriteConversation(int key) {
+        return !this.data.isLocked(key);
+    }
+
+    @Override
+    protected boolean canInstantiateNewReadConversation(int key) {
+        return !this.data.isLocked(key);
     }
 
     @Override
@@ -200,6 +240,29 @@ public class Database extends Node {
         if (message.getType() == TimeoutType.CRIT_WRITE_REQUEST && this.hasRequestedCritWrite) {
             this.abortCritWrite();
         }
+    }
+
+    @Override
+    protected void addUnconfirmedReadMessage(int key, ActorRef sender) {
+        if (this.unconfirmedReads.containsKey(key)) {
+            this.unconfirmedReads.get(key).add(sender);
+        } else {
+            List<ActorRef> senders = new ArrayList<>(List.of(sender));
+            this.unconfirmedReads.put(key, senders);
+        }
+    }
+
+    @Override
+    protected boolean isReadUnconfirmed(int key) {
+        return this.unconfirmedReads.containsKey(key);
+    }
+
+    @Override
+    protected void resetReadConfig(int key) {
+        if (this.unconfirmedReads.containsKey(key)) {
+            this.unconfirmedReads.remove(key);
+        }
+        this.data.unLockValueForKey(key);
     }
 
     @Override
