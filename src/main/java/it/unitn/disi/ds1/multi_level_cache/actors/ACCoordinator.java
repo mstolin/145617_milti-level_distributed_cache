@@ -4,42 +4,40 @@ import it.unitn.disi.ds1.multi_level_cache.messages.CritWriteVoteMessage;
 
 import java.util.Optional;
 
-public abstract class ACCoordinator extends Node {
+public class ACCoordinator <T extends Coordinator> {
 
-    protected boolean hasRequestedCritWrite = false;
-    protected int critWriteVotingCount = 0;
-    protected Optional<Integer> critWriteKey = Optional.empty();
-    protected Optional<Integer> critWriteValue = Optional.empty();
+    private final Coordinator coordinator;
+    private boolean hasRequestedCritWrite = false;
+    private int critWriteVotingCount = 0;
+    private Optional<Integer> critWriteKey = Optional.empty();
+    private Optional<Integer> critWriteValue = Optional.empty();
 
-    public ACCoordinator(String id) {
-        super(id);
+    public ACCoordinator(Coordinator coordinator) {
+        this.coordinator = coordinator;
     }
 
-    /**
-     * Determines if all participants of the round have voted.
-     *
-     * @return Boolean stating that all participants have voted or not
-     */
-    protected abstract boolean haveAllParticipantsVoted();
+    public boolean hasRequestedCritWrite() {
+        return hasRequestedCritWrite;
+    }
 
-    /**
-     * Is getting called when all participants voted ok.
-     */
-    protected abstract void onVoteOk(int key);
+    public void setCritWriteConfig(int key, int value) {
+        this.critWriteKey = Optional.of(key);
+        this.critWriteValue = Optional.of(value);
+        this.hasRequestedCritWrite = true;
+    }
 
-    protected void resetCritWriteConfig(int key) {
+    public void resetCritWriteConfig(int key) {
         this.hasRequestedCritWrite = false;
         this.critWriteVotingCount = 0;
         this.critWriteKey = Optional.empty();
         this.critWriteValue = Optional.empty();
-        this.data.unLockValueForKey(key);
     }
 
-    protected void abortCritWrite(int key) {
+    public void abortCritWrite(int key) {
         this.resetCritWriteConfig(key);
     }
 
-    protected void onCritWriteVoteMessage(CritWriteVoteMessage message) {
+    public void onCritWriteVoteMessage(CritWriteVoteMessage message) {
         int key = message.getKey();
         if (!message.isOk()) {
             // abort
@@ -51,8 +49,9 @@ public abstract class ACCoordinator extends Node {
             // increment count
             this.critWriteVotingCount = this.critWriteVotingCount + 1;
 
-            if (this.haveAllParticipantsVoted()) {
-                this.onVoteOk(key);
+            if (this.coordinator.haveAllParticipantsVoted(this.critWriteVotingCount)) {
+                int value = this.critWriteValue.get();
+                this.coordinator.onVoteOk(key, value);
             }
         }
     }
