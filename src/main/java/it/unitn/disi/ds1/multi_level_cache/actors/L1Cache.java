@@ -32,8 +32,7 @@ public class L1Cache extends Cache implements Coordinator {
 
     @Override
     protected void handleWriteMessage(WriteMessage message) {
-        // just forward to DB
-        this.forwardMessageToNext(message, TimeoutType.WRITE);
+        // what todo here, also L2
     }
 
     @Override

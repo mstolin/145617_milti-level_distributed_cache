@@ -26,10 +26,7 @@ public class L2Cache extends Cache {
 
     @Override
     protected void handleWriteMessage(WriteMessage message) {
-        // add client to lust
-        this.addUnconfirmedWrite(message.getKey(), this.getSender());
-        // forward to L1
-        this.forwardMessageToNext(message, TimeoutType.WRITE);
+        // todo what todo here also l1
     }
 
     @Override

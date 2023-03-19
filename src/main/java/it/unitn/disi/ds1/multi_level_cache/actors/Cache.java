@@ -214,9 +214,12 @@ public abstract class Cache extends Node {
             return;
         }
 
+        // lock
         this.data.lockValueForKey(key);
-
-        this.handleWriteMessage(message);
+        // set as unconfirmed
+        this.addUnconfirmedWrite(message.getKey(), this.getSender());
+        // forward to next
+        this.forwardMessageToNext(message, TimeoutType.WRITE);
     }
 
     private void onCritWriteMessage(CritWriteMessage message) {
@@ -272,23 +275,20 @@ public abstract class Cache extends Node {
         int value = message.getValue();
         int updateCount = message.getUpdateCount();
         boolean isLocked = this.data.isLocked(key);
-        boolean mustSave = this.data.containsKey(key) && !this.data.isNewerOrEqual(key, message.getUpdateCount());
+        boolean isUnconfirmed = this.isWriteUnconfirmed(key);
+        boolean mustUpdate =  isUnconfirmed || (this.data.containsKey(key) && !this.data.isNewerOrEqual(key, message.getUpdateCount()));
 
         Logger.refill(this.id, key, value, this.data.getValueForKey(key).orElse(-1), updateCount,
-                this.data.getUpdateCountForKey(key).orElse(0), isLocked, mustSave);
+                this.data.getUpdateCountForKey(key).orElse(0), isLocked, isUnconfirmed, mustUpdate);
 
-        // todo Must be saved if unconfirmed
-
-        if (!isLocked && mustSave) {
+        if (!isLocked && mustUpdate) {
             try {
                 this.data.setValueForKey(key, value, updateCount);
+                this.handleRefillMessage(message);
             } catch (IllegalAccessException e) {
                 // Do nothing, if the data is locked then we don't update since critical write has priority
             }
         }
-
-        // todo Check if this has to get into try
-        this.handleRefillMessage(message);
     }
 
     private void onReadMessage(ReadMessage message) {
