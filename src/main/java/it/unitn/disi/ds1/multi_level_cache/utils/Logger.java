@@ -1,5 +1,7 @@
 package it.unitn.disi.ds1.multi_level_cache.utils;
 
+import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
+
 public final class Logger {
 
     private final static String CRITICAL_READ_FORMAT = "key: %d, msg-uc: %d, actor-uc: %d";
@@ -10,6 +12,7 @@ public final class Logger {
     private final static String READ_FORMAT = "key: %d, msg-uc: %d, actor-uc: %d, forward: %b";
     private final static String REFILL_FORMAT = "key: %d, new-value: %d, old-value: %d, msg-uc: %d, actor-uc: %d, is-locked: %b, is-unconfirmed: %b, must-update: %b";
     private final static String WRITE_FORMAT = "key: %d, value: %d, is-locked: %b";
+    private final static String TIMEOUT_FORMAT = "type: %s";
 
     public static void log(LoggerType type, String id, String info) {
         info = info == null ? "" : info;
@@ -76,6 +79,11 @@ public final class Logger {
     public static void refill(String id, int key, int newValue, int oldValue, int msgUc, int actorUc, boolean isLocked, boolean isUnconfirmed, boolean mustUpdate) {
         String msg = String.format(REFILL_FORMAT, key, newValue, oldValue, msgUc, actorUc, isLocked, isUnconfirmed, mustUpdate);
         log(LoggerType.REFILL, id, msg);
+    }
+
+    public static void timeout(String id, TimeoutType type) {
+        String msg = String.format(TIMEOUT_FORMAT, type);
+        log(LoggerType.TIMEOUT, id, msg);
     }
 
     public static void write(String id, int key, int value, boolean isLocked) {

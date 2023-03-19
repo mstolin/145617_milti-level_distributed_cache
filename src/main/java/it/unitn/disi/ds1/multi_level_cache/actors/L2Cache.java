@@ -4,6 +4,7 @@ import akka.actor.ActorRef;
 import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
+import it.unitn.disi.ds1.multi_level_cache.utils.Logger;
 
 import java.io.Serializable;
 import java.util.List;
@@ -56,7 +57,7 @@ public class L2Cache extends Cache {
 
             // if the key is in this map, then no ReadReply has been received for the key
             if (this.isReadUnconfirmed(key)) {
-                System.out.printf("%s - has timed out for read, forward message directly to DB\n", this.id);
+                Logger.timeout(this.id, message.getType());
                 this.database.tell(readMessage, this.getSelf());
             }
         } else if (message.getType() == TimeoutType.CRIT_READ) {
@@ -65,7 +66,7 @@ public class L2Cache extends Cache {
 
             // if the key is in this map, then no ReadReply has been received for the key
             if (this.isReadUnconfirmed(key)) {
-                System.out.printf("%s - has timed out for crit read, forward message directly to DB\n", this.id);
+                Logger.timeout(this.id, message.getType());
                 this.database.tell(critReadMessage, this.getSelf());
             }
         } else if (message.getType() == TimeoutType.WRITE) {
@@ -73,7 +74,7 @@ public class L2Cache extends Cache {
             int key = writeMessage.getKey();
 
             if (this.isWriteUnconfirmed(key)) {
-                System.out.printf("%s - has timed out for write, forward message directly to DB\n", this.id);
+                Logger.timeout(this.id, message.getType());
                 this.database.tell(writeMessage, this.getSelf());
             }
         }

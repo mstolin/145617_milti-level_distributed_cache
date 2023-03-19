@@ -16,6 +16,7 @@ public enum LoggerType {
     CRITICAL_WRITE_VOTE,
     CRITICAL_READ,
     FLUSH,
+    TIMEOUT,
     ;
 
     @Override
@@ -59,6 +60,9 @@ public enum LoggerType {
             }
             case REFILL -> {
                 return "REFILL";
+            }
+            case TIMEOUT -> {
+                return "TIMEOUT";
             }
             case WRITE -> {
                 return "WRITE";

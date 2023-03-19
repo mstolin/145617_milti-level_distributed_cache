@@ -4,6 +4,7 @@ import akka.actor.ActorRef;
 import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
+import it.unitn.disi.ds1.multi_level_cache.utils.Logger;
 
 import java.io.Serializable;
 import java.util.List;
@@ -49,6 +50,7 @@ public class L1Cache extends Cache implements Coordinator {
             int key = requestMessage.getKey();
 
             if (this.isWriteUnconfirmed(key)) {
+                Logger.timeout(this.id, message.getType());
                 // reset and just timeout
                 this.resetCritWriteConfig(key);
             }
@@ -57,6 +59,7 @@ public class L1Cache extends Cache implements Coordinator {
             int key = writeMessage.getKey();
 
             if (this.isWriteUnconfirmed(key)) {
+                Logger.timeout(this.id, message.getType());
                 // reset and timeout
                 this.resetWriteConfig(key);
             }
@@ -65,6 +68,7 @@ public class L1Cache extends Cache implements Coordinator {
             int key = readMessage.getKey();
 
             if (this.isReadUnconfirmed(key)) {
+                Logger.timeout(this.id, message.getType());
                 this.resetReadConfig(key);
             }
         }
