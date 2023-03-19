@@ -1,6 +1,7 @@
 package it.unitn.disi.ds1.multi_level_cache.actors;
 
 import it.unitn.disi.ds1.multi_level_cache.messages.CritWriteVoteMessage;
+import it.unitn.disi.ds1.multi_level_cache.utils.Logger;
 
 import java.util.Optional;
 
@@ -30,7 +31,7 @@ public class ACCoordinator <T extends Coordinator> {
         this.critWriteValue = Optional.empty();
     }
 
-    public void onCritWriteVoteMessage(CritWriteVoteMessage message) {
+    public void onCritWriteVoteMessage(CritWriteVoteMessage message, String id) {
         int key = message.getKey();
         if (!message.isOk()) {
             // abort
@@ -41,9 +42,12 @@ public class ACCoordinator <T extends Coordinator> {
         if (this.hasRequestedCritWrite) {
             // increment count
             this.critWriteVotingCount = this.critWriteVotingCount + 1;
+            int value = this.critWriteValue.get();
+            boolean haveAllVoted = this.coordinator.haveAllParticipantsVoted(this.critWriteVotingCount);
 
-            if (this.coordinator.haveAllParticipantsVoted(this.critWriteVotingCount)) {
-                int value = this.critWriteValue.get();
+            Logger.criticalWriteVote(id, key, value, haveAllVoted);
+
+            if (haveAllVoted) {
                 this.coordinator.onVoteOk(key, value);
             }
         }
