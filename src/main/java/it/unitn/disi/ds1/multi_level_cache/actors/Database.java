@@ -4,6 +4,7 @@ import akka.actor.ActorRef;
 import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
+import it.unitn.disi.ds1.multi_level_cache.utils.Logger;
 
 import java.util.*;
 
@@ -55,20 +56,22 @@ public class Database extends Node implements Coordinator {
 
     private void onJoinL1Caches(JoinL1CachesMessage message) {
         this.l1Caches = List.copyOf(message.getL1Caches());
-        System.out.printf("Database joined group of %d L1 caches\n", this.l1Caches.size());
+        Logger.join(this.id, "L1 Caches", this.l1Caches.size());
     }
 
     private void onJoinL2Caches(JoinL2CachesMessage message) {
         this.l2Caches = List.copyOf(message.getL2Caches());
-        System.out.printf("Database joined group of %d L2 caches\n", this.l2Caches.size());
+        Logger.join(this.id, "L2 Caches", this.l2Caches.size());
     }
 
     private void onWriteMessage(WriteMessage message) {
         int key = message.getKey();
-        int value = message.getValue();;
-        System.out.printf("Database - Received write message of {%d: %d}\n", key, value);
+        int value = message.getValue();
+        boolean isLocked = this.data.isLocked(key);
 
-        if (this.data.isLocked(key)) {
+        Logger.write(this.id, key, value, isLocked);
+
+        if (isLocked) {
             System.out.printf("Database - Can't write key %d is locked\n", key);
             return; // todo send error
         }
@@ -135,9 +138,14 @@ public class Database extends Node implements Coordinator {
         // ODER bei L1 und L2 nach VOTE_OK antwort timeout, wenn timeout dann abort, wenn commit dann update
     }
 
+    private void onCritWriteVoteMessage(CritWriteVoteMessage message) {
+        this.acCoordinator.onCritWriteVoteMessage(message, this.id);
+    }
+
     private void onReadMessage(ReadMessage message) {
         int key = message.getKey();
-        System.out.printf("Database - Received read message for key %d\n", key);
+        Logger.read(this.id, key, message.getUpdateCount(), this.data.getUpdateCountForKey(key).orElse(0),
+                false);
 
         // add read as unconfirmed
         this.addUnconfirmedReadMessage(key, this.getSender());
@@ -238,7 +246,7 @@ public class Database extends Node implements Coordinator {
                .match(JoinL2CachesMessage.class, this::onJoinL2Caches)
                .match(WriteMessage.class, this::onWriteMessage)
                .match(CritWriteMessage.class, this::onCritWriteMessage)
-               .match(CritWriteVoteMessage.class, acCoordinator::onCritWriteVoteMessage)
+               .match(CritWriteVoteMessage.class, this::onCritWriteVoteMessage)
                .match(ReadMessage.class, this::onReadMessage)
                .match(CritReadMessage.class, this::onCritReadMessage)
                .match(TimeoutMessage.class, this::onTimeoutMessage)

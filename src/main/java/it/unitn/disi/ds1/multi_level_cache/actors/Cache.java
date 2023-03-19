@@ -3,6 +3,7 @@ package it.unitn.disi.ds1.multi_level_cache.actors;
 import akka.actor.ActorRef;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
+import it.unitn.disi.ds1.multi_level_cache.utils.Logger;
 
 import java.io.Serializable;
 import java.util.*;
@@ -184,17 +185,17 @@ public abstract class Cache extends Node {
 
     private void onJoinDatabase(JoinDatabaseMessage message) {
         this.database = message.getDatabase();
-        System.out.printf("%s joined database\n", this.id);
+        Logger.join(this.id, "Database", 1);
     }
 
     private void onJoinMainL1Cache(JoinMainL1CacheMessage message) {
         this.mainL1Cache = message.getL1Cache();
-        System.out.printf("%s joined main L1 cache\n", this.id);
+        Logger.join(this.id, "L1 Cache", 1);
     }
 
     private void onJoinL2Caches(JoinL2CachesMessage message) {
         this.l2Caches = List.copyOf(message.getL2Caches());
-        System.out.printf("%s joined group of %d L2 caches\n", this.id, this.l2Caches.size());
+        Logger.join(this.id, "L2 Caches", this.l2Caches.size());
     }
 
     /**
@@ -206,12 +207,12 @@ public abstract class Cache extends Node {
      */
     private void onWriteMessage(WriteMessage message) {
         int key = message.getKey();
+        Logger.write(this.id, message.getKey(), message.getValue(), this.data.isLocked(key));
 
         if (!this.canInstantiateNewWriteConversation(key)) {
             // Can't do anything
             return;
         }
-        System.out.printf("%s - Received write message, forward to next\n", this.id);
 
         this.data.lockValueForKey(key);
 
@@ -220,12 +221,12 @@ public abstract class Cache extends Node {
 
     private void onCritWriteMessage(CritWriteMessage message) {
         int key = message.getKey();
+        Logger.criticalWrite(this.id, key, message.getValue(), this.data.isLocked(key));
 
         if (!this.canInstantiateNewWriteConversation(key)) {
             // Can't do anything
             return;
         }
-        System.out.printf("%s - Received critical write message, forward to next\n", this.id);
 
         this.handleCritWriteMessage(message);
     }
@@ -233,6 +234,7 @@ public abstract class Cache extends Node {
     private void onCritWriteRequestMessage(CritWriteRequestMessage message) {
         int key = message.getKey();
         boolean isOk = !this.data.isLocked(key) && !this.isWriteUnconfirmed(key);
+        Logger.criticalWriteRequest(this.id, key, isOk);
         this.handleCritWriteRequestMessage(message, isOk);
     }
 
@@ -241,6 +243,7 @@ public abstract class Cache extends Node {
     }
 
     private void onCritWriteAbortMessage(CritWriteAbortMessage message) {
+        Logger.criticalWriteAbort(this.id);
         this.handleCritWriteAbortMessage(message);
     }
 
@@ -249,6 +252,9 @@ public abstract class Cache extends Node {
         int key = message.getKey();
         int value = message.getValue();
         int updateCount = message.getUpdateCount();
+
+        Logger.criticalWriteCommit(this.id, key, value, this.data.getValueForKey(key).orElse(-1), updateCount,
+                this.data.getUpdateCountForKey(key).orElse(0));
 
         // unlock and update
         this.data.unLockValueForKey(key);
@@ -263,21 +269,25 @@ public abstract class Cache extends Node {
     private void onRefillMessage(RefillMessage message) {
         // Print confirm
         int key = message.getKey();
-        System.out.printf(
-                "%s - Received refill message for key %d. Update if needed.\n",
-                this.id, key);
+        int value = message.getValue();
+        int updateCount = message.getUpdateCount();
+        boolean isLocked = this.data.isLocked(key);
+        boolean mustSave = this.data.containsKey(key) && !this.data.isNewerOrEqual(key, message.getUpdateCount());
 
-        if (this.data.containsKey(key) && !this.data.isNewerOrEqual(key, message.getUpdateCount())) {
+        Logger.refill(this.id, key, value, this.data.getValueForKey(key).orElse(-1), updateCount,
+                this.data.getUpdateCountForKey(key).orElse(0), isLocked, mustSave);
+
+        // todo Must be saved if unconfirmed
+
+        if (!isLocked && mustSave) {
             try {
-                this.data.setValueForKey(key, message.getValue(), message.getUpdateCount());
+                this.data.setValueForKey(key, value, updateCount);
             } catch (IllegalAccessException e) {
                 // Do nothing, if the data is locked then we don't update since critical write has priority
-            } finally {
-                System.out.printf("%s - Refilled value: {%d :%d} (given UC: %d, my UC: %d)\n",
-                        this.id, key, message.getValue(), message.getUpdateCount(), this.data.getUpdateCountForKey(key).get());
             }
         }
 
+        // todo Check if this has to get into try
         this.handleRefillMessage(message);
     }
 
@@ -288,25 +298,21 @@ public abstract class Cache extends Node {
             // Not allowed to handle received message -> time out
             return;
         }
-        // print confirm
-        int updateCount = message.getUpdateCount();
-        System.out.printf("%s Received read message for key %d (UC: %d)\n", this.id, key, updateCount);
 
         // add sender to queue
         this.addUnconfirmedReadMessage(key, this.getSender());
 
-        Optional<Integer> wanted = this.data.getValueForKey(key);
+        int updateCount = message.getUpdateCount();
+        boolean mustForward = !this.data.isNewerOrEqual(key, updateCount);
+        Logger.read(this.id, key, updateCount, this.data.getUpdateCountForKey(key).orElse(0), mustForward);
+
         // check if we own a more recent or an equal value
-        if (wanted.isPresent() && this.data.isNewerOrEqual(key, updateCount)) {
-            System.out.printf("%s knows an equal or more recent value: {%d :%d} (given UC: %d, my UC: %d)\n",
-                    this.id, key, wanted.get(), updateCount, this.data.getUpdateCountForKey(key).get());
+        if (mustForward) {
+            // We either don't know the value or it's older, so forward message to next
+            this.forwardReadMessageToNext(message, key);
+        } else {
             // response accordingly
             this.handleFill(key);
-        } else {
-            // We either don't know the value or it's older, so forward message to next
-            System.out.printf("%s does not know %d or has an older version (given UC: %d, my UC: %d), forward to next\n",
-                    this.id, key, updateCount, this.data.getUpdateCountForKey(key).orElse(0));
-            this.forwardReadMessageToNext(message, key);
         }
     }
 
@@ -322,7 +328,7 @@ public abstract class Cache extends Node {
 
         // print confirm
         int updateCount = message.getUpdateCount();
-        System.out.printf("%s - Received crit read message for key %d (UC: %d)\n", this.id, key, updateCount);
+        Logger.criticalRead(this.id, key, updateCount, this.data.getUpdateCountForKey(key).orElse(0));
 
         // Forward to next
         this.forwardCritReadMessageToNext(message, key);
@@ -334,8 +340,10 @@ public abstract class Cache extends Node {
      */
     private void onFillMessage(FillMessage message) {
         int key = message.getKey();
-        System.out.printf("%s received fill message for {%d: %d} (given UC: %d, my UC: %d)\n",
-                this.id, message.getKey(), message.getValue(), message.getUpdateCount(), this.data.getUpdateCountForKey(key).orElse(0));
+        int value = message.getValue();
+        int updateCount = message.getUpdateCount();
+        Logger.fill(this.id, key, value, this.data.getValueForKey(key).orElse(-1), updateCount,
+                this.data.getUpdateCountForKey(key).orElse(0));
 
         // Update value
         try {
@@ -355,7 +363,7 @@ public abstract class Cache extends Node {
      * @param message The received CrashMessage
      */
     private void onCrashMessage(CrashMessage message) {
-        System.out.printf("%s - Crash\n", this.id);
+        Logger.crash(this.id);
         this.recoverAfter(message.getRecoverAfterSeconds());
         this.flush();
     }
@@ -367,6 +375,7 @@ public abstract class Cache extends Node {
      * @param message The received RecoveryMessage.
      */
     private void onRecoveryMessage(RecoveryMessage message) {
+        Logger.recover(this.id);
         this.recover();
     }
 
@@ -376,7 +385,7 @@ public abstract class Cache extends Node {
 
     private void onFlushMessage(FlushMessage message) {
         this.flush();
-        System.out.printf("%s - Flushed\n", this.id);
+        Logger.flush(this.id);
     }
 
     @Override

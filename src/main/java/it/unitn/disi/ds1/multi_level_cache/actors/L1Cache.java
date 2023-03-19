@@ -87,7 +87,7 @@ public class L1Cache extends Cache implements Coordinator {
 
     @Override
     protected void handleCritWriteVoteMessage(CritWriteVoteMessage message) {
-        this.acCoordinator.onCritWriteVoteMessage(message);
+        this.acCoordinator.onCritWriteVoteMessage(message, this.id);
     }
 
     @Override
