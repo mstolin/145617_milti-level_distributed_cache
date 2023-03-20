@@ -8,7 +8,7 @@ public final class Logger {
     private final static String CRITICAL_READ_FORMAT = "key: %d, msg-uc: %d, actor-uc: %d, is-locked: %b";
     private final static String CRITICAL_WRITE_REQUEST = "key: %d, is-ok: %b";
     private final static String CRITICAL_WRITE_VOTE = "key: %d, value: %d, have-all-voted: %b";
-    private final static String ERROR_FORMAT = "msg-type: %s, key: %d, description: %s";
+    private final static String ERROR_FORMAT = "msg-type: %s, key: %d, force-timeout: %b, description: %s";
     private final static String FILL_FORMAT = "key: %d, new-value: %d, old-value: %d, new-uc: %d, old-uc: %d";
     private final static String INIT_READ_FORMAT = "key: %d, is-critical: %b";
     private final static String INIT_WRITE_FORMAT = "key: %d, value: %d, is-critical: %b";
@@ -58,8 +58,8 @@ public final class Logger {
         log(LoggerType.CRITICAL_WRITE_VOTE, id, msg);
     }
 
-    public static void error(String id, LoggerType messageType, int key, String description) {
-        String msg = String.format(ERROR_FORMAT, messageType, key, description);
+    public static void error(String id, LoggerType messageType, int key, boolean forceTimeout, String description) {
+        String msg = String.format(ERROR_FORMAT, messageType, key, forceTimeout, description);
         log(LoggerType.ERROR, id, msg);
     }
 

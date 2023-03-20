@@ -50,7 +50,7 @@ public class Database extends Node implements Coordinator {
             // reset the config
             this.resetReadConfig(key);
         } else {
-            Logger.error(this.id, LoggerType.READ, key, "Key is unknown");
+            Logger.error(this.id, LoggerType.READ, key, true, "Key is unknown");
             // todo send error response
         }
     }
@@ -70,12 +70,13 @@ public class Database extends Node implements Coordinator {
         int value = message.getValue();
         boolean isLocked = this.data.isLocked(key);
 
-        Logger.write(this.id, key, value, isLocked);
-
-        if (isLocked) {
-            Logger.error(this.id, LoggerType.WRITE, key, "Can't write value, because key is locked");
-            return; // todo send error
+        if (this.canInstantiateNewWriteConversation(key)) {
+            Logger.error(this.id, LoggerType.WRITE, key, true,
+                    "Can't write value, because key is locked or unconfirmed");
+            return;
         }
+
+        Logger.write(this.id, key, value, isLocked);
 
         try {
             // write data
@@ -104,12 +105,13 @@ public class Database extends Node implements Coordinator {
         int value = message.getValue();
         boolean isLocked = this.data.isLocked(key);
 
-        Logger.criticalWrite(this.id, key, value, isLocked);
-
-        if (this.data.isLocked(key)) {
-            Logger.error(this.id, LoggerType.CRITICAL_WRITE, key, "Can't write value, because key is locked");
-            return; // todo send error
+        if (this.canInstantiateNewWriteConversation(key)) {
+            Logger.error(this.id, LoggerType.CRITICAL_WRITE, key, true,
+                    "Can't write value, because key is locked or unconfirmed");
+            return;
         }
+
+        Logger.criticalWrite(this.id, key, value, isLocked);
 
         // Multicast vote request to all L1s // todo make own method
         CritWriteRequestMessage critWriteRequestMessage = new CritWriteRequestMessage(key);
@@ -150,7 +152,7 @@ public class Database extends Node implements Coordinator {
 
         if (!this.canInstantiateNewReadConversation(key)) {
             // force timeout
-            Logger.error(this.id, LoggerType.READ, key, "Can't read value, because it's locked");
+            Logger.error(this.id, LoggerType.READ, key, true, "Can't read value, because it's locked");
             return;
         }
         Logger.read(this.id, key, message.getUpdateCount(), this.data.getUpdateCountForKey(key).orElse(0),
@@ -168,7 +170,7 @@ public class Database extends Node implements Coordinator {
         int key = message.getKey();
         if (!this.canInstantiateNewReadConversation(key)) {
             // force timeout
-            Logger.error(this.id, LoggerType.CRITICAL_READ, key, "Can't read value, because it's locked");
+            Logger.error(this.id, LoggerType.CRITICAL_READ, key, true, "Can't read value, because it's locked");
             return;
         }
 

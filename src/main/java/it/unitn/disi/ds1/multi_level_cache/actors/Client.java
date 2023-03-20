@@ -257,14 +257,14 @@ public class Client extends Node {
         boolean isCritical = message.isCritical();
 
         if (!this.canInstantiateNewWriteConversation(key)) {
-            Logger.error(this.id, LoggerType.INIT_WRITE, key,
+            Logger.error(this.id, LoggerType.INIT_WRITE, key, false,
                     String.format("Can't write %d, waiting for another write response", value));
             return;
         }
 
         ActorRef l2Cache = message.getL2Cache();
         if (!this.l2Caches.contains(l2Cache)) {
-            Logger.error(this.id, LoggerType.INIT_WRITE, key, "L2 cache is unknown");
+            Logger.error(this.id, LoggerType.INIT_WRITE, key, false, "L2 cache is unknown");
             return;
         }
 
@@ -314,13 +314,13 @@ public class Client extends Node {
         boolean isCritical = message.isCritical();
 
         if (!this.canInstantiateNewReadConversation(key)) {
-            Logger.error(this.id, LoggerType.INIT_READ, key, "Can't read, waiting for another response");
+            Logger.error(this.id, LoggerType.INIT_READ, key, false, "Can't read, waiting for another response");
             return;
         }
 
         ActorRef l2Cache = message.getL2Cache();
         if (!this.l2Caches.contains(l2Cache)) {
-            Logger.error(this.id, LoggerType.INIT_READ, key, "L2 is unknown");
+            Logger.error(this.id, LoggerType.INIT_READ, key, false, "L2 is unknown");
             return;
         }
 

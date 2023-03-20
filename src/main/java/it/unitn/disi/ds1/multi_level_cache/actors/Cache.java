@@ -295,7 +295,7 @@ public abstract class Cache extends Node {
 
         if (!this.canInstantiateNewReadConversation(key)) {
             // Not allowed to handle received message -> time out
-            Logger.error(this.id, LoggerType.READ, key, "Can't read value, because it's locked");
+            Logger.error(this.id, LoggerType.READ, key, true, "Can't read value, because it's locked");
             return;
         }
 
@@ -322,7 +322,7 @@ public abstract class Cache extends Node {
 
         if (!this.canInstantiateNewReadConversation(key)) {
             // Not allowed to handle received message -> time out
-            Logger.error(this.id, LoggerType.CRITICAL_READ, key, "Can't read value, because it's locked");
+            Logger.error(this.id, LoggerType.CRITICAL_READ, key, true, "Can't read value, because it's locked");
             return;
         }
         // add as unconfirmed
