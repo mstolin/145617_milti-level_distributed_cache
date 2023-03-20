@@ -4,6 +4,7 @@ import akka.actor.ActorRef;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger;
+import it.unitn.disi.ds1.multi_level_cache.utils.LoggerType;
 
 import java.io.Serializable;
 import java.util.*;
@@ -294,6 +295,7 @@ public abstract class Cache extends Node {
 
         if (!this.canInstantiateNewReadConversation(key)) {
             // Not allowed to handle received message -> time out
+            Logger.error(this.id, LoggerType.READ, key, "Can't read value, because it's locked");
             return;
         }
 
@@ -302,7 +304,8 @@ public abstract class Cache extends Node {
 
         int updateCount = message.getUpdateCount();
         boolean mustForward = !this.data.isNewerOrEqual(key, updateCount);
-        Logger.read(this.id, key, updateCount, this.data.getUpdateCountForKey(key).orElse(0), mustForward);
+        Logger.read(this.id, key, updateCount, this.data.getUpdateCountForKey(key).orElse(0),
+                this.data.isLocked(key), mustForward);
 
         // check if we own a more recent or an equal value
         if (mustForward) {
@@ -319,6 +322,7 @@ public abstract class Cache extends Node {
 
         if (!this.canInstantiateNewReadConversation(key)) {
             // Not allowed to handle received message -> time out
+            Logger.error(this.id, LoggerType.CRITICAL_READ, key, "Can't read value, because it's locked");
             return;
         }
         // add as unconfirmed
@@ -326,7 +330,8 @@ public abstract class Cache extends Node {
 
         // print confirm
         int updateCount = message.getUpdateCount();
-        Logger.criticalRead(this.id, key, updateCount, this.data.getUpdateCountForKey(key).orElse(0));
+        Logger.criticalRead(this.id, key, updateCount, this.data.getUpdateCountForKey(key).orElse(0),
+                this.data.isLocked(key));
 
         // Forward to next
         this.forwardCritReadMessageToNext(message, key);

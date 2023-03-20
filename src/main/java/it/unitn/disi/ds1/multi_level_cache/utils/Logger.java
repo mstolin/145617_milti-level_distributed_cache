@@ -5,7 +5,7 @@ import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 public final class Logger {
 
     private final static String CRASH_FORMAT = "recover-after: %ls";
-    private final static String CRITICAL_READ_FORMAT = "key: %d, msg-uc: %d, actor-uc: %d";
+    private final static String CRITICAL_READ_FORMAT = "key: %d, msg-uc: %d, actor-uc: %d, is-locked: %b";
     private final static String CRITICAL_WRITE_REQUEST = "key: %d, is-ok: %b";
     private final static String CRITICAL_WRITE_VOTE = "key: %d, value: %d, have-all-voted: %b";
     private final static String ERROR_FORMAT = "msg-type: %s, key: %d, description: %s";
@@ -13,7 +13,7 @@ public final class Logger {
     private final static String INIT_READ_FORMAT = "key: %d, is-critical: %b";
     private final static String INIT_WRITE_FORMAT = "key: %d, value: %d, is-critical: %b";
     private final static String JOIN_FORMAT = "%s of %d";
-    private final static String READ_FORMAT = "key: %d, msg-uc: %d, actor-uc: %d, forward: %b";
+    private final static String READ_FORMAT = "key: %d, msg-uc: %d, actor-uc: %d, is-locked: %b, forward: %b";
     private final static String REFILL_FORMAT = "key: %d, new-value: %d, old-value: %d, msg-uc: %d, actor-uc: %d, is-locked: %b, is-unconfirmed: %b, must-update: %b";
     private final static String WRITE_FORMAT = "key: %d, value: %d, is-locked: %b";
     private final static String TIMEOUT_FORMAT = "type: %s";
@@ -29,8 +29,8 @@ public final class Logger {
         log(LoggerType.CRASH, id, msg);
     }
 
-    public static void criticalRead(String id, int key, int msgUpdateCount, int actorUpdateCount) {
-        String msg = String.format(CRITICAL_READ_FORMAT, key, msgUpdateCount, actorUpdateCount);
+    public static void criticalRead(String id, int key, int msgUpdateCount, int actorUpdateCount, boolean isLocked) {
+        String msg = String.format(CRITICAL_READ_FORMAT, key, msgUpdateCount, actorUpdateCount, isLocked);
         log(LoggerType.CRITICAL_READ, id, msg);
     }
 
@@ -87,8 +87,8 @@ public final class Logger {
         log(LoggerType.JOIN, id, msg);
     }
 
-    public static void read(String id, int key, int msgUpdateCount, int actorUpdateCount, boolean forward) {
-        String msg = String.format(READ_FORMAT, key, msgUpdateCount, actorUpdateCount, forward);
+    public static void read(String id, int key, int msgUpdateCount, int actorUpdateCount, boolean isLocked, boolean forward) {
+        String msg = String.format(READ_FORMAT, key, msgUpdateCount, actorUpdateCount, isLocked, forward);
         log(LoggerType.READ, id, msg);
     }
 

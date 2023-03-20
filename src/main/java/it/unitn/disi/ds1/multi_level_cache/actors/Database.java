@@ -147,8 +147,14 @@ public class Database extends Node implements Coordinator {
 
     private void onReadMessage(ReadMessage message) {
         int key = message.getKey();
+
+        if (!this.canInstantiateNewReadConversation(key)) {
+            // force timeout
+            Logger.error(this.id, LoggerType.READ, key, "Can't read value, because it's locked");
+            return;
+        }
         Logger.read(this.id, key, message.getUpdateCount(), this.data.getUpdateCountForKey(key).orElse(0),
-                false);
+                this.data.isLocked(key), false);
 
         // add read as unconfirmed
         this.addUnconfirmedReadMessage(key, this.getSender());
@@ -160,8 +166,14 @@ public class Database extends Node implements Coordinator {
 
     private void onCritReadMessage(CritReadMessage message) {
         int key = message.getKey();
+        if (!this.canInstantiateNewReadConversation(key)) {
+            // force timeout
+            Logger.error(this.id, LoggerType.CRITICAL_READ, key, "Can't read value, because it's locked");
+            return;
+        }
+
         Logger.criticalRead(this.id, key, message.getUpdateCount(),
-                this.data.getUpdateCountForKey(key).orElse(0));
+                this.data.getUpdateCountForKey(key).orElse(0), this.data.isLocked(key));
 
         // add read as unconfirmed
         this.addUnconfirmedReadMessage(key, this.getSender());
