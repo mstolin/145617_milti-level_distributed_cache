@@ -70,7 +70,7 @@ public class Database extends Node implements Coordinator {
         int value = message.getValue();
         boolean isLocked = this.data.isLocked(key);
 
-        if (this.canInstantiateNewWriteConversation(key)) {
+        if (!this.canInstantiateNewWriteConversation(key)) {
             Logger.error(this.id, LoggerType.WRITE, key, true,
                     "Can't write value, because key is locked or unconfirmed");
             return;
@@ -105,7 +105,7 @@ public class Database extends Node implements Coordinator {
         int value = message.getValue();
         boolean isLocked = this.data.isLocked(key);
 
-        if (this.canInstantiateNewWriteConversation(key)) {
+        if (!this.canInstantiateNewWriteConversation(key)) {
             Logger.error(this.id, LoggerType.CRITICAL_WRITE, key, true,
                     "Can't write value, because key is locked or unconfirmed");
             return;
