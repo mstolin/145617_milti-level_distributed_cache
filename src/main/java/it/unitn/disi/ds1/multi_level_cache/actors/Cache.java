@@ -68,7 +68,6 @@ public abstract class Cache extends Node {
         this.getContext().become(this.createReceiveForCrash());
 
         if (recoverDelay > 0) {
-            System.out.printf("%s - Recover after %d\n", this.id, recoverDelay);
             this.scheduleMessageToSelf(new RecoveryMessage(), recoverDelay);
         }
     }
@@ -77,7 +76,6 @@ public abstract class Cache extends Node {
      * Recovers this node after it has crashed.
      */
     protected void recover() {
-        System.out.printf("%s - Recovered\n", this.id);
         this.getContext().become(this.createReceive());
     }
 
@@ -363,8 +361,9 @@ public abstract class Cache extends Node {
      * @param message The received CrashMessage
      */
     private void onCrashMessage(CrashMessage message) {
-        Logger.crash(this.id);
-        this.recoverAfter(message.getRecoverAfterSeconds());
+        long recoverAfter = message.getRecoverAfterSeconds();
+        Logger.crash(this.id, recoverAfter);
+        this.recoverAfter(recoverAfter);
         this.flush();
     }
 

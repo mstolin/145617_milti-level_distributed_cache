@@ -5,6 +5,7 @@ import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger;
+import it.unitn.disi.ds1.multi_level_cache.utils.LoggerType;
 
 import java.util.*;
 
@@ -49,7 +50,7 @@ public class Database extends Node implements Coordinator {
             // reset the config
             this.resetReadConfig(key);
         } else {
-            System.out.printf("Database does not know about key %d\n", key);
+            Logger.error(this.id, LoggerType.READ, key, "Key is unknown");
             // todo send error response
         }
     }
@@ -72,7 +73,7 @@ public class Database extends Node implements Coordinator {
         Logger.write(this.id, key, value, isLocked);
 
         if (isLocked) {
-            System.out.printf("Database - Can't write key %d is locked\n", key);
+            Logger.error(this.id, LoggerType.WRITE, key, "Can't write value, because key is locked");
             return; // todo send error
         }
 
@@ -100,11 +101,13 @@ public class Database extends Node implements Coordinator {
 
     private void onCritWriteMessage(CritWriteMessage message) {
         int key = message.getKey();
-        int value = message.getValue();;
-        System.out.printf("Database - Received critical write message of {%d: %d}\n", key, value);
+        int value = message.getValue();
+        boolean isLocked = this.data.isLocked(key);
+
+        Logger.criticalWrite(this.id, key, value, isLocked);
 
         if (this.data.isLocked(key)) {
-            System.out.printf("Database - Can't write key %d is locked\n", key);
+            Logger.error(this.id, LoggerType.CRITICAL_WRITE, key, "Can't write value, because key is locked");
             return; // todo send error
         }
 
@@ -157,7 +160,8 @@ public class Database extends Node implements Coordinator {
 
     private void onCritReadMessage(CritReadMessage message) {
         int key = message.getKey();
-        System.out.printf("Database - Received crit read message for key %d\n", key);
+        Logger.criticalRead(this.id, key, message.getUpdateCount(),
+                this.data.getUpdateCountForKey(key).orElse(0));
 
         // add read as unconfirmed
         this.addUnconfirmedReadMessage(key, this.getSender());

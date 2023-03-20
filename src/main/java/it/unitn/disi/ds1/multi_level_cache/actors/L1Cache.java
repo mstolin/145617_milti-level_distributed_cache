@@ -148,9 +148,7 @@ public class L1Cache extends Cache implements Coordinator {
     @Override
     protected void recover() {
         super.recover();
-
         // send flush to all L2s
-        System.out.printf("%s - Flush all L2s\n", this.id);
         FlushMessage flushMessage = new FlushMessage(this.getSelf());
         this.multicast(flushMessage, this.l2Caches);
     }

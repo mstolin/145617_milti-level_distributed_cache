@@ -5,6 +5,7 @@ import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger;
+import it.unitn.disi.ds1.multi_level_cache.utils.LoggerType;
 
 import java.util.*;
 
@@ -256,14 +257,14 @@ public class Client extends Node {
         boolean isCritical = message.isCritical();
 
         if (!this.canInstantiateNewWriteConversation(key)) {
-            System.out.printf("%s can't instantiate new write for {%d: %d}, because it is waiting for response\n",
-                    this.id, key, value);
+            Logger.error(this.id, LoggerType.INIT_WRITE, key,
+                    String.format("Can't write %d, waiting for another write response", value));
             return;
         }
 
         ActorRef l2Cache = message.getL2Cache();
         if (!this.l2Caches.contains(l2Cache)) {
-            System.out.printf("%s The given L2 Cache is unknown\n", this.id);
+            Logger.error(this.id, LoggerType.INIT_WRITE, key, "L2 cache is unknown");
             return;
         }
 
@@ -313,14 +314,13 @@ public class Client extends Node {
         boolean isCritical = message.isCritical();
 
         if (!this.canInstantiateNewReadConversation(key)) {
-            System.out.printf("%s can't instantiate new read conversation for key %d, because it is waiting for response\n",
-                    this.id, key);
+            Logger.error(this.id, LoggerType.INIT_READ, key, "Can't read, waiting for another response");
             return;
         }
 
         ActorRef l2Cache = message.getL2Cache();
         if (!this.l2Caches.contains(l2Cache)) {
-            System.out.printf("%s The given L2 Cache is unknown\n", this.id);
+            Logger.error(this.id, LoggerType.INIT_READ, key, "L2 is unknown");
             return;
         }
 
