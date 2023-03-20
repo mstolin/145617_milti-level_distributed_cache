@@ -17,6 +17,10 @@ public enum LoggerType {
     CRITICAL_READ,
     FLUSH,
     TIMEOUT,
+    INIT_WRITE,
+    INIT_READ,
+    WRITE_CONFIRM,
+    READ_REPLY,
     ;
 
     @Override
@@ -49,11 +53,20 @@ public enum LoggerType {
             case FLUSH -> {
                 return "FLUSH";
             }
+            case INIT_READ -> {
+                return "INIT-READ";
+            }
+            case INIT_WRITE -> {
+                return "INIT-WRITE";
+            }
             case JOIN -> {
                 return "JOIN";
             }
             case READ -> {
                 return "READ";
+            }
+            case READ_REPLY -> {
+                return "READ-REPLY";
             }
             case RECOVER -> {
                 return "RECOVER";
@@ -66,6 +79,9 @@ public enum LoggerType {
             }
             case WRITE -> {
                 return "WRITE";
+            }
+            case WRITE_CONFIRM -> {
+                return "WRITE-CONFIRM";
             }
             default -> {
                 return "";

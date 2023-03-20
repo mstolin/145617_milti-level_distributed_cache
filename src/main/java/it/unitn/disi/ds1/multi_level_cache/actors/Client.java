@@ -4,6 +4,7 @@ import akka.actor.ActorRef;
 import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
+import it.unitn.disi.ds1.multi_level_cache.utils.Logger;
 
 import java.util.*;
 
@@ -50,8 +51,9 @@ public class Client extends Node {
      */
     private ActorRef getRandomActor(List<ActorRef> group) {
         Random rand = new Random();
-        Collections.shuffle(group);
-        return group.get(rand.nextInt(group.size()));
+        List<ActorRef> groupClone = group;
+        //Collections.shuffle(groupClone);
+        return groupClone.get(rand.nextInt(groupClone.size()));
     }
 
     /**
@@ -239,7 +241,7 @@ public class Client extends Node {
      */
     private void onJoinL2Caches(JoinL2CachesMessage message) {
         this.l2Caches = List.copyOf(message.getL2Caches());
-        System.out.printf("%s joined group of %d L2 caches\n", this.id, this.l2Caches.size());
+        Logger.join(this.id, "L2 Caches", this.l2Caches.size());
     }
 
     /**
@@ -251,6 +253,7 @@ public class Client extends Node {
     private void onInstantiateWriteMessage(InstantiateWriteMessage message) {
         int key = message.getKey();
         int value = message.getValue();
+        boolean isCritical = message.isCritical();
 
         if (!this.canInstantiateNewWriteConversation(key)) {
             System.out.printf("%s can't instantiate new write for {%d: %d}, because it is waiting for response\n",
@@ -264,11 +267,11 @@ public class Client extends Node {
             return;
         }
 
-        if (message.isCritical()) {
-            System.out.printf("%s - Sends critical write message {%d: %d} to L2 cache\n", this.id, key, value);
+        Logger.initWrite(this.id, key, value, isCritical);
+
+        if (isCritical) {
             this.tellCritWriteMessage(l2Cache, key, value);
         } else {
-            System.out.printf("%s - Sends write message {%d: %d} to L2 cache\n", this.id, key, value);
             this.tellWriteMessage(l2Cache, key, value);
         }
     }
@@ -284,8 +287,9 @@ public class Client extends Node {
         int key = message.getKey();
         int value = message.getValue();
         int updateCount = message.getUpdateCount();
-        System.out.printf("%s received write confirm for key %d: %d (new UC: %d, old UC: %d)\n",
-                this.id, key, value, updateCount, this.data.getUpdateCountForKey(key).orElse(0));
+
+        Logger.writeConfirm(this.id, key, value, this.data.getValueForKey(key).orElse(-1), updateCount,
+                this.data.getUpdateCountForKey(key).orElse(0));
 
         try {
             // update value
@@ -306,6 +310,7 @@ public class Client extends Node {
      */
     private void onInstantiateReadMessage(InstantiateReadMessage message) {
         int key = message.getKey();
+        boolean isCritical = message.isCritical();
 
         if (!this.canInstantiateNewReadConversation(key)) {
             System.out.printf("%s can't instantiate new read conversation for key %d, because it is waiting for response\n",
@@ -319,11 +324,11 @@ public class Client extends Node {
             return;
         }
 
-        if (message.isCritical()) {
-            System.out.printf("%s send critical read message to L2 Cache for key %d\n", this.id, key);
+        Logger.initRead(this.id, key, isCritical);
+
+        if (isCritical) {
             this.tellCritReadMessage(l2Cache, key);
         } else {
-            System.out.printf("%s send read message to L2 Cache for key %d\n", this.id, key);
             this.tellReadMessage(l2Cache, key);
         }
     }
@@ -339,8 +344,8 @@ public class Client extends Node {
         int key = message.getKey();
         int value = message.getValue();
         int updateCount = message.getUpdateCount();
-        System.out.printf("%s Received read reply {%d: %d} (new UC: %d, old UC: %d)\n",
-                this.id, key, value, updateCount, this.data.getUpdateCountForKey(key).orElse(0));
+        Logger.readReply(this.id, key, value, this.data.getValueForKey(key).orElse(-1), updateCount,
+                this.data.getUpdateCountForKey(key).orElse(0));
 
         try {
             // update value
@@ -358,8 +363,8 @@ public class Client extends Node {
             WriteMessage writeMessage = (WriteMessage) message.getMessage();
             int key = writeMessage.getKey();
             int value = writeMessage.getValue();
-            System.out.printf("%s - Timeout on WriteMessage for {%2d: %d}\n",
-                    this.id, key, value);
+
+            Logger.timeout(this.id, type);
 
             // try again
             this.retryWriteMessage(message.getUnreachableActor(), key, value, false);
@@ -369,7 +374,7 @@ public class Client extends Node {
 
             // if the key is in this map, then no ReadReply has been received for the key
             if (this.isReadUnconfirmed(key)) {
-                System.out.printf("%s - Timeout on ReadMessage for key %2d\n", this.id, key);
+                Logger.timeout(this.id, type);
                 this.retryReadMessage(message.getUnreachableActor(), key, false);
             }
         } else if (type == TimeoutType.CRIT_READ) {
@@ -377,15 +382,15 @@ public class Client extends Node {
             int key = critReadMessage.getKey();
 
             if (this.isReadUnconfirmed(key)) {
-                System.out.printf("%s - Timeout on CritReadMessage for key %2d\n", this.id, key);
+                Logger.timeout(this.id, type);
                 this.retryReadMessage(message.getUnreachableActor(), key, true);
             }
         } else if (type == TimeoutType.CRIT_WRITE) {
             CritWriteMessage critWriteMessage = (CritWriteMessage) message.getMessage();
             int key = critWriteMessage.getKey();
             int value = critWriteMessage.getValue();
-            System.out.printf("%s - Timeout on CritWriteMessage for {%2d: %d}\n",
-                    this.id, key, value);
+
+            Logger.timeout(this.id, type);
 
             // try again
             this.retryWriteMessage(message.getUnreachableActor(), key, value, true);

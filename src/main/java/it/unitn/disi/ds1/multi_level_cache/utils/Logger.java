@@ -8,6 +8,8 @@ public final class Logger {
     private final static String CRITICAL_WRITE_REQUEST = "key: %d, is-ok: %b";
     private final static String CRITICAL_WRITE_VOTE = "key: %d, value: %d, have-all-voted: %b";
     private final static String FILL_FORMAT = "key: %d, new-value: %d, old-value: %d, new-uc: %d, old-uc: %d";
+    private final static String INIT_READ_FORMAT = "key: %d, is-critical: %b";
+    private final static String INIT_WRITE_FORMAT = "key: %d, value: %d, is-critical: %b";
     private final static String JOIN_FORMAT = "%s of %d";
     private final static String READ_FORMAT = "key: %d, msg-uc: %d, actor-uc: %d, forward: %b";
     private final static String REFILL_FORMAT = "key: %d, new-value: %d, old-value: %d, msg-uc: %d, actor-uc: %d, is-locked: %b, is-unconfirmed: %b, must-update: %b";
@@ -16,7 +18,7 @@ public final class Logger {
 
     public static void log(LoggerType type, String id, String info) {
         info = info == null ? "" : info;
-        String msg = String.format("%-10.10s - %-7.7s - %s", String.format("[%s]", id), type, info);
+        String msg = String.format("%-8.8s | %-13.13s | %s", id, type, info);
         System.out.println(msg);
     }
 
@@ -53,13 +55,23 @@ public final class Logger {
         log(LoggerType.CRITICAL_WRITE_VOTE, id, msg);
     }
 
+    public static void fill(String id, int key, int newValue, int oldValue, int newUc, int oldUc) {
+        String msg = String.format(FILL_FORMAT, key, newValue, oldValue, newUc, oldUc);
+        log(LoggerType.FILL, id, msg);
+    }
+
     public static void flush(String id) {
         log(LoggerType.FLUSH, id, null);
     }
 
-    public static void fill(String id, int key, int newValue, int oldValue, int newUc, int oldUc) {
-        String msg = String.format(FILL_FORMAT, key, newValue, oldValue, newUc, oldUc);
-        log(LoggerType.FILL, id, msg);
+    public static void initRead(String id, int key, boolean isCritical) {
+        String msg = String.format(INIT_READ_FORMAT, key, isCritical);
+        log(LoggerType.INIT_READ, id, msg);
+    }
+
+    public static void initWrite(String id, int key, int value, boolean isCritical) {
+        String msg = String.format(INIT_WRITE_FORMAT, key, value, isCritical);
+        log(LoggerType.INIT_WRITE, id, msg);
     }
 
     public static void join(String id, String groupName, int groupSize) {
@@ -70,6 +82,11 @@ public final class Logger {
     public static void read(String id, int key, int msgUpdateCount, int actorUpdateCount, boolean forward) {
         String msg = String.format(READ_FORMAT, key, msgUpdateCount, actorUpdateCount, forward);
         log(LoggerType.READ, id, msg);
+    }
+
+    public static void readReply(String id, int key, int newValue, int oldValue, int newUc, int oldUc) {
+        String msg = String.format(FILL_FORMAT, key, newValue, oldValue, newUc, oldUc);
+        log(LoggerType.READ_REPLY, id, msg);
     }
 
     public static void recover(String id) {
@@ -89,6 +106,11 @@ public final class Logger {
     public static void write(String id, int key, int value, boolean isLocked) {
         String msg = String.format(WRITE_FORMAT, key, value, isLocked);
         log(LoggerType.WRITE, id, msg);
+    }
+
+    public static void writeConfirm(String id, int key, int newValue, int oldValue, int newUc, int oldUc) {
+        String msg = String.format(FILL_FORMAT, key, newValue, oldValue, newUc, oldUc);
+        log(LoggerType.WRITE_CONFIRM, id, msg);
     }
 
 }
