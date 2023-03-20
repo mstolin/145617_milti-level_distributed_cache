@@ -21,6 +21,7 @@ public enum LoggerType {
     INIT_READ,
     WRITE_CONFIRM,
     READ_REPLY,
+    ERROR,
     ;
 
     @Override
@@ -46,6 +47,9 @@ public enum LoggerType {
             }
             case CRITICAL_WRITE_VOTE -> {
                 return "CRITICAL-WRITE-VOTE";
+            }
+            case ERROR -> {
+                return "ERROR";
             }
             case FILL -> {
                 return "FILL";

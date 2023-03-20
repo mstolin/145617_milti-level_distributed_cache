@@ -4,9 +4,11 @@ import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 
 public final class Logger {
 
+    private final static String CRASH_FORMAT = "recover-after: %ls";
     private final static String CRITICAL_READ_FORMAT = "key: %d, msg-uc: %d, actor-uc: %d";
     private final static String CRITICAL_WRITE_REQUEST = "key: %d, is-ok: %b";
     private final static String CRITICAL_WRITE_VOTE = "key: %d, value: %d, have-all-voted: %b";
+    private final static String ERROR_FORMAT = "msg-type: %s, key: %d, description: %s";
     private final static String FILL_FORMAT = "key: %d, new-value: %d, old-value: %d, new-uc: %d, old-uc: %d";
     private final static String INIT_READ_FORMAT = "key: %d, is-critical: %b";
     private final static String INIT_WRITE_FORMAT = "key: %d, value: %d, is-critical: %b";
@@ -22,8 +24,9 @@ public final class Logger {
         System.out.println(msg);
     }
 
-    public static void crash(String id) {
-        log(LoggerType.CRASH, id, null);
+    public static void crash(String id, long recoverAfter) {
+        String msg = String.format(CRASH_FORMAT, recoverAfter);
+        log(LoggerType.CRASH, id, msg);
     }
 
     public static void criticalRead(String id, int key, int msgUpdateCount, int actorUpdateCount) {
@@ -53,6 +56,11 @@ public final class Logger {
     public static void criticalWriteVote(String id, int key, int value, boolean haveAllVoted) {
         String msg = String.format(CRITICAL_WRITE_VOTE, key, value, haveAllVoted);
         log(LoggerType.CRITICAL_WRITE_VOTE, id, msg);
+    }
+
+    public static void error(String id, LoggerType messageType, int key, String description) {
+        String msg = String.format(ERROR_FORMAT, messageType, key, description);
+        log(LoggerType.ERROR, id, msg);
     }
 
     public static void fill(String id, int key, int newValue, int oldValue, int newUc, int oldUc) {
