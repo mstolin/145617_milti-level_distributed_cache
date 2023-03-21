@@ -13,7 +13,7 @@ import java.util.List;
 public abstract class Node extends AbstractActor {
 
     /** The timeout duration */
-    static final long TIMEOUT_SECONDS = 2;
+    static final long TIMEOUT_SECONDS = 6;
     /** Data the Node knows about */
     protected DataStore data = new DataStore();
     /** ID of this node */
