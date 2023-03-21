@@ -2,6 +2,7 @@ package it.unitn.disi.ds1.multi_level_cache.actors;
 
 import it.unitn.disi.ds1.multi_level_cache.messages.CritWriteVoteMessage;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
+import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerOperationType;
 
 import java.util.Optional;
 
@@ -45,7 +46,7 @@ public class ACCoordinator <T extends Coordinator> {
             int value = this.critWriteValue.get();
             boolean haveAllVoted = this.coordinator.haveAllParticipantsVoted(this.critWriteVotingCount);
 
-            Logger.criticalWriteVote(id, key, value, haveAllVoted);
+            Logger.criticalWriteVote(id, LoggerOperationType.RECEIVED, key, value, haveAllVoted);
 
             if (haveAllVoted) {
                 this.coordinator.onVoteOk(key, value);

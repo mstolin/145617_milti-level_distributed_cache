@@ -5,6 +5,7 @@ import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
+import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerOperationType;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerType;
 
 import java.util.*;
@@ -309,7 +310,7 @@ public class Client extends Node {
         int value = message.getValue();
         int updateCount = message.getUpdateCount();
 
-        Logger.writeConfirm(this.id, key, value, this.data.getValueForKey(key).orElse(-1), updateCount,
+        Logger.writeConfirm(this.id, LoggerOperationType.RECEIVED, key, value, this.data.getValueForKey(key).orElse(-1), updateCount,
                 this.data.getUpdateCountForKey(key).orElse(0));
 
         try {
@@ -359,7 +360,7 @@ public class Client extends Node {
         int key = message.getKey();
         int value = message.getValue();
         int updateCount = message.getUpdateCount();
-        Logger.readReply(this.id, key, value, this.data.getValueForKey(key).orElse(-1), updateCount,
+        Logger.readReply(this.id, LoggerOperationType.RECEIVED, key, value, this.data.getValueForKey(key).orElse(-1), updateCount,
                 this.data.getUpdateCountForKey(key).orElse(0));
 
         try {

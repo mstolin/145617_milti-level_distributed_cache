@@ -5,6 +5,7 @@ import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
+import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerOperationType;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerType;
 
 import java.util.*;
@@ -76,7 +77,7 @@ public class Database extends Node implements Coordinator {
             return;
         }
 
-        Logger.write(this.id, key, value, isLocked);
+        Logger.write(this.id, LoggerOperationType.RECEIVED, key, value, isLocked);
 
         try {
             // write data
@@ -111,7 +112,7 @@ public class Database extends Node implements Coordinator {
             return;
         }
 
-        Logger.criticalWrite(this.id, key, value, isLocked);
+        Logger.criticalWrite(this.id, LoggerOperationType.RECEIVED, key, value, isLocked);
 
         // Multicast vote request to all L1s // todo make own method
         CritWriteRequestMessage critWriteRequestMessage = new CritWriteRequestMessage(key);
@@ -155,7 +156,7 @@ public class Database extends Node implements Coordinator {
             Logger.error(this.id, LoggerType.READ, key, true, "Can't read value, because it's locked");
             return;
         }
-        Logger.read(this.id, key, message.getUpdateCount(), this.data.getUpdateCountForKey(key).orElse(0),
+        Logger.read(this.id, LoggerOperationType.RECEIVED, key, message.getUpdateCount(), this.data.getUpdateCountForKey(key).orElse(0),
                 this.data.isLocked(key), false);
 
         // add read as unconfirmed
@@ -174,7 +175,7 @@ public class Database extends Node implements Coordinator {
             return;
         }
 
-        Logger.criticalRead(this.id, key, message.getUpdateCount(),
+        Logger.criticalRead(this.id, LoggerOperationType.RECEIVED, key, message.getUpdateCount(),
                 this.data.getUpdateCountForKey(key).orElse(0), this.data.isLocked(key));
 
         // add read as unconfirmed

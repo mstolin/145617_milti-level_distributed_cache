@@ -4,6 +4,7 @@ import akka.actor.ActorRef;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
+import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerOperationType;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerType;
 
 import java.io.Serializable;
@@ -206,7 +207,7 @@ public abstract class Cache extends Node {
      */
     private void onWriteMessage(WriteMessage message) {
         int key = message.getKey();
-        Logger.write(this.id, message.getKey(), message.getValue(), this.data.isLocked(key));
+        Logger.write(this.id, LoggerOperationType.RECEIVED, message.getKey(), message.getValue(), this.data.isLocked(key));
 
         if (!this.canInstantiateNewWriteConversation(key)) {
             // Can't do anything
@@ -223,7 +224,7 @@ public abstract class Cache extends Node {
 
     private void onCritWriteMessage(CritWriteMessage message) {
         int key = message.getKey();
-        Logger.criticalWrite(this.id, key, message.getValue(), this.data.isLocked(key));
+        Logger.criticalWrite(this.id, LoggerOperationType.RECEIVED, key, message.getValue(), this.data.isLocked(key));
 
         if (!this.canInstantiateNewWriteConversation(key)) {
             // Can't do anything
@@ -236,7 +237,7 @@ public abstract class Cache extends Node {
     private void onCritWriteRequestMessage(CritWriteRequestMessage message) {
         int key = message.getKey();
         boolean isOk = !this.data.isLocked(key) && !this.isWriteUnconfirmed(key);
-        Logger.criticalWriteRequest(this.id, key, isOk);
+        Logger.criticalWriteRequest(this.id, LoggerOperationType.RECEIVED, key, isOk);
         this.handleCritWriteRequestMessage(message, isOk);
     }
 
@@ -245,7 +246,7 @@ public abstract class Cache extends Node {
     }
 
     private void onCritWriteAbortMessage(CritWriteAbortMessage message) {
-        Logger.criticalWriteAbort(this.id);
+        Logger.criticalWriteAbort(this.id, LoggerOperationType.RECEIVED);
         this.handleCritWriteAbortMessage(message);
     }
 
@@ -255,7 +256,7 @@ public abstract class Cache extends Node {
         int value = message.getValue();
         int updateCount = message.getUpdateCount();
 
-        Logger.criticalWriteCommit(this.id, key, value, this.data.getValueForKey(key).orElse(-1), updateCount,
+        Logger.criticalWriteCommit(this.id, LoggerOperationType.RECEIVED, key, value, this.data.getValueForKey(key).orElse(-1), updateCount,
                 this.data.getUpdateCountForKey(key).orElse(0));
 
         // unlock and update
@@ -277,7 +278,7 @@ public abstract class Cache extends Node {
         boolean isUnconfirmed = this.isWriteUnconfirmed(key);
         boolean mustUpdate =  isUnconfirmed || (this.data.containsKey(key) && !this.data.isNewerOrEqual(key, message.getUpdateCount()));
 
-        Logger.refill(this.id, key, value, this.data.getValueForKey(key).orElse(-1), updateCount,
+        Logger.refill(this.id, LoggerOperationType.RECEIVED, key, value, this.data.getValueForKey(key).orElse(-1), updateCount,
                 this.data.getUpdateCountForKey(key).orElse(0), isLocked, isUnconfirmed, mustUpdate);
 
         if (!isLocked && mustUpdate) {
@@ -304,7 +305,7 @@ public abstract class Cache extends Node {
 
         int updateCount = message.getUpdateCount();
         boolean mustForward = !this.data.isNewerOrEqual(key, updateCount);
-        Logger.read(this.id, key, updateCount, this.data.getUpdateCountForKey(key).orElse(0),
+        Logger.read(this.id, LoggerOperationType.RECEIVED, key, updateCount, this.data.getUpdateCountForKey(key).orElse(0),
                 this.data.isLocked(key), mustForward);
 
         // check if we own a more recent or an equal value
@@ -330,7 +331,7 @@ public abstract class Cache extends Node {
 
         // print confirm
         int updateCount = message.getUpdateCount();
-        Logger.criticalRead(this.id, key, updateCount, this.data.getUpdateCountForKey(key).orElse(0),
+        Logger.criticalRead(this.id, LoggerOperationType.RECEIVED, key, updateCount, this.data.getUpdateCountForKey(key).orElse(0),
                 this.data.isLocked(key));
 
         // Forward to next
@@ -345,7 +346,7 @@ public abstract class Cache extends Node {
         int key = message.getKey();
         int value = message.getValue();
         int updateCount = message.getUpdateCount();
-        Logger.fill(this.id, key, value, this.data.getValueForKey(key).orElse(-1), updateCount,
+        Logger.fill(this.id, LoggerOperationType.RECEIVED, key, value, this.data.getValueForKey(key).orElse(-1), updateCount,
                 this.data.getUpdateCountForKey(key).orElse(0));
 
         // Update value
@@ -379,7 +380,7 @@ public abstract class Cache extends Node {
      * @param message The received RecoveryMessage.
      */
     private void onRecoveryMessage(RecoveryMessage message) {
-        Logger.recover(this.id);
+        Logger.recover(this.id, LoggerOperationType.RECEIVED);
         this.recover();
     }
 
@@ -389,7 +390,7 @@ public abstract class Cache extends Node {
 
     private void onFlushMessage(FlushMessage message) {
         this.flush();
-        Logger.flush(this.id);
+        Logger.flush(this.id, LoggerOperationType.RECEIVED);
     }
 
     @Override
