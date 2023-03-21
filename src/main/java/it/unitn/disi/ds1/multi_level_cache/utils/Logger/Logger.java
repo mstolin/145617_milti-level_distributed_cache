@@ -13,6 +13,7 @@ public final class Logger {
     private final static String INIT_READ_FORMAT = "key: %d, is-critical: %b";
     private final static String INIT_WRITE_FORMAT = "key: %d, value: %d, is-critical: %b";
     private final static String JOIN_FORMAT = "%s of %d";
+    private final static String LOG_FORMAT = "%-8.8s | %-13.13s | %-3.3s | %s";
     private final static String READ_FORMAT = "key: %d, msg-uc: %d, actor-uc: %d, is-locked: %b, forward: %b";
     private final static String REFILL_FORMAT = "key: %d, new-value: %d, old-value: %d, msg-uc: %d, actor-uc: %d, is-locked: %b, is-unconfirmed: %b, must-update: %b";
     private final static String WRITE_FORMAT = "key: %d, value: %d, is-locked: %b";
@@ -20,7 +21,7 @@ public final class Logger {
 
     public static void log(LoggerType type, String id, LoggerOperationType operationType, String info) {
         info = info == null ? "" : info;
-        String msg = String.format("%-8.8s | %-13.13s | %s", id, type, info);
+        String msg = String.format(LOG_FORMAT, id, type, operationType, info);
         System.out.println(msg);
     }
 
