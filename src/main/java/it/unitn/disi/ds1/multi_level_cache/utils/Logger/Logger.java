@@ -11,14 +11,14 @@ public final class Logger {
     private final static String CRITICAL_WRITE_REQUEST_REC = "key: %d, is-ok: %b";
     private final static String CRITICAL_WRITE_REQUEST_SEND = "key: %d";
     private final static String CRITICAL_WRITE_VOTE_REC = "key: %d, value: %d, have-all-voted: %b";
-    private final static String CRITICAL_WRITE_VOTE_SEND = "key: %d, is-ok: %d";
+    private final static String CRITICAL_WRITE_VOTE_SEND = "key: %d, is-ok: %b";
     private final static String ERROR_FORMAT = "msg-type: %s, key: %d, force-timeout: %b, description: %s";
     private final static String FILL_FORMAT_REC = "key: %d, new-value: %d, old-value: %d, new-uc: %d, old-uc: %d";
     private final static String FILL_FORMAT_SEND = "key: %d, value: %d, uc: %d";
     private final static String INIT_READ_FORMAT = "key: %d, is-critical: %b";
     private final static String INIT_WRITE_FORMAT = "key: %d, value: %d, is-critical: %b";
     private final static String JOIN_FORMAT = "%s of %d";
-    private final static String LOG_FORMAT = "%-8.8s | %-3.3s | %-13.13s | %s";
+    private final static String LOG_FORMAT = "%-8.8s | %-3.3s | %-18.18s | %s";
     private final static String READ_FORMAT_REC = "key: %d, msg-uc: %d, actor-uc: %d, is-locked: %b, forward: %b";
     private final static String READ_FORMAT_SEND = "key: %d, uc: %d";
     private final static String REFILL_FORMAT = "key: %d, new-value: %d, old-value: %d, msg-uc: %d, actor-uc: %d, is-locked: %b, is-unconfirmed: %b, must-update: %b";

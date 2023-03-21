@@ -31,22 +31,22 @@ public enum LoggerType {
                 return "CRASH";
             }
             case CRITICAL_READ -> {
-                return "CRITICAL-READ";
+                return "CRIT-READ";
             }
             case CRITICAL_WRITE -> {
-                return "CRITICAL-WRITE";
+                return "CRIT-WRITE";
             }
             case CRITICAL_WRITE_ABORT -> {
-                return "CRITICAL-WRITE-ABORT";
+                return "CRIT-WRITE-ABORT";
             }
             case CRITICAL_WRITE_COMMIT -> {
-                return "CRITICAL-WRITE-COMMIT";
+                return "CRIT-WRITE-COMMIT";
             }
             case CRITICAL_WRITE_REQUEST -> {
-                return "CRITICAL-WRITE-REQUEST";
+                return "CRIT-WRITE-REQUEST";
             }
             case CRITICAL_WRITE_VOTE -> {
-                return "CRITICAL-WRITE-VOTE";
+                return "CRIT-WRITE-VOTE";
             }
             case ERROR -> {
                 return "ERROR";
