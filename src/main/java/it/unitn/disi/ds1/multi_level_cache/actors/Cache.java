@@ -207,7 +207,9 @@ public abstract class Cache extends Node {
      */
     private void onWriteMessage(WriteMessage message) {
         int key = message.getKey();
-        Logger.write(this.id, LoggerOperationType.RECEIVED, message.getKey(), message.getValue(), this.data.isLocked(key));
+        int value = message.getValue();
+        boolean isLocked = this.data.isLocked(key);
+        Logger.write(this.id, LoggerOperationType.RECEIVED, key, value, isLocked);
 
         if (!this.canInstantiateNewWriteConversation(key)) {
             // Can't do anything
@@ -219,6 +221,7 @@ public abstract class Cache extends Node {
         // set as unconfirmed
         this.addUnconfirmedWrite(message.getKey(), this.getSender());
         // forward to next
+        Logger.write(this.id, LoggerOperationType.SEND, key, value, isLocked);
         this.forwardMessageToNext(message, TimeoutType.WRITE);
     }
 
@@ -246,7 +249,7 @@ public abstract class Cache extends Node {
     }
 
     private void onCritWriteAbortMessage(CritWriteAbortMessage message) {
-        Logger.criticalWriteAbort(this.id, LoggerOperationType.RECEIVED);
+        Logger.criticalWriteAbort(this.id, LoggerOperationType.RECEIVED, message.getKey());
         this.handleCritWriteAbortMessage(message);
     }
 
@@ -311,6 +314,7 @@ public abstract class Cache extends Node {
         // check if we own a more recent or an equal value
         if (mustForward) {
             // We either don't know the value or it's older, so forward message to next
+            Logger.read(this.id, LoggerOperationType.SEND, key, updateCount, 0, false, true);
             this.forwardReadMessageToNext(message, key);
         } else {
             // response accordingly
@@ -335,6 +339,7 @@ public abstract class Cache extends Node {
                 this.data.isLocked(key));
 
         // Forward to next
+        Logger.criticalRead(this.id, LoggerOperationType.SEND, key, updateCount, 0, this.data.isLocked(key));
         this.forwardCritReadMessageToNext(message, key);
     }
 

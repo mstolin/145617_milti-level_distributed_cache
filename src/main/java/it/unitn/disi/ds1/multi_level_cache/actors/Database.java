@@ -43,10 +43,10 @@ public class Database extends Node implements Coordinator {
         Optional<Integer> value = this.data.getValueForKey(key);
         Optional<Integer> updateCount = this.data.getUpdateCountForKey(key);
         if (this.isReadUnconfirmed(key) && value.isPresent() && updateCount.isPresent()) {
-            System.out.printf("Database - Requested value is %d, send fill message to sender\n", value.get());
             // multicast to everyone who has requested the value
             List<ActorRef> senders = this.unconfirmedReads.get(key);
             FillMessage fillMessage = new FillMessage(key, value.get(), updateCount.get());
+            Logger.fill(this.id, LoggerOperationType.MULTICAST, key, value.get(), 0, updateCount.get(), 0);
             this.multicast(fillMessage, senders);
             // reset the config
             this.resetReadConfig(key);
@@ -91,7 +91,8 @@ public class Database extends Node implements Coordinator {
 
             // Send refill to all other L1 caches
             // todo make own method
-            RefillMessage refillMessage = new RefillMessage(message.getKey(), message.getValue(), updateCount);
+            RefillMessage refillMessage = new RefillMessage(key, value, updateCount);
+            Logger.refill(this.id, LoggerOperationType.MULTICAST, key, value, 0, updateCount, 0, false, false, false);
             this.multicast(refillMessage, this.l1Caches);
 
             // Unlock value
@@ -116,6 +117,7 @@ public class Database extends Node implements Coordinator {
 
         // Multicast vote request to all L1s // todo make own method
         CritWriteRequestMessage critWriteRequestMessage = new CritWriteRequestMessage(key);
+        Logger.criticalWriteRequest(this.id, LoggerOperationType.MULTICAST, key, true);
         this.multicast(critWriteRequestMessage, this.l1Caches);
         this.setMulticastTimeout(critWriteRequestMessage, TimeoutType.CRIT_WRITE_REQUEST);
         // set crit write config
@@ -145,7 +147,7 @@ public class Database extends Node implements Coordinator {
     }
 
     private void onCritWriteVoteMessage(CritWriteVoteMessage message) {
-        this.acCoordinator.onCritWriteVoteMessage(message, this.id);
+        this.acCoordinator.onCritWriteVoteMessage(message);
     }
 
     private void onReadMessage(ReadMessage message) {
@@ -202,6 +204,7 @@ public class Database extends Node implements Coordinator {
             // now all participants have locked the data, then send a commit message to update the value
             // todo make own method
             CritWriteCommitMessage commitMessage = new CritWriteCommitMessage(key, value, updateCount);
+            Logger.criticalWriteCommit(this.id, LoggerOperationType.MULTICAST, key, value, 0, updateCount, 0);
             this.multicast(commitMessage, this.l1Caches);
         } catch (IllegalAccessException e) {
             // already locked -> force timeout
@@ -214,6 +217,7 @@ public class Database extends Node implements Coordinator {
         this.data.unLockValueForKey(key);
         // multicast abort message
         CritWriteAbortMessage abortMessage = new CritWriteAbortMessage(key);
+        Logger.criticalWriteAbort(this.id, LoggerOperationType.MULTICAST, key);
         this.multicast(abortMessage, this.l1Caches);
     }
 
@@ -253,6 +257,7 @@ public class Database extends Node implements Coordinator {
     private void onTimeoutMessage(TimeoutMessage message) {
         if (message.getType() == TimeoutType.CRIT_WRITE_REQUEST && this.acCoordinator.hasRequestedCritWrite()) {
             CritWriteRequestMessage requestMessage = (CritWriteRequestMessage) message.getMessage();
+            Logger.timeout(this.id, TimeoutType.CRIT_WRITE_ABORT);
             this.abortCritWrite(requestMessage.getKey());
         }
     }

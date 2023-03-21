@@ -5,6 +5,7 @@ import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
+import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerOperationType;
 
 import java.io.Serializable;
 import java.util.List;
@@ -39,6 +40,8 @@ public class L1Cache extends Cache implements Coordinator {
     @Override
     protected void handleRefillMessage(RefillMessage message) {
         // just multicast to all L2s
+        Logger.refill(this.id, LoggerOperationType.MULTICAST, message.getKey(), message.getValue(), 0,
+                message.getUpdateCount(), 0, false, false, true);
         this.multicast(message, this.l2Caches);
         this.resetWriteConfig(message.getKey());
     }
@@ -77,12 +80,15 @@ public class L1Cache extends Cache implements Coordinator {
     @Override
     protected void handleCritWriteMessage(CritWriteMessage message) {
         this.acCoordinator.setCritWriteConfig(message.getValue());
+        Logger.criticalWrite(this.id, LoggerOperationType.SEND, message.getKey(), message.getValue(), false);
+        this.forwardMessageToNext(message, TimeoutType.CRIT_WRITE);
     }
 
     @Override
     protected void handleCritWriteRequestMessage(CritWriteRequestMessage message, boolean isOk) {
         if (isOk) {
             // iff everything is ok, then multicast the request to all L2s
+            Logger.criticalWriteRequest(this.id, LoggerOperationType.MULTICAST, message.getKey(), true);
             this.multicast(message, this.l2Caches);
             this.setMulticastTimeout(message, TimeoutType.CRIT_WRITE_REQUEST);
         }
@@ -90,7 +96,7 @@ public class L1Cache extends Cache implements Coordinator {
 
     @Override
     protected void handleCritWriteVoteMessage(CritWriteVoteMessage message) {
-        this.acCoordinator.onCritWriteVoteMessage(message, this.id);
+        this.acCoordinator.onCritWriteVoteMessage(message);
     }
 
     @Override
@@ -99,6 +105,7 @@ public class L1Cache extends Cache implements Coordinator {
         // reset/abort
         this.resetCritWriteConfig(key);
         // multicast abort to L2s
+        Logger.criticalWriteAbort(this.id, LoggerOperationType.MULTICAST, key);
         this.multicast(message, this.l2Caches);
     }
 
@@ -107,13 +114,17 @@ public class L1Cache extends Cache implements Coordinator {
         // reset critical write
         this.resetCritWriteConfig(message.getKey());
         // multicast commit to all L2s
+        Logger.criticalWriteCommit(this.id, LoggerOperationType.MULTICAST, message.getKey(), message.getValue(), 0,
+                message.getUpdateCount(), 0);
         this.multicast(message, this.l2Caches);
     }
 
     @Override
     protected void multicastReFillMessageIfNeeded(int key, int value, int updateCount, ActorRef sender) {
         RefillMessage reFillMessage = new RefillMessage(key, value, updateCount);
+        Logger.refill(this.id, LoggerOperationType.MULTICAST, key, value, 0, updateCount, 0, false, false, true);
 
+        // todo heck this, why???
         if (sender != ActorRef.noSender()) {
             this.multicast(reFillMessage, this.l2Caches);
         }
@@ -133,6 +144,7 @@ public class L1Cache extends Cache implements Coordinator {
             // multicast to L2s who have requested the key
             List<ActorRef> requestedL2s = this.unconfirmedReads.get(key);
             FillMessage fillMessage = new FillMessage(key, value, updateCount);
+            Logger.fill(this.id, LoggerOperationType.MULTICAST, key, value, 0, updateCount, 0);
             this.multicast(fillMessage, requestedL2s);
             // afterwards reset for key
             this.resetReadConfig(key);
@@ -150,6 +162,7 @@ public class L1Cache extends Cache implements Coordinator {
         super.recover();
         // send flush to all L2s
         FlushMessage flushMessage = new FlushMessage(this.getSelf());
+        Logger.flush(this.id, LoggerOperationType.MULTICAST);
         this.multicast(flushMessage, this.l2Caches);
     }
 
@@ -163,6 +176,7 @@ public class L1Cache extends Cache implements Coordinator {
         // got OK vote from all L2s, lock and answer back to DB
         this.data.lockValueForKey(key);
         CritWriteVoteMessage critWriteVoteMessage = new CritWriteVoteMessage(key, true);
+        Logger.criticalWriteVote(this.id, LoggerOperationType.SEND, key, value, true, true);
         this.database.tell(critWriteVoteMessage, this.getSelf());
         // reset
         this.resetCritWriteConfig(key);

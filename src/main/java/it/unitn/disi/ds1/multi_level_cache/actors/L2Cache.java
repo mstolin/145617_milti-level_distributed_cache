@@ -5,6 +5,7 @@ import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
+import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerOperationType;
 
 import java.io.Serializable;
 import java.util.List;
@@ -39,6 +40,7 @@ public class L2Cache extends Cache {
             int value = message.getValue();
             int updateCount = message.getUpdateCount();
             WriteConfirmMessage confirmMessage = new WriteConfirmMessage(key, value, updateCount);
+            Logger.writeConfirm(this.id, LoggerOperationType.SEND, key, value, 0, updateCount, 0);
             client.tell(confirmMessage, this.getSelf());
             // reset timeout
             this.resetWriteConfig(key);
@@ -96,6 +98,7 @@ public class L2Cache extends Cache {
         }
         // answer back
         CritWriteVoteMessage critWriteVoteOkMessage = new CritWriteVoteMessage(key, isOk);
+        Logger.criticalWriteVote(this.id, LoggerOperationType.SEND, key, 0, true, isOk);
         this.mainL1Cache.tell(critWriteVoteOkMessage, this.getSelf());
     }
 
@@ -122,6 +125,7 @@ public class L2Cache extends Cache {
         if (this.isWriteUnconfirmed(key)) {
             ActorRef client = this.unconfirmedWrites.get(key);
             WriteConfirmMessage confirmMessage = new WriteConfirmMessage(key, value, updateCount);
+            Logger.writeConfirm(this.id, LoggerOperationType.SEND, key, value, 0, updateCount, 0);
             client.tell(confirmMessage, this.getSelf());
         }
 
@@ -152,6 +156,7 @@ public class L2Cache extends Cache {
             // multicast to clients who have requested the key
             List<ActorRef> clients = this.unconfirmedReads.get(key);
             ReadReplyMessage readReplyMessage = new ReadReplyMessage(key, value, updateCount);
+            Logger.readReply(this.id, LoggerOperationType.MULTICAST, key, value, 0, updateCount, 0);
             this.multicast(readReplyMessage, clients);
             // reset for key
             this.resetReadConfig(key);

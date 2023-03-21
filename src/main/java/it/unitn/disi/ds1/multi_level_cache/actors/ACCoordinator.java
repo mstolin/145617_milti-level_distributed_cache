@@ -32,7 +32,7 @@ public class ACCoordinator <T extends Coordinator> {
         this.critWriteValue = Optional.empty();
     }
 
-    public void onCritWriteVoteMessage(CritWriteVoteMessage message, String id) {
+    public void onCritWriteVoteMessage(CritWriteVoteMessage message) {
         int key = message.getKey();
         if (!message.isOk()) {
             // abort
@@ -45,8 +45,6 @@ public class ACCoordinator <T extends Coordinator> {
             this.critWriteVotingCount = this.critWriteVotingCount + 1;
             int value = this.critWriteValue.get();
             boolean haveAllVoted = this.coordinator.haveAllParticipantsVoted(this.critWriteVotingCount);
-
-            Logger.criticalWriteVote(id, LoggerOperationType.RECEIVED, key, value, haveAllVoted);
 
             if (haveAllVoted) {
                 this.coordinator.onVoteOk(key, value);

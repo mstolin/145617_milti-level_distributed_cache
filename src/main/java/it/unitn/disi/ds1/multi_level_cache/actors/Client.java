@@ -72,10 +72,12 @@ public class Client extends Node {
         this.setTimeout(writeMessage, l2Cache, TimeoutType.WRITE);
 
         if (this.canInstantiateNewWriteConversation(key) || isRetry) {
+            Logger.write(this.id, LoggerOperationType.SEND, key, value, false);
             l2Cache.tell(writeMessage, this.getSelf());
             // set config
             this.isWaitingForWriteConfirm = true;
         } else {
+            Logger.criticalWrite(this.id, LoggerOperationType.SEND, key, value, false);
             Logger.error(this.id, LoggerType.WRITE, key, true, "Waiting for another response");
         }
     }
@@ -94,6 +96,7 @@ public class Client extends Node {
         this.setTimeout(critWriteMessage, l2Cache, TimeoutType.CRIT_WRITE);
 
         if (this.canInstantiateNewWriteConversation(key) || isRetry) {
+            Logger.criticalWrite(this.id, LoggerOperationType.SEND, key, value, false);
             l2Cache.tell(critWriteMessage, this.getSelf());
             // set config
             this.isWaitingForWriteConfirm = true;
@@ -122,12 +125,10 @@ public class Client extends Node {
             // send message
             if (isCritical) {
                 this.tellCritWriteMessage(randomActor, key, value, true);
-                System.out.printf("%s - Retried CritWriteMessage for {%d: %d} for the %dth time (max retries: %d)\n",
-                        this.id, key, value, this.writeRetryCount, MAX_RETRY_COUNT);
+                Logger.criticalWrite(this.id, LoggerOperationType.RETRY, key, value, false);
             } else {
                 this.tellWriteMessage(randomActor, key, value, true);
-                System.out.printf("%s - Retried WriteMessage for {%d: %d} for the %dth time (max retries: %d)\n",
-                        this.id, key, value, this.writeRetryCount, MAX_RETRY_COUNT);
+                Logger.write(this.id, LoggerOperationType.RETRY, key, value, false);
             }
         } else {
             // abort retry
@@ -156,6 +157,7 @@ public class Client extends Node {
         this.setTimeout(readMessage, l2Cache, TimeoutType.READ);
 
         if (this.canInstantiateNewWriteConversation(key)) {
+            Logger.read(this.id, LoggerOperationType.SEND, key, readMessage.getUpdateCount(), 0, false, true);
             l2Cache.tell(readMessage, this.getSelf());
             // set config
             this.addUnconfirmedReadMessage(key, l2Cache);
@@ -177,6 +179,7 @@ public class Client extends Node {
         this.setTimeout(critReadMessage, l2Cache, TimeoutType.CRIT_READ);
 
         if (this.canInstantiateNewReadConversation(key)) {
+            Logger.criticalRead(this.id, LoggerOperationType.SEND, key, critReadMessage.getUpdateCount(), 0, false);
             l2Cache.tell(critReadMessage, this.getSelf());
             // set config
             this.addUnconfirmedReadMessage(key, l2Cache);
@@ -204,12 +207,17 @@ public class Client extends Node {
             // send message
             if (isCritical) {
                 this.tellCritReadMessage(randomActor, key);
-                System.out.printf("%s - Retried CritReadMessage for key %d for the %dth time (max retries: %d)\n",
-                        this.id, key, retryCountForKey, MAX_RETRY_COUNT);
+                Logger.criticalRead(this.id, LoggerOperationType.RETRY, key,
+                        this.data.getUpdateCountForKey(key).orElse(0),
+                        this.data.getUpdateCountForKey(key).orElse(0),
+                        this.data.isLocked(key));
             } else {
                 this.tellReadMessage(randomActor, key);
-                System.out.printf("%s - Retried ReadMessage for key %d for the %dth time (max retries: %d)\n",
-                        this.id, key, retryCountForKey, MAX_RETRY_COUNT);
+                Logger.read(this.id, LoggerOperationType.RETRY, key,
+                        this.data.getUpdateCountForKey(key).orElse(0),
+                        this.data.getUpdateCountForKey(key).orElse(0),
+                        this.data.isLocked(key),
+                        true);
             }
             this.increaseCountForUnconfirmedReadMessage(key);
         } else {
