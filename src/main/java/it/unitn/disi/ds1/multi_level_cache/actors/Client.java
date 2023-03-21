@@ -7,6 +7,7 @@ import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger;
 import it.unitn.disi.ds1.multi_level_cache.utils.LoggerType;
 
+import java.io.Serializable;
 import java.util.*;
 
 public class Client extends Node {
@@ -53,7 +54,7 @@ public class Client extends Node {
     private ActorRef getRandomActor(List<ActorRef> group) {
         Random rand = new Random();
         List<ActorRef> groupClone = group;
-        //Collections.shuffle(groupClone);
+        //Collections.shuffle(groupClone); // todo fix shuffle
         return groupClone.get(rand.nextInt(groupClone.size()));
     }
 
@@ -65,13 +66,18 @@ public class Client extends Node {
      * @param key Key that has to be written
      * @param value Value used to update the key
      */
-    private void tellWriteMessage(ActorRef l2Cache, int key, int value) {
+    private void tellWriteMessage(ActorRef l2Cache, int key, int value, boolean isRetry) {
         WriteMessage writeMessage = new WriteMessage(key, value);
-        l2Cache.tell(writeMessage, this.getSelf());
-        // set config
-        this.isWaitingForWriteConfirm = true;
         // set timeout
         this.setTimeout(writeMessage, l2Cache, TimeoutType.WRITE);
+
+        if (this.canInstantiateNewWriteConversation(key) || isRetry) {
+            l2Cache.tell(writeMessage, this.getSelf());
+            // set config
+            this.isWaitingForWriteConfirm = true;
+        } else {
+            Logger.error(this.id, LoggerType.WRITE, key, true, "Waiting for another response");
+        }
     }
 
     /**
@@ -82,13 +88,18 @@ public class Client extends Node {
      * @param key Key that has to be written
      * @param value Value used to update the key
      */
-    private void tellCritWriteMessage(ActorRef l2Cache, int key, int value) {
+    private void tellCritWriteMessage(ActorRef l2Cache, int key, int value, boolean isRetry) {
         CritWriteMessage critWriteMessage = new CritWriteMessage(key, value);
-        l2Cache.tell(critWriteMessage, this.getSelf());
-        // set config
-        this.isWaitingForWriteConfirm = true;
         // set timeout
         this.setTimeout(critWriteMessage, l2Cache, TimeoutType.CRIT_WRITE);
+
+        if (this.canInstantiateNewWriteConversation(key) || isRetry) {
+            l2Cache.tell(critWriteMessage, this.getSelf());
+            // set config
+            this.isWaitingForWriteConfirm = true;
+        } else {
+            Logger.error(this.id, LoggerType.CRITICAL_WRITE, key, true, "Waiting for another response");
+        }
     }
 
     /**
@@ -106,18 +117,18 @@ public class Client extends Node {
             List<ActorRef> workingL2Caches = this.l2Caches
                     .stream().filter((actorRef -> actorRef != unreachableActor)).toList();
             ActorRef randomActor = this.getRandomActor(workingL2Caches);
-
+            // increase count
+            this.writeRetryCount = this.writeRetryCount + 1;
             // send message
             if (isCritical) {
-                this.tellCritWriteMessage(randomActor, key, value);
+                this.tellCritWriteMessage(randomActor, key, value, true);
                 System.out.printf("%s - Retried CritWriteMessage for {%d: %d} for the %dth time (max retries: %d)\n",
                         this.id, key, value, this.writeRetryCount, MAX_RETRY_COUNT);
             } else {
-                this.tellWriteMessage(randomActor, key, value);
+                this.tellWriteMessage(randomActor, key, value, true);
                 System.out.printf("%s - Retried WriteMessage for {%d: %d} for the %dth time (max retries: %d)\n",
                         this.id, key, value, this.writeRetryCount, MAX_RETRY_COUNT);
             }
-            this.writeRetryCount = this.writeRetryCount + 1;
         } else {
             // abort retry
             this.resetWriteConfig();
@@ -141,11 +152,16 @@ public class Client extends Node {
      */
     private void tellReadMessage(ActorRef l2Cache, int key) {
         ReadMessage readMessage = new ReadMessage(key, this.data.getUpdateCountForKey(key).orElse(0));
-        l2Cache.tell(readMessage, this.getSelf());
-        // set config
-        this.addUnconfirmedReadMessage(key, l2Cache);
         // set timeout
         this.setTimeout(readMessage, l2Cache, TimeoutType.READ);
+
+        if (this.canInstantiateNewWriteConversation(key)) {
+            l2Cache.tell(readMessage, this.getSelf());
+            // set config
+            this.addUnconfirmedReadMessage(key, l2Cache);
+        } else {
+            Logger.error(this.id, LoggerType.INIT_READ, key, true, "Waiting for another response");
+        }
     }
 
     /**
@@ -157,11 +173,16 @@ public class Client extends Node {
      */
     private void tellCritReadMessage(ActorRef l2Cache, int key) {
         CritReadMessage critReadMessage = new CritReadMessage(key, this.data.getUpdateCountForKey(key).orElse(0));
-        l2Cache.tell(critReadMessage, this.getSelf());
-        // set config
-        this.addUnconfirmedReadMessage(key, l2Cache);
         // set timeout
         this.setTimeout(critReadMessage, l2Cache, TimeoutType.CRIT_READ);
+
+        if (this.canInstantiateNewReadConversation(key)) {
+            l2Cache.tell(critReadMessage, this.getSelf());
+            // set config
+            this.addUnconfirmedReadMessage(key, l2Cache);
+        } else {
+            Logger.error(this.id, LoggerType.INIT_READ, key, true, "Waiting for another response");
+        }
     }
 
     /**
@@ -271,9 +292,9 @@ public class Client extends Node {
         Logger.initWrite(this.id, key, value, isCritical);
 
         if (isCritical) {
-            this.tellCritWriteMessage(l2Cache, key, value);
+            this.tellCritWriteMessage(l2Cache, key, value, false);
         } else {
-            this.tellWriteMessage(l2Cache, key, value);
+            this.tellWriteMessage(l2Cache, key, value, false);
         }
     }
 
@@ -313,14 +334,9 @@ public class Client extends Node {
         int key = message.getKey();
         boolean isCritical = message.isCritical();
 
-        if (!this.canInstantiateNewReadConversation(key)) {
-            Logger.error(this.id, LoggerType.INIT_READ, key, false, "Can't read, waiting for another response");
-            return;
-        }
-
         ActorRef l2Cache = message.getL2Cache();
         if (!this.l2Caches.contains(l2Cache)) {
-            Logger.error(this.id, LoggerType.INIT_READ, key, false, "L2 is unknown");
+            Logger.error(this.id, LoggerType.INIT_READ, key, true, "L2 is unknown");
             return;
         }
 
