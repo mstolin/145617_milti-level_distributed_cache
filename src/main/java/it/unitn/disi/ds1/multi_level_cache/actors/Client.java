@@ -4,10 +4,9 @@ import akka.actor.ActorRef;
 import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
-import it.unitn.disi.ds1.multi_level_cache.utils.Logger;
-import it.unitn.disi.ds1.multi_level_cache.utils.LoggerType;
+import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
+import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerType;
 
-import java.io.Serializable;
 import java.util.*;
 
 public class Client extends Node {

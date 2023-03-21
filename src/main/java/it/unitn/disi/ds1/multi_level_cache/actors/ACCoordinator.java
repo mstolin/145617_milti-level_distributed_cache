@@ -1,7 +1,7 @@
 package it.unitn.disi.ds1.multi_level_cache.actors;
 
 import it.unitn.disi.ds1.multi_level_cache.messages.CritWriteVoteMessage;
-import it.unitn.disi.ds1.multi_level_cache.utils.Logger;
+import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
 
 import java.util.Optional;
 
