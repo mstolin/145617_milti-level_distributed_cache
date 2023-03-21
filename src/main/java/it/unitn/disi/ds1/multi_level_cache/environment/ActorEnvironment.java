@@ -177,7 +177,12 @@ public class ActorEnvironment {
     }
 
     public void makeClientWrite(ActorRef client, ActorRef l2Cache, int key, int value) {
-        InstantiateWriteMessage message = new InstantiateWriteMessage(key, value, l2Cache);
+        InstantiateWriteMessage message = new InstantiateWriteMessage(key, value, l2Cache, false);
+        client.tell(message, ActorRef.noSender());
+    }
+
+    public void makeClientCritWrite(ActorRef client, ActorRef l2Cache, int key, int value) {
+        InstantiateWriteMessage message = new InstantiateWriteMessage(key, value, l2Cache, true);
         client.tell(message, ActorRef.noSender());
     }
 
