@@ -10,4 +10,5 @@ public enum TimeoutType {
     CRIT_READ,
     CRIT_WRITE,
     CRIT_WRITE_REQUEST,
+    CRIT_WRITE_ABORT,
 }
