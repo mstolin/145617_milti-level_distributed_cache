@@ -84,9 +84,8 @@ public class L2Cache extends Cache {
 
     @Override
     protected void handleCritWriteMessage(CritWriteMessage message) {
-        /*
-        nothing special todo here, all important happening in Cache
-         */
+        Logger.criticalWrite(this.id, LoggerOperationType.SEND, message.getKey(), message.getValue(), false);
+        this.forwardMessageToNext(message, TimeoutType.CRIT_WRITE);
     }
 
     @Override
