@@ -4,7 +4,7 @@ import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 
 public final class Logger {
 
-    private final static String CRASH_FORMAT = "recover-after: %ls";
+    private final static String CRASH_FORMAT = "recover-after: %ds";
     private final static String CRITICAL_READ_FORMAT = "key: %d, msg-uc: %d, actor-uc: %d, is-locked: %b";
     private final static String CRITICAL_WRITE_REQUEST = "key: %d, is-ok: %b";
     private final static String CRITICAL_WRITE_VOTE = "key: %d, value: %d, have-all-voted: %b";
