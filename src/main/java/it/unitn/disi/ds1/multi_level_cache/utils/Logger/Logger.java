@@ -8,7 +8,7 @@ public final class Logger {
     private final static String CRITICAL_READ_FORMAT_REC = "key: %d, msg-uc: %d, actor-uc: %d, is-locked: %b";
     private final static String CRITICAL_READ_FORMAT_SEND = "key: %d, uc: %d";
     private final static String CRITICAL_WRITE_ABORT_FORMAT = "key: %d";
-    private final static String CRITICAL_WRITE_REQUEST_REC = "key: %d, is-ok: %b";
+    private final static String CRITICAL_WRITE_REQUEST_REC = "key: %d";
     private final static String CRITICAL_WRITE_REQUEST_SEND = "key: %d";
     private final static String CRITICAL_WRITE_VOTE_REC = "key: %d, value: %d, have-all-voted: %b";
     private final static String CRITICAL_WRITE_VOTE_SEND = "key: %d, is-ok: %b";
