@@ -1,19 +1,17 @@
 package it.unitn.disi.ds1.multi_level_cache.actors;
 
 import it.unitn.disi.ds1.multi_level_cache.messages.CritWriteVoteMessage;
-import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
-import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerOperationType;
 
 import java.util.Optional;
 
 public class ACCoordinator <T extends Coordinator> {
 
-    private final Coordinator coordinator;
+    private final T coordinator;
     private boolean hasRequestedCritWrite = false;
     private int critWriteVotingCount = 0;
     private Optional<Integer> critWriteValue = Optional.empty();
 
-    public ACCoordinator(Coordinator coordinator) {
+    public ACCoordinator(T coordinator) {
         this.coordinator = coordinator;
     }
 
