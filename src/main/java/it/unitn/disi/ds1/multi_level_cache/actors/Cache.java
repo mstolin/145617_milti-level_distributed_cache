@@ -159,24 +159,6 @@ public abstract class Cache extends Node {
                 .build();
     }
 
-    /**
-     * Updates the cache value for the given key if needed. The requirements are,
-     * that the key already exists and the received value is newer. This method
-     * should be called, whenever a ReFillMessage has been received.
-     *
-     * @param key Key of the value
-     * @param value The new value
-     * @param updateCount The update count of the received value
-     */
-    private void updateDataIfContained(int key, int value, int updateCount) throws IllegalAccessException {
-        if (this.data.containsKey(key) && !this.data.isNewerOrEqual(key, updateCount)) {
-            int currentUpdateCount = this.data.getUpdateCountForKey(key).orElse(0);
-            System.out.printf("%s Update value: {%d :%d} (given UC: %d, my UC: %d)\n",
-                    this.id, key, value, updateCount, currentUpdateCount);
-            this.data.setValueForKey(key, value, currentUpdateCount);
-        }
-    }
-
     private void forwardReadMessageToNext(Serializable message, int key) {
         this.forwardMessageToNext(message, TimeoutType.READ);
     }
@@ -280,10 +262,16 @@ public abstract class Cache extends Node {
         int updateCount = message.getUpdateCount();
         boolean isLocked = this.data.isLocked(key);
         boolean isUnconfirmed = this.isWriteUnconfirmed(key);
-        boolean mustUpdate =  isUnconfirmed || (this.data.containsKey(key) && !this.data.isNewerOrEqual(key, message.getUpdateCount()));
+        /*
+        Only update if either,
+        1. the write-operation is unconfirmed or (then this was the requested Cache)
+        2. the message uc is newer than the current one (always update a write from the DB)
+         */
+        int actorUpdateCount = this.data.getUpdateCountForKey(key).orElse(0);
+        boolean mustUpdate =  isUnconfirmed || (updateCount > actorUpdateCount);
 
-        Logger.refill(this.id, LoggerOperationType.RECEIVED, key, value, this.data.getValueForKey(key).orElse(-1), updateCount,
-                this.data.getUpdateCountForKey(key).orElse(0), isLocked, isUnconfirmed, mustUpdate);
+        Logger.refill(this.id, LoggerOperationType.RECEIVED, key, value, this.data.getValueForKey(key).orElse(-1),
+                updateCount, actorUpdateCount, isLocked, isUnconfirmed, mustUpdate);
 
         if (!isLocked && mustUpdate) {
             try {
@@ -308,8 +296,10 @@ public abstract class Cache extends Node {
         this.addUnconfirmedReadMessage(key, this.getSender());
 
         int updateCount = message.getUpdateCount();
-        boolean mustForward = !this.data.isNewerOrEqual(key, updateCount);
-        Logger.read(this.id, LoggerOperationType.RECEIVED, key, updateCount, this.data.getUpdateCountForKey(key).orElse(0),
+        int actorUpdateCount = this.data.getUpdateCountForKey(key).orElse(0);
+        // only forward if the message update count is older
+        boolean mustForward = updateCount > actorUpdateCount;
+        Logger.read(this.id, LoggerOperationType.RECEIVED, key, updateCount, actorUpdateCount,
                 this.data.isLocked(key), mustForward);
 
         // check if we own a more recent or an equal value
