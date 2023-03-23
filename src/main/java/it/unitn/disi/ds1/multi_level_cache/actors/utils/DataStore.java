@@ -139,19 +139,6 @@ public class DataStore {
         return false;
     }
 
-    public boolean isNewerOrEqual(int key, int updateCount) {
-        if (updateCount <= 0) {
-            // if it is 0, then it has never been written
-            return false;
-        }
-
-        Optional<Integer> currentUpdateCount = this.getUpdateCountForKey(key);
-        if (currentUpdateCount.isPresent()) {
-            return currentUpdateCount.get() >= updateCount;
-        }
-        return false;
-    }
-
     public void resetData() {
         this.data = new HashMap<>();
     }
