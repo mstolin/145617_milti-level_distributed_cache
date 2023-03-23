@@ -13,6 +13,7 @@ import java.util.List;
 public class L1Cache extends Cache implements Coordinator {
 
     private final ACCoordinator acCoordinator = new ACCoordinator(this);
+    private boolean isCritWriteRequestConfirmed = false;
 
     public L1Cache(String id) {
         super(id);
@@ -52,10 +53,11 @@ public class L1Cache extends Cache implements Coordinator {
             CritWriteRequestMessage requestMessage = (CritWriteRequestMessage) message.getMessage();
             int key = requestMessage.getKey();
 
-            if (this.isWriteUnconfirmed(key)) {
+            if (!this.isCritWriteRequestConfirmed) {
                 Logger.timeout(this.id, message.getType());
                 // reset and just timeout
                 this.resetCritWriteConfig(key);
+                this.isCritWriteRequestConfirmed = false;
             }
         } else if (message.getType() == TimeoutType.WRITE) {
             WriteMessage writeMessage = (WriteMessage) message.getMessage();
@@ -90,6 +92,7 @@ public class L1Cache extends Cache implements Coordinator {
             Logger.criticalWriteRequest(this.id, LoggerOperationType.MULTICAST, message.getKey(), true);
             this.acCoordinator.setCritWriteConfig(message.getKey());
             this.multicast(message, this.l2Caches);
+            this.isCritWriteRequestConfirmed = false;
             this.setMulticastTimeout(message, TimeoutType.CRIT_WRITE_REQUEST);
         }
     }
@@ -117,6 +120,11 @@ public class L1Cache extends Cache implements Coordinator {
         Logger.criticalWriteCommit(this.id, LoggerOperationType.MULTICAST, message.getKey(), message.getValue(), 0,
                 message.getUpdateCount(), 0);
         this.multicast(message, this.l2Caches);
+    }
+
+    @Override
+    protected boolean isCritWriteOk(int key) {
+        return !this.data.isLocked(key) && !this.isWriteUnconfirmed(key);
     }
 
     @Override
@@ -173,13 +181,16 @@ public class L1Cache extends Cache implements Coordinator {
 
     @Override
     public void onVoteOk(int key, int value) {
+        // crit write request is now confirmed
+        this.isCritWriteRequestConfirmed = true;
         // got OK vote from all L2s, lock and answer back to DB
         this.data.lockValueForKey(key);
+        // set as unconfirmed with no sender, just to block all new write requests
+        this.addUnconfirmedWrite(key, ActorRef.noSender());
+
         CritWriteVoteMessage critWriteVoteMessage = new CritWriteVoteMessage(key, true);
         Logger.criticalWriteVote(this.id, LoggerOperationType.SEND, key, value, true, true);
         this.database.tell(critWriteVoteMessage, this.getSelf());
-        // reset
-        this.resetCritWriteConfig(key);
     }
 
     @Override

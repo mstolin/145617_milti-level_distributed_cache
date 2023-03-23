@@ -321,6 +321,7 @@ public class Client extends Node {
         Logger.writeConfirm(this.id, LoggerOperationType.RECEIVED, key, value, this.data.getValueForKey(key).orElse(-1), updateCount,
                 this.data.getUpdateCountForKey(key).orElse(0));
 
+        this.data.unLockValueForKey(key);
         try {
             // update value
             this.data.setValueForKey(key, value, updateCount);
@@ -409,7 +410,7 @@ public class Client extends Node {
                 Logger.timeout(this.id, type);
                 this.retryReadMessage(message.getUnreachableActor(), key, true);
             }
-        } else if (type == TimeoutType.CRIT_WRITE) {
+        } else if (type == TimeoutType.CRIT_WRITE && this.isWaitingForWriteConfirm) {
             CritWriteMessage critWriteMessage = (CritWriteMessage) message.getMessage();
             int key = critWriteMessage.getKey();
             int value = critWriteMessage.getValue();

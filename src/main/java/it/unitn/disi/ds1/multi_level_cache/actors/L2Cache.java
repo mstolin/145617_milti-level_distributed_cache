@@ -12,6 +12,9 @@ import java.util.List;
 
 public class L2Cache extends Cache {
 
+    /** Is this the L2 requested by the client for critical write? */
+    private boolean isPrimaryL2ForCritWrite = false;
+
     public L2Cache(String id) {
         super(id);
     }
@@ -85,6 +88,10 @@ public class L2Cache extends Cache {
     @Override
     protected void handleCritWriteMessage(CritWriteMessage message) {
         Logger.criticalWrite(this.id, LoggerOperationType.SEND, message.getKey(), message.getValue(), false);
+        // set as unconfirmed
+        this.addUnconfirmedWrite(message.getKey(),this.getSender());
+        this.isPrimaryL2ForCritWrite = true;
+        // forward to L1
         this.forwardMessageToNext(message, TimeoutType.CRIT_WRITE);
     }
 
@@ -94,6 +101,11 @@ public class L2Cache extends Cache {
         if (isOk) {
             // just lock data
             this.data.lockValueForKey(key);
+
+            if (!this.isPrimaryL2ForCritWrite) {
+                // is this is not the L2 contacted by the client, add write as unconfirmed with no sender
+                this.addUnconfirmedWrite(key, ActorRef.noSender());
+            }
         }
         // answer back
         CritWriteVoteMessage critWriteVoteOkMessage = new CritWriteVoteMessage(key, isOk);
@@ -123,13 +135,26 @@ public class L2Cache extends Cache {
         // response to client if needed
         if (this.isWriteUnconfirmed(key)) {
             ActorRef client = this.unconfirmedWrites.get(key);
-            WriteConfirmMessage confirmMessage = new WriteConfirmMessage(key, value, updateCount);
-            Logger.writeConfirm(this.id, LoggerOperationType.SEND, key, value, 0, updateCount, 0);
-            client.tell(confirmMessage, this.getSelf());
+            if (this.isPrimaryL2ForCritWrite && client != ActorRef.noSender()) {
+                WriteConfirmMessage confirmMessage = new WriteConfirmMessage(key, value, updateCount);
+                Logger.writeConfirm(this.id, LoggerOperationType.SEND, key, value, 0, updateCount, 0);
+                client.tell(confirmMessage, this.getSelf());
+                // reset
+                this.isPrimaryL2ForCritWrite = false;
+            }
         }
 
         // reset critical write
         this.resetWriteConfig(key);
+    }
+
+    @Override
+    protected boolean isCritWriteOk(int key) {
+        if (this.isPrimaryL2ForCritWrite) {
+            return !this.data.isLocked(key) && this.isWriteUnconfirmed(key);
+        } else {
+            return !this.data.isLocked(key) && !this.isWriteUnconfirmed(key);
+        }
     }
 
     @Override

@@ -115,6 +115,8 @@ public class Database extends Node implements Coordinator {
 
         Logger.criticalWrite(this.id, LoggerOperationType.RECEIVED, key, value, isLocked);
 
+        // lock value from now on
+        this.data.lockValueForKey(key);
         // Multicast vote request to all L1s // todo make own method
         CritWriteRequestMessage critWriteRequestMessage = new CritWriteRequestMessage(key);
         Logger.criticalWriteRequest(this.id, LoggerOperationType.MULTICAST, key, true);
@@ -122,28 +124,6 @@ public class Database extends Node implements Coordinator {
         this.setMulticastTimeout(critWriteRequestMessage, TimeoutType.CRIT_WRITE_REQUEST);
         // set crit write config
         this.acCoordinator.setCritWriteConfig(value);
-
-        /*
-        1. Send CritWriteRequestMessage to all L1s + timeout
-        -- On timeout unlock
-
-        2. L1s lock data as well, also send CritWriteRequestMessage + timeout
-        -- on timeout unlock + forward abort to DB
-
-        3. L2s lock data, send CriteWriteVoteMessage to L1
-
-        4. L1 collects from L2s, if all OK -> CriteWriteVoteMessage with OK to DB, OTHERWISE abort
-
-        5. DB collects from L1s, if all OK -> update value + send commit to all L1s, OTHERWISE abort to all L1s
-
-        6. On COMMIT: L1 updates value + unlock + send COMMIT to L2s, On ABORT -> unlock + send abort to all L2s
-
-        7. On COMMIT: L2 updates value + unlock data + writeconfirm to client, On ABORT: unlock + simply timeout
-         */
-
-        // TODO Check nochmal AC, wenn alle VOTE_OK, erst dann kann gelockt werden, dannach kann erst gupdatetd werde
-        // VLL extra COMMIT_LOCK, COMMIT_UPDATE, COMMIT_UNLOCK ??
-        // ODER bei L1 und L2 nach VOTE_OK antwort timeout, wenn timeout dann abort, wenn commit dann update
     }
 
     private void onCritWriteVoteMessage(CritWriteVoteMessage message) {
@@ -199,11 +179,11 @@ public class Database extends Node implements Coordinator {
         this.acCoordinator.resetCritWriteConfig();
 
         // update value
+        this.data.unLockValueForKey(key);
         try {
             this.data.setValueForKey(key, value);
 
             int updateCount = this.data.getUpdateCountForKey(key).get();
-            this.data.lockValueForKey(key);
             // now all participants have locked the data, then send a commit message to update the value
             // todo make own method
             CritWriteCommitMessage commitMessage = new CritWriteCommitMessage(key, value, updateCount);

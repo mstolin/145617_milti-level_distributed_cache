@@ -54,6 +54,8 @@ public abstract class Cache extends Node {
 
     protected abstract void handleCritWriteCommitMessage(CritWriteCommitMessage message);
 
+    protected abstract boolean isCritWriteOk(int key);
+
     /**
      * Flushes all temporary data.
      */
@@ -233,13 +235,12 @@ public abstract class Cache extends Node {
             // Can't do anything
             return;
         }
-
         this.handleCritWriteMessage(message);
     }
 
     private void onCritWriteRequestMessage(CritWriteRequestMessage message) {
         int key = message.getKey();
-        boolean isOk = !this.data.isLocked(key) && !this.isWriteUnconfirmed(key);
+        boolean isOk = this.isCritWriteOk(key);
         Logger.criticalWriteRequest(this.id, LoggerOperationType.RECEIVED, key, isOk);
         this.handleCritWriteRequestMessage(message, isOk);
     }
