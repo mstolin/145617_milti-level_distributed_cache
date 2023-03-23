@@ -195,6 +195,9 @@ public class Database extends Node implements Coordinator {
 
     @Override
     public void onVoteOk(int key, int value) {
+        // reset timeout
+        this.acCoordinator.resetCritWriteConfig();
+
         // update value
         try {
             this.data.setValueForKey(key, value);
@@ -257,7 +260,7 @@ public class Database extends Node implements Coordinator {
     private void onTimeoutMessage(TimeoutMessage message) {
         if (message.getType() == TimeoutType.CRIT_WRITE_REQUEST && this.acCoordinator.hasRequestedCritWrite()) {
             CritWriteRequestMessage requestMessage = (CritWriteRequestMessage) message.getMessage();
-            Logger.timeout(this.id, TimeoutType.CRIT_WRITE_ABORT);
+            Logger.timeout(this.id, TimeoutType.CRIT_WRITE_REQUEST);
             this.abortCritWrite(requestMessage.getKey());
         }
     }
