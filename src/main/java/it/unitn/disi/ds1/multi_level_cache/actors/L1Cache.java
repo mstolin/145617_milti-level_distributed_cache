@@ -79,7 +79,6 @@ public class L1Cache extends Cache implements Coordinator {
 
     @Override
     protected void handleCritWriteMessage(CritWriteMessage message) {
-        this.acCoordinator.setCritWriteConfig(message.getValue());
         Logger.criticalWrite(this.id, LoggerOperationType.SEND, message.getKey(), message.getValue(), false);
         this.forwardMessageToNext(message, TimeoutType.CRIT_WRITE);
     }
@@ -89,6 +88,7 @@ public class L1Cache extends Cache implements Coordinator {
         if (isOk) {
             // iff everything is ok, then multicast the request to all L2s
             Logger.criticalWriteRequest(this.id, LoggerOperationType.MULTICAST, message.getKey(), true);
+            this.acCoordinator.setCritWriteConfig(message.getKey());
             this.multicast(message, this.l2Caches);
             this.setMulticastTimeout(message, TimeoutType.CRIT_WRITE_REQUEST);
         }
