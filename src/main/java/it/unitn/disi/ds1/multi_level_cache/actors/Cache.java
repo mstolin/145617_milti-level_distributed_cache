@@ -32,8 +32,6 @@ public abstract class Cache extends Node {
         super(id);
     }
 
-    protected abstract void multicastReFillMessageIfNeeded(int key, int value, int updateCount, ActorRef sender);
-
     protected abstract void handleFill(int key);
 
     protected abstract void forwardMessageToNext(Serializable message, TimeoutType timeoutType);
@@ -264,16 +262,23 @@ public abstract class Cache extends Node {
         boolean isUnconfirmed = this.isWriteUnconfirmed(key);
         /*
         Only update if either,
-        1. the write-operation is unconfirmed or (then this was the requested Cache)
-        2. the message uc is newer than the current one (always update a write from the DB)
+        1. the data is locked and write-operation is unconfirmed (then, this was the requested Cache by client/L2)
+        2. the data is unlocked and the message uc is newer than the current one (always update a write from the DB)
          */
         int actorUpdateCount = this.data.getUpdateCountForKey(key).orElse(0);
-        boolean mustUpdate =  isUnconfirmed || (updateCount > actorUpdateCount);
+        boolean isMsgNewer = updateCount > actorUpdateCount;
+        boolean isLockedAndUnconfirmed = isLocked && isUnconfirmed;
+        boolean mustUpdate =  isLockedAndUnconfirmed || (!isLocked && isMsgNewer);
 
         Logger.refill(this.id, LoggerOperationType.RECEIVED, key, value, this.data.getValueForKey(key).orElse(-1),
                 updateCount, actorUpdateCount, isLocked, isUnconfirmed, mustUpdate);
 
-        if (!isLocked && mustUpdate) {
+        if (mustUpdate) {
+            if (isLockedAndUnconfirmed) {
+                // only unlock if this is the requested cache
+                this.data.unLockValueForKey(key);
+            }
+
             try {
                 this.data.setValueForKey(key, value, updateCount);
                 this.handleRefillMessage(message);

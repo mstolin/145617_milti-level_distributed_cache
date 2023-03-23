@@ -157,13 +157,6 @@ public class L2Cache extends Cache {
         }
     }
 
-    @Override
-    protected void multicastReFillMessageIfNeeded(int key, int value, int updateCount, ActorRef sender) {
-        /*
-        No need to implement. L2 cache does not send ReFill message.
-         */
-    }
-
     /**
      * Sends a ReadReply message to the saved sender. A ReadReply message is only send
      * back to the client. Therefore, no need to start a timeout, since a client is

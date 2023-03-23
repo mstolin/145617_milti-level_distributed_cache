@@ -127,21 +127,21 @@ public class L1Cache extends Cache implements Coordinator {
         return !this.data.isLocked(key) && !this.isWriteUnconfirmed(key);
     }
 
-    @Override
+    /*@Override
     protected void multicastReFillMessageIfNeeded(int key, int value, int updateCount, ActorRef sender) {
         RefillMessage reFillMessage = new RefillMessage(key, value, updateCount);
         Logger.refill(this.id, LoggerOperationType.MULTICAST, key, value, 0, updateCount, 0, false, false, true);
 
         // todo heck this, why???
-        if (sender != ActorRef.noSender()) {
+        /*if (sender != ActorRef.noSender()) {
             this.multicast(reFillMessage, this.l2Caches);
-        }
-        for (ActorRef cache: this.l2Caches) {
+        }*/
+        /*for (ActorRef cache: this.l2Caches) {
             if (cache != sender) {
                 cache.tell(reFillMessage, this.getSelf());
             }
         }
-    }
+    }*/
 
     @Override
     protected void handleFill(int key) {
