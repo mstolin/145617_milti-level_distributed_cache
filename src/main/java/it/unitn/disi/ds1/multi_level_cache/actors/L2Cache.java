@@ -109,7 +109,7 @@ public class L2Cache extends Cache {
         }
         // answer back
         CritWriteVoteMessage critWriteVoteOkMessage = new CritWriteVoteMessage(key, isOk);
-        Logger.criticalWriteVote(this.id, LoggerOperationType.SEND, key, 0, true, isOk);
+        Logger.criticalWriteVote(this.id, LoggerOperationType.SEND, key, isOk);
         this.mainL1Cache.tell(critWriteVoteOkMessage, this.getSelf());
     }
 

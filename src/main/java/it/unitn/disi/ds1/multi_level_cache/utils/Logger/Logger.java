@@ -10,8 +10,7 @@ public final class Logger {
     private final static String CRITICAL_WRITE_ABORT_FORMAT = "key: %d";
     private final static String CRITICAL_WRITE_REQUEST_REC = "key: %d";
     private final static String CRITICAL_WRITE_REQUEST_SEND = "key: %d";
-    private final static String CRITICAL_WRITE_VOTE_REC = "key: %d, value: %d, have-all-voted: %b";
-    private final static String CRITICAL_WRITE_VOTE_SEND = "key: %d, is-ok: %b";
+    private final static String CRITICAL_WRITE_VOTE= "key: %d, is-ok: %b";
     private final static String ERROR_FORMAT = "msg-type: %s, key: %d, force-timeout: %b, description: %s";
     private final static String FILL_FORMAT_REC = "key: %d, new-value: %d, old-value: %d, new-uc: %d, old-uc: %d";
     private final static String FILL_FORMAT_SEND = "key: %d, value: %d, uc: %d";
@@ -94,15 +93,8 @@ public final class Logger {
         log(LoggerType.CRITICAL_WRITE_REQUEST, id, operationType, msg);
     }
 
-    public static void criticalWriteVote(String id, LoggerOperationType operationType, int key, int value, boolean haveAllVoted, boolean isOk) {
-        String msg = "";
-
-        if (operationType == LoggerOperationType.RECEIVED) {
-            msg = String.format(CRITICAL_WRITE_VOTE_REC, key, value, haveAllVoted);
-        } else if (isSendAction(operationType)) {
-            msg = String.format(CRITICAL_WRITE_VOTE_SEND, key, isOk);
-        }
-
+    public static void criticalWriteVote(String id, LoggerOperationType operationType, int key, boolean isOk) {
+        String msg = String.format(CRITICAL_WRITE_VOTE, key, isOk);
         log(LoggerType.CRITICAL_WRITE_VOTE, id, operationType, msg);
     }
 

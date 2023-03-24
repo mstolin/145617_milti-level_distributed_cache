@@ -127,6 +127,7 @@ public class Database extends Node implements Coordinator {
     }
 
     private void onCritWriteVoteMessage(CritWriteVoteMessage message) {
+        Logger.criticalWriteVote(this.id, LoggerOperationType.RECEIVED, message.getKey(), message.isOk());
         this.acCoordinator.onCritWriteVoteMessage(message);
     }
 

@@ -88,7 +88,7 @@ public class L1Cache extends Cache implements Coordinator {
     @Override
     protected void handleCritWriteRequestMessage(CritWriteRequestMessage message, boolean isOk) {
         if (isOk) {
-            // iff everything is ok, then multicast the request to all L2s
+            // iff everything is ok, then multicast the request to all L2s, otherwise force a timeout
             Logger.criticalWriteRequest(this.id, LoggerOperationType.MULTICAST, message.getKey(), true);
             this.acCoordinator.setCritWriteConfig(message.getKey());
             this.multicast(message, this.l2Caches);
@@ -99,6 +99,10 @@ public class L1Cache extends Cache implements Coordinator {
 
     @Override
     protected void handleCritWriteVoteMessage(CritWriteVoteMessage message) {
+        int key = message.getKey();
+        boolean isOk = message.isOk();
+        Logger.criticalWriteVote(this.id, LoggerOperationType.RECEIVED, key, isOk);
+
         this.acCoordinator.onCritWriteVoteMessage(message);
     }
 
@@ -189,7 +193,7 @@ public class L1Cache extends Cache implements Coordinator {
         this.addUnconfirmedWrite(key, ActorRef.noSender());
 
         CritWriteVoteMessage critWriteVoteMessage = new CritWriteVoteMessage(key, true);
-        Logger.criticalWriteVote(this.id, LoggerOperationType.SEND, key, value, true, true);
+        Logger.criticalWriteVote(this.id, LoggerOperationType.SEND, key, true);
         this.database.tell(critWriteVoteMessage, this.getSelf());
     }
 
