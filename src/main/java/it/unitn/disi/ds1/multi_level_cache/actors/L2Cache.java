@@ -82,6 +82,16 @@ public class L2Cache extends Cache {
                 Logger.timeout(this.id, message.getType());
                 this.database.tell(writeMessage, this.getSelf());
             }
+        } else if (message.getType() == TimeoutType.CRIT_WRITE) {
+            CritWriteMessage writeMessage = (CritWriteMessage) message.getMessage();
+            int key = writeMessage.getKey();
+
+            if (this.isWriteUnconfirmed(key)) {
+                // do not forward to DB when crit write fails
+                Logger.timeout(this.id, message.getType());
+                this.resetWriteConfig(key);
+                this.isPrimaryL2ForCritWrite = false;
+            }
         }
     }
 
@@ -155,6 +165,12 @@ public class L2Cache extends Cache {
         } else {
             return !this.data.isLocked(key) && !this.isWriteUnconfirmed(key);
         }
+    }
+
+    @Override
+    protected void flush() {
+        super.flush();
+        this.isPrimaryL2ForCritWrite = false;
     }
 
     /**

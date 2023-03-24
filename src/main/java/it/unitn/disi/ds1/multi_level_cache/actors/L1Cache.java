@@ -166,6 +166,7 @@ public class L1Cache extends Cache implements Coordinator {
     @Override
     protected void flush() {
         super.flush();
+        this.isCritWriteRequestConfirmed = false;
         this.acCoordinator.resetCritWriteConfig();
     }
 
