@@ -3,6 +3,7 @@ package it.unitn.disi.ds1.multi_level_cache.actors;
 import akka.actor.ActorRef;
 import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
+import it.unitn.disi.ds1.multi_level_cache.messages.utils.CacheCrashConfig;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerOperationType;
@@ -66,14 +67,15 @@ public class Client extends Node {
      * @param key Key that has to be written
      * @param value Value used to update the key
      */
-    private void tellWriteMessage(ActorRef l2Cache, int key, int value, boolean isRetry) {
-        WriteMessage writeMessage = new WriteMessage(key, value);
-        // set timeout
-        this.setTimeout(writeMessage, l2Cache, TimeoutType.WRITE);
-
+    private void tellWriteMessage(ActorRef l2Cache, int key, int value, boolean isRetry, CacheCrashConfig l1CrashConfig,
+                                  CacheCrashConfig l2CrashConfig) {
         if (this.canInstantiateNewWriteConversation(key) || isRetry) {
             Logger.write(this.id, LoggerOperationType.SEND, key, value, false);
+
+            WriteMessage writeMessage = new WriteMessage(key, value, l1CrashConfig, l2CrashConfig);
             l2Cache.tell(writeMessage, this.getSelf());
+            // set timeout
+            this.setTimeout(writeMessage, l2Cache, TimeoutType.WRITE);
             // set config
             this.isWaitingForWriteConfirm = true;
         } else {
@@ -90,13 +92,14 @@ public class Client extends Node {
      * @param key Key that has to be written
      * @param value Value used to update the key
      */
-    private void tellCritWriteMessage(ActorRef l2Cache, int key, int value, boolean isRetry) {
-        CritWriteMessage critWriteMessage = new CritWriteMessage(key, value);
-        // set timeout
-        this.setTimeout(critWriteMessage, l2Cache, TimeoutType.CRIT_WRITE);
-
+    private void tellCritWriteMessage(ActorRef l2Cache, int key, int value, boolean isRetry,
+                                      CacheCrashConfig l1CrashConfig, CacheCrashConfig l2CrashConfig) {
         if (this.canInstantiateNewWriteConversation(key) || isRetry) {
             Logger.criticalWrite(this.id, LoggerOperationType.SEND, key, value, false);
+
+            CritWriteMessage critWriteMessage = new CritWriteMessage(key, value, l1CrashConfig, l2CrashConfig);
+            // set timeout
+            this.setTimeout(critWriteMessage, l2Cache, TimeoutType.CRIT_WRITE);
             l2Cache.tell(critWriteMessage, this.getSelf());
             // set config
             this.isWaitingForWriteConfirm = true;
@@ -114,7 +117,8 @@ public class Client extends Node {
      * @param value Value used to update the key
      * @param isCritical Determines if the message is of critical nature
      */
-    private void retryWriteMessage(ActorRef unreachableActor, int key, int value, boolean isCritical) {
+    private void retryWriteMessage(ActorRef unreachableActor, int key, int value, boolean isCritical,
+                                   CacheCrashConfig l1CrashConfig, CacheCrashConfig l2CrashConfig) {
         if (this.writeRetryCount < MAX_RETRY_COUNT) {
             // get random actor
             List<ActorRef> workingL2Caches = this.l2Caches
@@ -124,10 +128,10 @@ public class Client extends Node {
             this.writeRetryCount = this.writeRetryCount + 1;
             // send message
             if (isCritical) {
-                this.tellCritWriteMessage(randomActor, key, value, true);
+                this.tellCritWriteMessage(randomActor, key, value, true, l1CrashConfig, l2CrashConfig);
                 Logger.criticalWrite(this.id, LoggerOperationType.RETRY, key, value, false);
             } else {
-                this.tellWriteMessage(randomActor, key, value, true);
+                this.tellWriteMessage(randomActor, key, value, true, l1CrashConfig, l2CrashConfig);
                 Logger.write(this.id, LoggerOperationType.RETRY, key, value, false);
             }
         } else {
@@ -151,8 +155,10 @@ public class Client extends Node {
      * @param l2Cache Target L2 cache
      * @param key Key to be read
      */
-    private void tellReadMessage(ActorRef l2Cache, int key) {
-        ReadMessage readMessage = new ReadMessage(key, this.data.getUpdateCountForKey(key).orElse(0));
+    private void tellReadMessage(ActorRef l2Cache, int key, CacheCrashConfig l1CrashConfig,
+                                 CacheCrashConfig l2CrashConfig) {
+        ReadMessage readMessage = new ReadMessage(key, this.data.getUpdateCountForKey(key).orElse(0),
+                l1CrashConfig, l2CrashConfig);
         // set timeout
         this.setTimeout(readMessage, l2Cache, TimeoutType.READ);
 
@@ -173,8 +179,10 @@ public class Client extends Node {
      * @param l2Cache Target L2 cache
      * @param key Key to be read
      */
-    private void tellCritReadMessage(ActorRef l2Cache, int key) {
-        CritReadMessage critReadMessage = new CritReadMessage(key, this.data.getUpdateCountForKey(key).orElse(0));
+    private void tellCritReadMessage(ActorRef l2Cache, int key, CacheCrashConfig l1CrashConfig,
+                                     CacheCrashConfig l2CrashConfig) {
+        CritReadMessage critReadMessage = new CritReadMessage(key, this.data.getUpdateCountForKey(key).orElse(0),
+                l1CrashConfig, l2CrashConfig);
         // set timeout
         this.setTimeout(critReadMessage, l2Cache, TimeoutType.CRIT_READ);
 
@@ -196,7 +204,8 @@ public class Client extends Node {
      * @param key Key to be read
      * @param isCritical Determines if the message is of critical nature
      */
-    private void retryReadMessage(ActorRef unreachableActor, int key, boolean isCritical) {
+    private void retryReadMessage(ActorRef unreachableActor, int key, boolean isCritical, CacheCrashConfig l1CrashConfig,
+                                  CacheCrashConfig l2CrashConfig) {
         int retryCountForKey = this.getRetryCountForRead(key);
         if (retryCountForKey < MAX_RETRY_COUNT) {
             // get another actor (hoping it will work)
@@ -206,13 +215,13 @@ public class Client extends Node {
 
             // send message
             if (isCritical) {
-                this.tellCritReadMessage(randomActor, key);
+                this.tellCritReadMessage(randomActor, key, l1CrashConfig, l2CrashConfig);
                 Logger.criticalRead(this.id, LoggerOperationType.RETRY, key,
                         this.data.getUpdateCountForKey(key).orElse(0),
                         this.data.getUpdateCountForKey(key).orElse(0),
                         this.data.isLocked(key));
             } else {
-                this.tellReadMessage(randomActor, key);
+                this.tellReadMessage(randomActor, key, l1CrashConfig, l2CrashConfig);
                 Logger.read(this.id, LoggerOperationType.RETRY, key,
                         this.data.getUpdateCountForKey(key).orElse(0),
                         this.data.getUpdateCountForKey(key).orElse(0),
@@ -300,9 +309,11 @@ public class Client extends Node {
         Logger.initWrite(this.id, key, value, isCritical);
 
         if (isCritical) {
-            this.tellCritWriteMessage(l2Cache, key, value, false);
+            this.tellCritWriteMessage(l2Cache, key, value, false, message.getL1CrashConfig(),
+                    message.getL2CrashConfig());
         } else {
-            this.tellWriteMessage(l2Cache, key, value, false);
+            this.tellWriteMessage(l2Cache, key, value, false, message.getL1CrashConfig(),
+                    message.getL2CrashConfig());
         }
     }
 
@@ -352,9 +363,9 @@ public class Client extends Node {
         Logger.initRead(this.id, key, isCritical);
 
         if (isCritical) {
-            this.tellCritReadMessage(l2Cache, key);
+            this.tellCritReadMessage(l2Cache, key, message.getL1CrashConfig(), message.getL2CrashConfig());
         } else {
-            this.tellReadMessage(l2Cache, key);
+            this.tellReadMessage(l2Cache, key, message.getL1CrashConfig(), message.getL2CrashConfig());
         }
     }
 
@@ -392,7 +403,8 @@ public class Client extends Node {
             Logger.timeout(this.id, type);
 
             // try again
-            this.retryWriteMessage(message.getUnreachableActor(), key, value, false);
+            this.retryWriteMessage(message.getUnreachableActor(), key, value, false,
+                    writeMessage.getL1CrashConfig(), writeMessage.getL2CrashConfig());
         } else if (type == TimeoutType.READ) {
             ReadMessage readMessage = (ReadMessage) message.getMessage();
             int key = readMessage.getKey();
@@ -400,7 +412,8 @@ public class Client extends Node {
             // if the key is in this map, then no ReadReply has been received for the key
             if (this.isReadUnconfirmed(key)) {
                 Logger.timeout(this.id, type);
-                this.retryReadMessage(message.getUnreachableActor(), key, false);
+                this.retryReadMessage(message.getUnreachableActor(), key, false, readMessage.getL1CrashConfig(),
+                        readMessage.getL2CrashConfig());
             }
         } else if (type == TimeoutType.CRIT_READ) {
             CritReadMessage critReadMessage = (CritReadMessage) message.getMessage();
@@ -408,7 +421,8 @@ public class Client extends Node {
 
             if (this.isReadUnconfirmed(key)) {
                 Logger.timeout(this.id, type);
-                this.retryReadMessage(message.getUnreachableActor(), key, true);
+                this.retryReadMessage(message.getUnreachableActor(), key, true,
+                        critReadMessage.getL1CrashConfig(), critReadMessage.getL2CrashConfig());
             }
         } else if (type == TimeoutType.CRIT_WRITE && this.isWaitingForWriteConfirm) {
             CritWriteMessage critWriteMessage = (CritWriteMessage) message.getMessage();
@@ -418,7 +432,8 @@ public class Client extends Node {
             Logger.timeout(this.id, type);
 
             // try again
-            this.retryWriteMessage(message.getUnreachableActor(), key, value, true);
+            this.retryWriteMessage(message.getUnreachableActor(), key, value, true,
+                    critWriteMessage.getL1CrashConfig(), critWriteMessage.getL2CrashConfig());
         }
     }
 
