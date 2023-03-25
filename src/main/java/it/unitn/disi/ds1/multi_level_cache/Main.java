@@ -2,6 +2,7 @@ package it.unitn.disi.ds1.multi_level_cache;
 
 import akka.actor.ActorRef;
 import it.unitn.disi.ds1.multi_level_cache.environment.ActorEnvironment;
+import it.unitn.disi.ds1.multi_level_cache.messages.utils.CacheCrashConfig;
 
 import java.util.NoSuchElementException;
 
@@ -19,11 +20,6 @@ public class Main {
      * number of clients
      */
     private static final Integer numberOfClients = 2;
-
-    private static void sleepAndDelimiter(int milliseconds) throws InterruptedException {
-        System.out.println("----------------------");
-        Thread.sleep(milliseconds);
-    }
 
     public static void main(String[] args) throws InterruptedException {
         ActorEnvironment actorEnvironment = new ActorEnvironment(
@@ -50,7 +46,12 @@ public class Main {
             READ A VALUE
              */
             /*sleepAndDelimiter(2000);
-            actorEnvironment.makeClientRead(firstClient, l211, 9);*
+            actorEnvironment.makeClientRead(firstClient, l211, 9);*/
+
+            /*
+            READ A VALUE, MAKE L1 CRASH AFTER PROCESSED
+             */
+            actorEnvironment.makeClientRead(firstClient, l211, 9, CacheCrashConfig.crashOnProcessed(0, 10000), CacheCrashConfig.empty());
 
             /*
             READ A VALUE FROM SAME L2
@@ -72,7 +73,7 @@ public class Main {
             READ A VALUE WITH CRASHED L1
              */
             /*sleepAndDelimiter(2000);
-            actorEnvironment.makeCacheCrash(l12, 5);
+            actorEnvironment.makeCacheCrash(l12, 5000);
             sleepAndDelimiter(2000);
             actorEnvironment.makeClientRead(firstClient, l221, 9);*/
 
@@ -80,7 +81,7 @@ public class Main {
             READ A VALUE WITH CRASHED L2
              */
             /*Thread.sleep(2000);
-            actorEnvironment.makeCacheCrash(l221, 10);
+            actorEnvironment.makeCacheCrash(l221, 10000);
             actorEnvironment.makeClientRead(firstClient, l221, 1);*/
 
             /*
@@ -131,20 +132,20 @@ public class Main {
             WRITE A VALUE WITH CRASHED L2
              */
             /*Thread.sleep(2000);
-            actorEnvironment.makeCacheCrash(l211, 10);
+            actorEnvironment.makeCacheCrash(l211, 10000);
             actorEnvironment.makeClientWrite(firstClient, l211, 3, 100);*/
 
             /*
             WRITE A VALUE WITH ONLY CRASHED L2
              */
-            /*actorEnvironment.makeCacheCrash(l211, 30);
-            actorEnvironment.makeCacheCrash(l212, 30);
-            actorEnvironment.makeCacheCrash(l213, 30);
-            actorEnvironment.makeCacheCrash(l214, 30);
-            actorEnvironment.makeCacheCrash(l221, 30);
-            actorEnvironment.makeCacheCrash(l222, 30);
-            actorEnvironment.makeCacheCrash(l223, 30);
-            actorEnvironment.makeCacheCrash(l224, 30);
+            /*actorEnvironment.makeCacheCrash(l211, 30000);
+            actorEnvironment.makeCacheCrash(l212, 30000);
+            actorEnvironment.makeCacheCrash(l213, 30000);
+            actorEnvironment.makeCacheCrash(l214, 30000);
+            actorEnvironment.makeCacheCrash(l221, 30000);
+            actorEnvironment.makeCacheCrash(l222, 30000);
+            actorEnvironment.makeCacheCrash(l223, 30000);
+            actorEnvironment.makeCacheCrash(l224, 30000);
             actorEnvironment.makeClientWrite(firstClient, l211, 3, 100);*/
 
             /*
@@ -153,8 +154,8 @@ public class Main {
             /*sleepAndDelimiter(2000);
             actorEnvironment.makeClientWrite(firstClient, l211, 3, 100);
             actorEnvironment.makeClientRead(secondClient, l221, 3);
-            actorEnvironment.makeCacheCrash(l221, 10);
-            actorEnvironment.makeCacheCrash(l11, 10);
+            actorEnvironment.makeCacheCrash(l221, 10000);
+            actorEnvironment.makeCacheCrash(l11, 10000);
             sleepAndDelimiter(2000);
             actorEnvironment.makeClientRead(secondClient, l211, 3);*/
 
@@ -168,11 +169,11 @@ public class Main {
             /*
             CRITWRITE, THEN READ FROM MULTIPLE L2s
              */
-            actorEnvironment.makeClientCritWrite(firstClient, l211, 3, 77);
+            /*actorEnvironment.makeClientCritWrite(firstClient, l211, 3, 77);
             Thread.sleep(2000);
             actorEnvironment.makeClientRead(secondClient, l211, 3);
             Thread.sleep(2000);
-            actorEnvironment.makeClientRead(secondClient, l221, 3);
+            actorEnvironment.makeClientRead(secondClient, l221, 3);*/
 
             /*
             CRITWRITE, AFTERWARD NORMAL WRITE TO SAME L2 FOR SAME KEY
@@ -187,6 +188,12 @@ public class Main {
             /*actorEnvironment.makeClientCritWrite(firstClient, l211, 3, 77);
             Thread.sleep(2000);
             actorEnvironment.makeClientCritWrite(firstClient, l221, 3, 160);*/
+
+            /*
+            CRITWRITE, WITH CRASHED L1
+             */
+            /*actorEnvironment.makeCacheCrash(l11, 10000);
+            actorEnvironment.makeClientCritWrite(firstClient, l211, 3, 77);*/
 
         } catch (NoSuchElementException exc) {
             System.out.println("Some actor is not available");
