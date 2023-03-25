@@ -87,12 +87,12 @@ public abstract class Node extends AbstractActor {
         return TIMEOUT_SECONDS;
     }
 
-    protected void scheduleMessageToSelf(Serializable message, long seconds) {
+    protected void scheduleMessageToSelf(Serializable message, long millis) {
         this.getContext()
                 .system()
                 .scheduler()
                 .scheduleOnce(
-                        Duration.ofSeconds(seconds),
+                        Duration.ofMillis(millis),
                         this.getSelf(),
                         message,
                         this.getContext().system().dispatcher(),
