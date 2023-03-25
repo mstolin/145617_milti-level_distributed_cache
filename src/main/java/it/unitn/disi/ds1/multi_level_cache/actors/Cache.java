@@ -2,6 +2,7 @@ package it.unitn.disi.ds1.multi_level_cache.actors;
 
 import akka.actor.ActorRef;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
+import it.unitn.disi.ds1.multi_level_cache.messages.utils.CacheCrashConfig;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerOperationType;
@@ -32,6 +33,27 @@ public abstract class Cache extends Node {
         super(id);
     }
 
+    private void makeSelfCrash(long crashAfter, long recoverAfter) {
+        CrashMessage crashMessage = new CrashMessage(recoverAfter);
+        this.scheduleMessageToSelf(crashMessage, crashAfter);
+    }
+
+    private void makeSelfCrashOnReceivedIfNeeded(CacheCrashConfig l1CrashConfig, CacheCrashConfig l2CrashConfig) {
+        if (this.isL1Cache() && l1CrashConfig.isCrashOnReceive()) {
+            this.makeSelfCrash(l1CrashConfig.getCrashAfterOnReceive(), l1CrashConfig.getRecoverAfterOnReceive());
+        } else if (!this.isL1Cache() && l2CrashConfig.isCrashOnReceive()) {
+            this.makeSelfCrash(l2CrashConfig.getCrashAfterOnReceive(), l2CrashConfig.getRecoverAfterOnReceive());
+        }
+    }
+
+    private void makeSelfCrashOnProcessedIfNeeded(CacheCrashConfig l1CrashConfig, CacheCrashConfig l2CrashConfig) {
+        if (this.isL1Cache() && l1CrashConfig.isCrashOnProcessed()) {
+            this.makeSelfCrash(l1CrashConfig.getCrashAfterOnProcessed(), l1CrashConfig.getRecoverAfterOnProcessed());
+        } else if (!this.isL1Cache() && l2CrashConfig.isCrashOnProcessed()) {
+            this.makeSelfCrash(l2CrashConfig.getCrashAfterOnProcessed(), l2CrashConfig.getRecoverAfterOnProcessed());
+        }
+    }
+
     protected abstract void handleFill(int key);
 
     protected abstract void forwardMessageToNext(Serializable message, TimeoutType timeoutType);
@@ -53,6 +75,8 @@ public abstract class Cache extends Node {
     protected abstract void handleCritWriteCommitMessage(CritWriteCommitMessage message);
 
     protected abstract boolean isCritWriteOk(int key);
+
+    protected abstract boolean isL1Cache();
 
     /**
      * Flushes all temporary data.
@@ -198,6 +222,11 @@ public abstract class Cache extends Node {
             return;
         }
 
+        // make crash
+        CacheCrashConfig l1CrashConfig = message.getL1CrashConfig();
+        CacheCrashConfig l2CrashConfig = message.getL2CrashConfig();
+        this.makeSelfCrashOnReceivedIfNeeded(l1CrashConfig, l2CrashConfig);
+
         // lock
         this.data.lockValueForKey(key);
         // set as unconfirmed
@@ -205,6 +234,8 @@ public abstract class Cache extends Node {
         // forward to next
         Logger.write(this.id, LoggerOperationType.SEND, key, value, isLocked);
         this.forwardMessageToNext(message, TimeoutType.WRITE);
+
+        this.makeSelfCrashOnProcessedIfNeeded(l1CrashConfig, l2CrashConfig);
     }
 
     private void onCritWriteMessage(CritWriteMessage message) {
@@ -215,7 +246,15 @@ public abstract class Cache extends Node {
             // Can't do anything
             return;
         }
+
+        // make crash
+        CacheCrashConfig l1CrashConfig = message.getL1CrashConfig();
+        CacheCrashConfig l2CrashConfig = message.getL2CrashConfig();
+        this.makeSelfCrashOnReceivedIfNeeded(l1CrashConfig, l2CrashConfig);
+
         this.handleCritWriteMessage(message);
+
+        this.makeSelfCrashOnProcessedIfNeeded(l1CrashConfig, l2CrashConfig);
     }
 
     private void onCritWriteRequestMessage(CritWriteRequestMessage message) {
@@ -297,13 +336,19 @@ public abstract class Cache extends Node {
             return;
         }
 
+        // make crash
+        CacheCrashConfig l1CrashConfig = message.getL1CrashConfig();
+        CacheCrashConfig l2CrashConfig = message.getL2CrashConfig();
+        this.makeSelfCrashOnReceivedIfNeeded(l1CrashConfig, l2CrashConfig);
+
         // add sender to queue
         this.addUnconfirmedReadMessage(key, this.getSender());
 
         int updateCount = message.getUpdateCount();
         int actorUpdateCount = this.data.getUpdateCountForKey(key).orElse(0);
-        // only forward if the message update count is older
-        boolean mustForward = updateCount > actorUpdateCount;
+        // only forward if the message update count is older, or we don't know the value
+        boolean isOlder = updateCount > actorUpdateCount;
+        boolean mustForward = isOlder || !this.data.containsKey(key);
         Logger.read(this.id, LoggerOperationType.RECEIVED, key, updateCount, actorUpdateCount,
                 this.data.isLocked(key), mustForward);
 
@@ -316,6 +361,8 @@ public abstract class Cache extends Node {
             // response accordingly
             this.handleFill(key);
         }
+
+        this.makeSelfCrashOnProcessedIfNeeded(l1CrashConfig, l2CrashConfig);
     }
 
     private void onCritReadMessage(CritReadMessage message) {
@@ -326,6 +373,12 @@ public abstract class Cache extends Node {
             Logger.error(this.id, LoggerType.CRITICAL_READ, key, true, "Can't read value, because it's locked");
             return;
         }
+
+        // make crash
+        CacheCrashConfig l1CrashConfig = message.getL1CrashConfig();
+        CacheCrashConfig l2CrashConfig = message.getL2CrashConfig();
+        this.makeSelfCrashOnReceivedIfNeeded(l1CrashConfig, l2CrashConfig);
+
         // add as unconfirmed
         this.addUnconfirmedReadMessage(key, this.getSender());
 
@@ -337,6 +390,8 @@ public abstract class Cache extends Node {
         // Forward to next
         Logger.criticalRead(this.id, LoggerOperationType.SEND, key, updateCount, 0, this.data.isLocked(key));
         this.forwardCritReadMessageToNext(message, key);
+
+        this.makeSelfCrashOnProcessedIfNeeded(l1CrashConfig, l2CrashConfig);
     }
 
     /**
@@ -368,7 +423,7 @@ public abstract class Cache extends Node {
      * @param message The received CrashMessage
      */
     private void onCrashMessage(CrashMessage message) {
-        long recoverAfter = message.getRecoverAfterSeconds();
+        long recoverAfter = message.getRecoverAfter();
         Logger.crash(this.id, recoverAfter);
         this.recoverAfter(recoverAfter);
         this.flush();
