@@ -1,15 +1,15 @@
 package it.unitn.disi.ds1.multi_level_cache.messages;
 
-import java.io.Serializable;
+import it.unitn.disi.ds1.multi_level_cache.messages.utils.CacheCrashConfig;
 
-public class CritWriteMessage implements Serializable {
+public class CritWriteMessage extends CrashableMessage {
 
     private final int key;
 
     private final int value;
 
-
-    public CritWriteMessage(int key, int value) {
+    public CritWriteMessage(int key, int value, CacheCrashConfig l1CrashConfig, CacheCrashConfig l2CrashConfig) {
+        super(l1CrashConfig, l2CrashConfig);
         this.key = key;
         this.value = value;
     }

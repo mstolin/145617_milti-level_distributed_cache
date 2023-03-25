@@ -1,16 +1,14 @@
 package it.unitn.disi.ds1.multi_level_cache.messages;
 
-import java.io.Serializable;
-import java.util.UUID;
+import it.unitn.disi.ds1.multi_level_cache.messages.utils.CacheCrashConfig;
 
-public class WriteMessage implements Serializable {
+public class WriteMessage extends CrashableMessage {
 
-    private final UUID uuid;
     private final int key;
     private final int value;
 
-    public WriteMessage(int key, int value) {
-        this.uuid = UUID.randomUUID();
+    public WriteMessage(int key, int value, CacheCrashConfig l1CrashConfig, CacheCrashConfig l2CrashConfig) {
+        super(l1CrashConfig, l2CrashConfig);
         this.key = key;
         this.value = value;
     }
@@ -21,10 +19,6 @@ public class WriteMessage implements Serializable {
 
     public int getValue() {
         return value;
-    }
-
-    public UUID getUuid() {
-        return uuid;
     }
 
 }
