@@ -403,8 +403,8 @@ public class Client extends Node {
             Logger.timeout(this.id, type);
 
             // try again
-            this.retryWriteMessage(message.getUnreachableActor(), key, value, false,
-                    writeMessage.getL1CrashConfig(), writeMessage.getL2CrashConfig());
+            this.retryWriteMessage(message.getUnreachableActor(), key, value, false, CacheCrashConfig.empty(),
+                    CacheCrashConfig.empty());
         } else if (type == TimeoutType.READ) {
             ReadMessage readMessage = (ReadMessage) message.getMessage();
             int key = readMessage.getKey();
@@ -412,8 +412,8 @@ public class Client extends Node {
             // if the key is in this map, then no ReadReply has been received for the key
             if (this.isReadUnconfirmed(key)) {
                 Logger.timeout(this.id, type);
-                this.retryReadMessage(message.getUnreachableActor(), key, false, readMessage.getL1CrashConfig(),
-                        readMessage.getL2CrashConfig());
+                this.retryReadMessage(message.getUnreachableActor(), key, false, CacheCrashConfig.empty(),
+                        CacheCrashConfig.empty());
             }
         } else if (type == TimeoutType.CRIT_READ) {
             CritReadMessage critReadMessage = (CritReadMessage) message.getMessage();
@@ -421,8 +421,8 @@ public class Client extends Node {
 
             if (this.isReadUnconfirmed(key)) {
                 Logger.timeout(this.id, type);
-                this.retryReadMessage(message.getUnreachableActor(), key, true,
-                        critReadMessage.getL1CrashConfig(), critReadMessage.getL2CrashConfig());
+                this.retryReadMessage(message.getUnreachableActor(), key, true, CacheCrashConfig.empty(),
+                        CacheCrashConfig.empty());
             }
         } else if (type == TimeoutType.CRIT_WRITE && this.isWaitingForWriteConfirm) {
             CritWriteMessage critWriteMessage = (CritWriteMessage) message.getMessage();
@@ -432,8 +432,8 @@ public class Client extends Node {
             Logger.timeout(this.id, type);
 
             // try again
-            this.retryWriteMessage(message.getUnreachableActor(), key, value, true,
-                    critWriteMessage.getL1CrashConfig(), critWriteMessage.getL2CrashConfig());
+            this.retryWriteMessage(message.getUnreachableActor(), key, value, true, CacheCrashConfig.empty(),
+                    CacheCrashConfig.empty());
         }
     }
 
