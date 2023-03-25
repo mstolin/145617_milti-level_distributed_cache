@@ -4,14 +4,15 @@ import java.io.Serializable;
 
 public class CrashMessage implements Serializable {
 
-    private final long recoverAfterSeconds;
+    /** Delay of milliseconds */
+    private final long recoverAfter;
 
-    public CrashMessage(long recoverAfterSeconds) {
-        this.recoverAfterSeconds = recoverAfterSeconds;
+    public CrashMessage(long recoverAfter) {
+        this.recoverAfter = recoverAfter;
     }
 
-    public long getRecoverAfterSeconds() {
-        return recoverAfterSeconds;
+    public long getRecoverAfter() {
+        return recoverAfter;
     }
 
 }
