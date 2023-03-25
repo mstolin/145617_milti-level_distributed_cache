@@ -168,6 +168,11 @@ public class L2Cache extends Cache {
     }
 
     @Override
+    protected boolean isL1Cache() {
+        return false;
+    }
+
+    @Override
     protected void flush() {
         super.flush();
         this.isPrimaryL2ForCritWrite = false;

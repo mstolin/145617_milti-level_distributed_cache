@@ -131,6 +131,11 @@ public class L1Cache extends Cache implements Coordinator {
         return !this.data.isLocked(key) && !this.isWriteUnconfirmed(key);
     }
 
+    @Override
+    protected boolean isL1Cache() {
+        return true;
+    }
+
     /*@Override
     protected void multicastReFillMessageIfNeeded(int key, int value, int updateCount, ActorRef sender) {
         RefillMessage reFillMessage = new RefillMessage(key, value, updateCount);
