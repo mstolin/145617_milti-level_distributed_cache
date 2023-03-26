@@ -18,7 +18,7 @@ public final class Logger {
     private final static String INIT_WRITE_FORMAT = "key: %d, value: %d, is-critical: %b";
     private final static String JOIN_FORMAT = "%s of %d";
     private final static String LOG_FORMAT = "%-8.8s | %-3.3s | %-18.18s | %s";
-    private final static String READ_FORMAT_REC = "key: %d, msg-uc: %d, actor-uc: %d, is-locked: %b, forward: %b";
+    private final static String READ_FORMAT_REC = "key: %d, msg-uc: %d, actor-uc: %d, is-locked: %b, is-older: %b, is-unconfirmed: %b";
     private final static String READ_FORMAT_SEND = "key: %d, uc: %d";
     private final static String REFILL_FORMAT = "key: %d, new-value: %d, old-value: %d, msg-uc: %d, actor-uc: %d, is-locked: %b, is-unconfirmed: %b, must-update: %b";
     private final static String WRITE_FORMAT_REC = "key: %d, value: %d, is-locked: %b";
@@ -134,11 +134,11 @@ public final class Logger {
         log(LoggerType.JOIN, id, LoggerOperationType.RECEIVED, msg);
     }
 
-    public static void read(String id, LoggerOperationType operationType, int key, int msgUpdateCount, int actorUpdateCount, boolean isLocked, boolean forward) {
+    public static void read(String id, LoggerOperationType operationType, int key, int msgUpdateCount, int actorUpdateCount, boolean isLocked, boolean isOlder, boolean isUnconfirmed) {
         String msg = "";
 
         if (operationType == LoggerOperationType.RECEIVED) {
-            msg = String.format(READ_FORMAT_REC, key, msgUpdateCount, actorUpdateCount, isLocked, forward);
+            msg = String.format(READ_FORMAT_REC, key, msgUpdateCount, actorUpdateCount, isLocked, isOlder, isUnconfirmed);
         } else if (isSendAction(operationType)) {
             msg = String.format(READ_FORMAT_SEND, key, msgUpdateCount);
         }
