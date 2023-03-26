@@ -15,7 +15,7 @@ public class Database extends Node implements Coordinator {
     private final ACCoordinator acCoordinator = new ACCoordinator(this);
     private List<ActorRef> l1Caches;
     private List<ActorRef> l2Caches;
-    private Map<Integer, List<ActorRef>> unconfirmedReads = new HashMap<>();
+    private Map<Integer, ActorRef> unconfirmedReads = new HashMap<>();
 
     public Database() {
         super("Database");
@@ -44,10 +44,10 @@ public class Database extends Node implements Coordinator {
         Optional<Integer> updateCount = this.data.getUpdateCountForKey(key);
         if (this.isReadUnconfirmed(key) && value.isPresent() && updateCount.isPresent()) {
             // multicast to everyone who has requested the value
-            List<ActorRef> senders = this.unconfirmedReads.get(key);
+            ActorRef sender = this.unconfirmedReads.get(key);
             FillMessage fillMessage = new FillMessage(key, value.get(), updateCount.get());
-            Logger.fill(this.id, LoggerOperationType.MULTICAST, key, value.get(), 0, updateCount.get(), 0);
-            this.multicast(fillMessage, senders);
+            Logger.fill(this.id, LoggerOperationType.SEND, key, value.get(), 0, updateCount.get(), 0);
+            sender.tell(fillMessage, this.getSelf());
             // reset the config
             this.resetReadConfig(key);
         } else {
@@ -139,8 +139,10 @@ public class Database extends Node implements Coordinator {
             Logger.error(this.id, LoggerType.READ, key, true, "Can't read value, because it's locked");
             return;
         }
+        boolean isLocked = this.data.isLocked(key);
+        boolean isUnconfirmed = this.isReadUnconfirmed(key);
         Logger.read(this.id, LoggerOperationType.RECEIVED, key, message.getUpdateCount(), this.data.getUpdateCountForKey(key).orElse(0),
-                this.data.isLocked(key), false);
+                isLocked, false, isUnconfirmed);
 
         // add read as unconfirmed
         this.addUnconfirmedReadMessage(key, this.getSender());
@@ -217,12 +219,7 @@ public class Database extends Node implements Coordinator {
 
     @Override
     protected void addUnconfirmedReadMessage(int key, ActorRef sender) {
-        if (this.unconfirmedReads.containsKey(key)) {
-            this.unconfirmedReads.get(key).add(sender);
-        } else {
-            List<ActorRef> senders = new ArrayList<>(List.of(sender));
-            this.unconfirmedReads.put(key, senders);
-        }
+        this.unconfirmedReads.put(key, sender);
     }
 
     @Override

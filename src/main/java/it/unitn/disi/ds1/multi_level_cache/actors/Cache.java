@@ -341,25 +341,31 @@ public abstract class Cache extends Node {
         CacheCrashConfig l2CrashConfig = message.getL2CrashConfig();
         this.makeSelfCrashOnReceivedIfNeeded(l1CrashConfig, l2CrashConfig);
 
-        // add sender to queue
-        this.addUnconfirmedReadMessage(key, this.getSender());
-
         int updateCount = message.getUpdateCount();
         int actorUpdateCount = this.data.getUpdateCountForKey(key).orElse(0);
         // only forward if the message update count is older, or we don't know the value
+        boolean isLocked = this.data.isLocked(key);
         boolean isOlder = updateCount > actorUpdateCount;
         boolean mustForward = isOlder || !this.data.containsKey(key);
-        Logger.read(this.id, LoggerOperationType.RECEIVED, key, updateCount, actorUpdateCount,
-                this.data.isLocked(key), mustForward);
+        boolean isUnconfirmed = this.isReadUnconfirmed(key);
+        Logger.read(this.id, LoggerOperationType.RECEIVED, key, updateCount, actorUpdateCount, isLocked, isOlder,
+                isUnconfirmed);
 
         // check if we own a more recent or an equal value
         if (mustForward) {
-            // We either don't know the value or it's older, so forward message to next
-            Logger.read(this.id, LoggerOperationType.SEND, key, updateCount, 0, false, true);
-            this.forwardReadMessageToNext(message, key);
+            if (!isUnconfirmed) {
+                // Maybe another client already requested to read this key, then only add as unconfirmed and wait for response
+                Logger.read(this.id, LoggerOperationType.SEND, key, updateCount, 0, isLocked, isOlder,
+                        false);
+                this.forwardReadMessageToNext(message, key);
+            }
+            // add sender to queue
+            this.addUnconfirmedReadMessage(key, this.getSender());
         } else {
             // response accordingly
             this.handleFill(key);
+            // add sender to queue
+            this.addUnconfirmedReadMessage(key, this.getSender());
         }
 
         this.makeSelfCrashOnProcessedIfNeeded(l1CrashConfig, l2CrashConfig);

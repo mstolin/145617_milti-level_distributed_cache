@@ -163,7 +163,9 @@ public class Client extends Node {
         this.setTimeout(readMessage, l2Cache, TimeoutType.READ);
 
         if (this.canInstantiateNewWriteConversation(key)) {
-            Logger.read(this.id, LoggerOperationType.SEND, key, readMessage.getUpdateCount(), 0, false, true);
+            boolean isLocked = this.data.isLocked(key);
+            boolean isUnconfirmed = this.isReadUnconfirmed(key);
+            Logger.read(this.id, LoggerOperationType.SEND, key, readMessage.getUpdateCount(), 0, isLocked, true, isUnconfirmed);
             l2Cache.tell(readMessage, this.getSelf());
             // set config
             this.addUnconfirmedReadMessage(key, l2Cache);
@@ -213,20 +215,24 @@ public class Client extends Node {
                     .stream().filter((actorRef -> actorRef != unreachableActor)).toList();
             ActorRef randomActor = this.getRandomActor(workingL2Caches);
 
+
+            boolean isLocked = this.data.isLocked(key);
+            boolean isUnconfirmed = this.isReadUnconfirmed(key);
             // send message
             if (isCritical) {
                 this.tellCritReadMessage(randomActor, key, l1CrashConfig, l2CrashConfig);
                 Logger.criticalRead(this.id, LoggerOperationType.RETRY, key,
                         this.data.getUpdateCountForKey(key).orElse(0),
                         this.data.getUpdateCountForKey(key).orElse(0),
-                        this.data.isLocked(key));
+                        isLocked);
             } else {
                 this.tellReadMessage(randomActor, key, l1CrashConfig, l2CrashConfig);
                 Logger.read(this.id, LoggerOperationType.RETRY, key,
                         this.data.getUpdateCountForKey(key).orElse(0),
                         this.data.getUpdateCountForKey(key).orElse(0),
-                        this.data.isLocked(key),
-                        true);
+                        isLocked,
+                        true,
+                        isUnconfirmed);
             }
             this.increaseCountForUnconfirmedReadMessage(key);
         } else {
