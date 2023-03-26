@@ -51,7 +51,32 @@ public class Main {
             /*
             READ A VALUE, MAKE L1 CRASH AFTER PROCESSED
              */
-            actorEnvironment.makeClientRead(firstClient, l211, 9, CacheCrashConfig.crashOnProcessed(0, 10000), CacheCrashConfig.empty());
+            /*actorEnvironment.makeClientRead(firstClient, l211, 9,
+                    CacheCrashConfig.crashOnReceive(0, 10000), CacheCrashConfig.empty());*/
+
+            /*
+            READ, TWO DIFFERENT CLIENTS AT THE SAME TIME, SAME L2
+             */
+            /*actorEnvironment.makeClientRead(firstClient, l211, 9);
+            actorEnvironment.makeClientRead(secondClient, l211, 9);*/
+
+            /*
+            READ DIFFERENT VALUE, TWO DIFFERENT CLIENTS AT THE SAME TIME, SAME L2
+             */
+            actorEnvironment.makeClientRead(firstClient, l211, 9);
+            actorEnvironment.makeClientRead(secondClient, l211, 3);
+
+            /*
+            READ, TWO DIFFERENT CLIENTS AT THE SAME TIME, DIFFERENT L2, SAME L1
+             */
+            /*actorEnvironment.makeClientRead(firstClient, l211, 9);
+            actorEnvironment.makeClientRead(secondClient, l212, 9);*/
+
+            /*
+            READ, TWO DIFFERENT CLIENTS AT THE SAME TIME, DIFFERENT L2, DIFFERENT L1
+             */
+            /*actorEnvironment.makeClientRead(firstClient, l211, 9);
+            actorEnvironment.makeClientRead(secondClient, l221, 9);*/
 
             /*
             READ A VALUE FROM SAME L2
@@ -62,7 +87,7 @@ public class Main {
             actorEnvironment.makeClientRead(firstClient, l211, 3);*/
 
             /*
-            READ A VALUE FROM TWICE FROM DIFFERENT L2 BUT SAME L1
+            READ A DIFFERENT VALUE FROM TWICE FROM DIFFERENT L2 BUT SAME L1
              */
             /*sleepAndDelimiter(2000);
             actorEnvironment.makeClientRead(firstClient, l211, 5);
