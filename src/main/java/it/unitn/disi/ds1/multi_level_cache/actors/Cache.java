@@ -38,19 +38,11 @@ public abstract class Cache extends Node {
         this.scheduleMessageToSelf(crashMessage, crashAfter);
     }
 
-    private void makeSelfCrashOnReceivedIfNeeded(CacheCrashConfig l1CrashConfig, CacheCrashConfig l2CrashConfig) {
-        if (this.isL1Cache() && l1CrashConfig.isCrashOnReceive()) {
-            this.makeSelfCrash(l1CrashConfig.getCrashAfterOnReceive(), l1CrashConfig.getRecoverAfterOnReceive());
-        } else if (!this.isL1Cache() && l2CrashConfig.isCrashOnReceive()) {
-            this.makeSelfCrash(l2CrashConfig.getCrashAfterOnReceive(), l2CrashConfig.getRecoverAfterOnReceive());
-        }
-    }
-
-    private void makeSelfCrashOnProcessedIfNeeded(CacheCrashConfig l1CrashConfig, CacheCrashConfig l2CrashConfig) {
-        if (this.isL1Cache() && l1CrashConfig.isCrashOnProcessed()) {
-            this.makeSelfCrash(l1CrashConfig.getCrashAfterOnProcessed(), l1CrashConfig.getRecoverAfterOnProcessed());
-        } else if (!this.isL1Cache() && l2CrashConfig.isCrashOnProcessed()) {
-            this.makeSelfCrash(l2CrashConfig.getCrashAfterOnProcessed(), l2CrashConfig.getRecoverAfterOnProcessed());
+    private void makeSelfCrashIfNeeded(CacheCrashConfig l1CrashConfig, CacheCrashConfig l2CrashConfig) {
+        if (this.isL1Cache() && l1CrashConfig.mustCrash()) {
+            this.makeSelfCrash(l1CrashConfig.getCrashDelayMillis(), l1CrashConfig.getRecoverDelayMillis());
+        } else if (!this.isL1Cache() && l2CrashConfig.mustCrash()) {
+            this.makeSelfCrash(l2CrashConfig.getCrashDelayMillis(), l2CrashConfig.getRecoverDelayMillis());
         }
     }
 
@@ -225,7 +217,7 @@ public abstract class Cache extends Node {
         // make crash
         CacheCrashConfig l1CrashConfig = message.getL1CrashConfig();
         CacheCrashConfig l2CrashConfig = message.getL2CrashConfig();
-        this.makeSelfCrashOnReceivedIfNeeded(l1CrashConfig, l2CrashConfig);
+        this.makeSelfCrashIfNeeded(l1CrashConfig, l2CrashConfig);
 
         // lock
         this.data.lockValueForKey(key);
@@ -234,8 +226,6 @@ public abstract class Cache extends Node {
         // forward to next
         Logger.write(this.id, LoggerOperationType.SEND, key, value, isLocked);
         this.forwardMessageToNext(message, TimeoutType.WRITE);
-
-        this.makeSelfCrashOnProcessedIfNeeded(l1CrashConfig, l2CrashConfig);
     }
 
     private void onCritWriteMessage(CritWriteMessage message) {
@@ -250,11 +240,9 @@ public abstract class Cache extends Node {
         // make crash
         CacheCrashConfig l1CrashConfig = message.getL1CrashConfig();
         CacheCrashConfig l2CrashConfig = message.getL2CrashConfig();
-        this.makeSelfCrashOnReceivedIfNeeded(l1CrashConfig, l2CrashConfig);
+        this.makeSelfCrashIfNeeded(l1CrashConfig, l2CrashConfig);
 
         this.handleCritWriteMessage(message);
-
-        this.makeSelfCrashOnProcessedIfNeeded(l1CrashConfig, l2CrashConfig);
     }
 
     private void onCritWriteRequestMessage(CritWriteRequestMessage message) {
@@ -339,7 +327,7 @@ public abstract class Cache extends Node {
         // make crash
         CacheCrashConfig l1CrashConfig = message.getL1CrashConfig();
         CacheCrashConfig l2CrashConfig = message.getL2CrashConfig();
-        this.makeSelfCrashOnReceivedIfNeeded(l1CrashConfig, l2CrashConfig);
+        this.makeSelfCrashIfNeeded(l1CrashConfig, l2CrashConfig);
 
         int updateCount = message.getUpdateCount();
         int actorUpdateCount = this.data.getUpdateCountForKey(key).orElse(0);
@@ -367,8 +355,6 @@ public abstract class Cache extends Node {
             // add sender to queue
             this.addUnconfirmedReadMessage(key, this.getSender());
         }
-
-        this.makeSelfCrashOnProcessedIfNeeded(l1CrashConfig, l2CrashConfig);
     }
 
     private void onCritReadMessage(CritReadMessage message) {
@@ -383,7 +369,7 @@ public abstract class Cache extends Node {
         // make crash
         CacheCrashConfig l1CrashConfig = message.getL1CrashConfig();
         CacheCrashConfig l2CrashConfig = message.getL2CrashConfig();
-        this.makeSelfCrashOnReceivedIfNeeded(l1CrashConfig, l2CrashConfig);
+        this.makeSelfCrashIfNeeded(l1CrashConfig, l2CrashConfig);
 
         // add as unconfirmed
         this.addUnconfirmedReadMessage(key, this.getSender());
@@ -396,8 +382,6 @@ public abstract class Cache extends Node {
         // Forward to next
         Logger.criticalRead(this.id, LoggerOperationType.SEND, key, updateCount, 0, this.data.isLocked(key));
         this.forwardCritReadMessageToNext(message, key);
-
-        this.makeSelfCrashOnProcessedIfNeeded(l1CrashConfig, l2CrashConfig);
     }
 
     /**

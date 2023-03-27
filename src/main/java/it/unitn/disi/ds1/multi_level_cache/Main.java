@@ -49,10 +49,10 @@ public class Main {
             actorEnvironment.makeClientRead(firstClient, l211, 9);*/
 
             /*
-            READ A VALUE, MAKE L1 CRASH AFTER PROCESSED
+            READ A VALUE, MAKE L1 CRASH AFTER RECEIVED
              */
-            /*actorEnvironment.makeClientRead(firstClient, l211, 9,
-                    CacheCrashConfig.crashOnReceive(0, 10000), CacheCrashConfig.empty());*/
+            actorEnvironment.makeClientRead(firstClient, l211, 9,
+                    CacheCrashConfig.create(0, 10000), CacheCrashConfig.empty());
 
             /*
             READ, TWO DIFFERENT CLIENTS AT THE SAME TIME, SAME L2
@@ -63,8 +63,8 @@ public class Main {
             /*
             READ DIFFERENT VALUE, TWO DIFFERENT CLIENTS AT THE SAME TIME, SAME L2
              */
-            actorEnvironment.makeClientRead(firstClient, l211, 9);
-            actorEnvironment.makeClientRead(secondClient, l211, 3);
+            /*actorEnvironment.makeClientRead(firstClient, l211, 9);
+            actorEnvironment.makeClientRead(secondClient, l211, 3);*/
 
             /*
             READ, TWO DIFFERENT CLIENTS AT THE SAME TIME, DIFFERENT L2, SAME L1
