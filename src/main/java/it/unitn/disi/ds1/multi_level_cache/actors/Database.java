@@ -74,6 +74,7 @@ public class Database extends Node implements Coordinator {
         if (!this.canInstantiateNewWriteConversation(key)) {
             Logger.error(this.id, LoggerType.WRITE, key, true,
                     "Can't write value, because key is locked or unconfirmed");
+            this.getSender().tell(ErrorMessage.lockedKey(key, TimeoutType.WRITE), this.getSelf());
             return;
         }
 
@@ -110,6 +111,7 @@ public class Database extends Node implements Coordinator {
         if (!this.canInstantiateNewWriteConversation(key)) {
             Logger.error(this.id, LoggerType.CRITICAL_WRITE, key, true,
                     "Can't write value, because key is locked or unconfirmed");
+            this.getSender().tell(ErrorMessage.lockedKey(key, TimeoutType.CRIT_WRITE), this.getSelf());
             return;
         }
 
@@ -134,9 +136,16 @@ public class Database extends Node implements Coordinator {
     private void onReadMessage(ReadMessage message) {
         int key = message.getKey();
 
+        if (!this.data.containsKey(key)) {
+            Logger.error(this.id, LoggerType.READ, key, false, String.format("Can't read, because key %d is unknown", key));
+            this.getSender().tell(ErrorMessage.unknownKey(key, TimeoutType.READ), this.getSelf());
+            return;
+        }
+
         if (!this.canInstantiateNewReadConversation(key)) {
             // force timeout
             Logger.error(this.id, LoggerType.READ, key, true, "Can't read value, because it's locked");
+            this.getSender().tell(ErrorMessage.lockedKey(key, TimeoutType.READ), this.getSelf());
             return;
         }
         boolean isLocked = this.data.isLocked(key);
@@ -154,9 +163,17 @@ public class Database extends Node implements Coordinator {
 
     private void onCritReadMessage(CritReadMessage message) {
         int key = message.getKey();
+
+        if (!this.data.containsKey(key)) {
+            Logger.error(this.id, LoggerType.CRITICAL_READ, key, false, String.format("Can't read, because key %d is unknown", key));
+            this.getSender().tell(ErrorMessage.unknownKey(key, TimeoutType.CRIT_READ), this.getSelf());
+            return;
+        }
+
         if (!this.canInstantiateNewReadConversation(key)) {
             // force timeout
             Logger.error(this.id, LoggerType.CRITICAL_READ, key, true, "Can't read value, because it's locked");
+            this.getSender().tell(ErrorMessage.lockedKey(key, TimeoutType.CRIT_READ), this.getSelf());
             return;
         }
 

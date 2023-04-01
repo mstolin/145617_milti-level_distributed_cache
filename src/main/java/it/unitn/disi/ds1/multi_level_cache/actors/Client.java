@@ -4,6 +4,7 @@ import akka.actor.ActorRef;
 import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.CacheCrashConfig;
+import it.unitn.disi.ds1.multi_level_cache.messages.utils.ErrorType;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerOperationType;
@@ -443,6 +444,19 @@ public class Client extends Node {
         }
     }
 
+    private void onErrorMessage(ErrorMessage message) {
+        ErrorType errorType = message.getErrorType();
+        TimeoutType messageType = message.getMessageType();
+        int key = message.getKey();
+        Logger.error(this.id, LoggerType.READ, message.getKey(), false, "RECEIVED AN ERROR MESSAGE");
+
+        if (messageType == TimeoutType.READ || messageType == TimeoutType.CRIT_READ) {
+            this.resetReadConfig(key);
+        } else if (messageType == TimeoutType.WRITE || messageType == TimeoutType.CRIT_WRITE) {
+            this.resetWriteConfig();
+        }
+    }
+
     @Override
     protected void addUnconfirmedReadMessage(int key, ActorRef sender) {
         if (!this.unconfirmedReads.containsKey(key)) {
@@ -475,6 +489,7 @@ public class Client extends Node {
                 .match(InstantiateReadMessage.class, this::onInstantiateReadMessage)
                 .match(ReadReplyMessage.class, this::onReadReplyMessage)
                 .match(TimeoutMessage.class, this::onTimeoutMessage)
+                .match(ErrorMessage.class, this::onErrorMessage)
                 .build();
     }
 

@@ -66,6 +66,8 @@ public abstract class Cache extends Node {
 
     protected abstract void handleCritWriteCommitMessage(CritWriteCommitMessage message);
 
+    protected abstract void handleErrorMessage(ErrorMessage message);
+
     protected abstract boolean isCritWriteOk(int key);
 
     protected abstract boolean isL1Cache();
@@ -210,7 +212,7 @@ public abstract class Cache extends Node {
         Logger.write(this.id, LoggerOperationType.RECEIVED, key, value, isLocked);
 
         if (!this.canInstantiateNewWriteConversation(key)) {
-            // Can't do anything
+            this.getSender().tell(ErrorMessage.lockedKey(key, TimeoutType.WRITE), this.getSelf());
             return;
         }
 
@@ -233,7 +235,7 @@ public abstract class Cache extends Node {
         Logger.criticalWrite(this.id, LoggerOperationType.RECEIVED, key, message.getValue(), this.data.isLocked(key));
 
         if (!this.canInstantiateNewWriteConversation(key)) {
-            // Can't do anything
+            this.getSender().tell(ErrorMessage.lockedKey(key, TimeoutType.CRIT_WRITE), this.getSelf());
             return;
         }
 
@@ -321,6 +323,7 @@ public abstract class Cache extends Node {
         if (!this.canInstantiateNewReadConversation(key)) {
             // Not allowed to handle received message -> time out
             Logger.error(this.id, LoggerType.READ, key, true, "Can't read value, because it's locked");
+            this.getSender().tell(ErrorMessage.lockedKey(key, TimeoutType.READ), this.getSelf());
             return;
         }
 
@@ -363,6 +366,7 @@ public abstract class Cache extends Node {
         if (!this.canInstantiateNewReadConversation(key)) {
             // Not allowed to handle received message -> time out
             Logger.error(this.id, LoggerType.CRITICAL_READ, key, true, "Can't read value, because it's locked");
+            this.getSender().tell(ErrorMessage.lockedKey(key, TimeoutType.CRIT_READ), this.getSelf());
             return;
         }
 
@@ -439,6 +443,10 @@ public abstract class Cache extends Node {
         Logger.flush(this.id, LoggerOperationType.RECEIVED);
     }
 
+    private void onErrorMessage(ErrorMessage message) {
+        this.handleErrorMessage(message);
+    }
+
     @Override
     public Receive createReceive() {
         return this
@@ -459,6 +467,7 @@ public abstract class Cache extends Node {
                 .match(CrashMessage.class, this::onCrashMessage)
                 .match(TimeoutMessage.class, this::onTimeoutMessage)
                 .match(FlushMessage.class, this::onFlushMessage)
+                .match(ErrorMessage.class, this::onErrorMessage)
                 .build();
     }
 

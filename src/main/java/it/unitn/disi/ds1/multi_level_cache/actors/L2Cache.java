@@ -6,6 +6,7 @@ import it.unitn.disi.ds1.multi_level_cache.messages.*;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerOperationType;
+import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerType;
 
 import java.io.Serializable;
 import java.util.List;
@@ -53,9 +54,6 @@ public class L2Cache extends Cache {
     @Override
     protected void handleTimeoutMessage(TimeoutMessage message) {
         // forward message to DB, no need for timeout since DB can't timeout
-        /*
-        TODO Was ist wenn DB timeout wegen ein lock?
-         */
         if (message.getType() == TimeoutType.READ) {
             ReadMessage readMessage = (ReadMessage) message.getMessage();
             int key = readMessage.getKey();
@@ -159,6 +157,41 @@ public class L2Cache extends Cache {
 
         // reset critical write
         this.resetWriteConfig(key);
+    }
+
+    @Override
+    protected void handleErrorMessage(ErrorMessage message) {
+        TimeoutType messageType = message.getMessageType();
+        int key = message.getKey();
+
+        if (messageType == TimeoutType.WRITE && this.isWriteUnconfirmed(key)) {
+            Logger.error(this.id, LoggerType.WRITE, key, false, "Received error message");
+            // tell L2 about message
+            ActorRef client = this.unconfirmedWrites.get(key);
+            client.tell(message, this.getSelf());
+            // reset
+            this.resetWriteConfig(key);
+        } else if (messageType == TimeoutType.CRIT_WRITE && !this.isWriteUnconfirmed(key)) {
+            Logger.error(this.id, LoggerType.CRITICAL_WRITE, key, false, "Received error message");
+            // tell L2 about message
+            ActorRef client = this.unconfirmedWrites.get(key);
+            client.tell(message, this.getSelf());
+            // reset and just timeout
+            this.isPrimaryL2ForCritWrite = false;
+            this.resetWriteConfig(key);
+        } else if ((messageType == TimeoutType.READ || messageType == TimeoutType.CRIT_READ) && this.isReadUnconfirmed(key)) {
+            if (messageType == TimeoutType.READ) {
+                Logger.error(this.id, LoggerType.READ, key, false, "Received error message");
+            } else {
+                Logger.error(this.id, LoggerType.CRITICAL_READ, key, false, "Received error message");
+            }
+
+            // tell L2 about message
+            List<ActorRef> clients = this.unconfirmedReads.get(key);
+            this.multicast(message, clients);
+            // reset
+            this.resetReadConfig(key);
+        }
     }
 
     @Override

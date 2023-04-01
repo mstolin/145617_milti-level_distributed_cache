@@ -6,6 +6,7 @@ import it.unitn.disi.ds1.multi_level_cache.messages.*;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerOperationType;
+import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerType;
 
 import java.io.Serializable;
 import java.util.List;
@@ -124,6 +125,41 @@ public class L1Cache extends Cache implements Coordinator {
         Logger.criticalWriteCommit(this.id, LoggerOperationType.MULTICAST, message.getKey(), message.getValue(), 0,
                 message.getUpdateCount(), 0);
         this.multicast(message, this.l2Caches);
+    }
+
+    @Override
+    protected void handleErrorMessage(ErrorMessage message) {
+        TimeoutType messageType = message.getMessageType();
+        int key = message.getKey();
+
+        if (messageType == TimeoutType.WRITE && this.isWriteUnconfirmed(key)) {
+            Logger.error(this.id, LoggerType.WRITE, key, false, "Received error message");
+            // tell L2 about message
+            ActorRef l2Cache = this.unconfirmedWrites.get(key);
+            l2Cache.tell(message, this.getSelf());
+            // reset
+            this.resetWriteConfig(key);
+        } else if (messageType == TimeoutType.CRIT_WRITE && !this.isCritWriteRequestConfirmed) {
+            Logger.error(this.id, LoggerType.CRITICAL_WRITE, key, false, "Received error message");
+            // tell L2 about message
+            ActorRef l2Cache = this.unconfirmedWrites.get(key);
+            l2Cache.tell(message, this.getSelf());
+            // reset and just timeout
+            this.resetCritWriteConfig(key);
+            this.isCritWriteRequestConfirmed = false;
+        } else if ((messageType == TimeoutType.READ || messageType == TimeoutType.CRIT_READ) && this.isReadUnconfirmed(key)) {
+            if (messageType == TimeoutType.READ) {
+                Logger.error(this.id, LoggerType.READ, key, false, "Received error message");
+            } else {
+                Logger.error(this.id, LoggerType.CRITICAL_READ, key, false, "Received error message");
+            }
+
+            // tell L2 about message
+            List<ActorRef> l2Caches = this.unconfirmedReads.get(key);
+            this.multicast(message, l2Caches);
+            // reset
+            this.resetReadConfig(key);
+        }
     }
 
     @Override
