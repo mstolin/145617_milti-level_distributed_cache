@@ -1,6 +1,6 @@
 package it.unitn.disi.ds1.multi_level_cache.messages.utils;
 
-public enum TimeoutType {
+public enum TimeoutType { // todo rename message type
     WRITE,
     WRITE_CONFIRM,
     READ,
