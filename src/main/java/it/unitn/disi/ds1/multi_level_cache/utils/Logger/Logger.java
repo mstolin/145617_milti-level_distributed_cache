@@ -1,6 +1,6 @@
 package it.unitn.disi.ds1.multi_level_cache.utils.Logger;
 
-import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
+import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageType;
 
 public final class Logger {
 
@@ -29,7 +29,7 @@ public final class Logger {
         return operationType == LoggerOperationType.SEND || operationType == LoggerOperationType.MULTICAST || operationType == LoggerOperationType.RETRY;
     }
 
-    public static void log(LoggerType type, String id, LoggerOperationType operationType, String info) {
+    public static void log(MessageType type, String id, LoggerOperationType operationType, String info) {
         info = info == null ? "" : info;
         String msg = String.format(LOG_FORMAT, id, operationType, type, info);
         System.out.println(msg);
@@ -37,7 +37,7 @@ public final class Logger {
 
     public static void crash(String id, long recoverAfter) {
         String msg = String.format(CRASH_FORMAT, recoverAfter);
-        log(LoggerType.CRASH, id, LoggerOperationType.RECEIVED, msg);
+        log(MessageType.CRASH, id, LoggerOperationType.RECEIVED, msg);
     }
 
     public static void criticalRead(String id, LoggerOperationType operationType, int key, int msgUpdateCount, int actorUpdateCount, boolean isLocked) {
@@ -49,7 +49,7 @@ public final class Logger {
             msg = String.format(CRITICAL_READ_FORMAT_SEND, key, msgUpdateCount);
         }
 
-        log(LoggerType.CRITICAL_READ, id, operationType, msg);
+        log(MessageType.CRITICAL_READ, id, operationType, msg);
     }
 
     public static void criticalWrite(String id, LoggerOperationType operationType, int key, int value, boolean isLocked) {
@@ -61,12 +61,12 @@ public final class Logger {
             msg = String.format(WRITE_FORMAT_SEND, key, value);
         }
 
-        log(LoggerType.CRITICAL_WRITE, id, operationType, msg);
+        log(MessageType.CRITICAL_WRITE, id, operationType, msg);
     }
 
     public static void criticalWriteAbort(String id, LoggerOperationType operationType, int key) {
         String msg = String.format(CRITICAL_WRITE_ABORT_FORMAT, key);
-        log(LoggerType.CRITICAL_WRITE_ABORT, id, operationType, msg);
+        log(MessageType.CRITICAL_WRITE_ABORT, id, operationType, msg);
     }
 
     public static void criticalWriteCommit(String id, LoggerOperationType operationType, int key, int newValue, int oldValue, int newUc, int oldUc) {
@@ -78,7 +78,7 @@ public final class Logger {
             msg = String.format(FILL_FORMAT_SEND, key, newValue, newUc);
         }
 
-        log(LoggerType.CRITICAL_WRITE_COMMIT, id, operationType, msg);
+        log(MessageType.CRITICAL_WRITE_COMMIT, id, operationType, msg);
     }
 
     public static void criticalWriteRequest(String id, LoggerOperationType operationType, int key, boolean isOk) {
@@ -90,17 +90,17 @@ public final class Logger {
             msg = String.format(CRITICAL_WRITE_REQUEST_SEND, key);
         }
 
-        log(LoggerType.CRITICAL_WRITE_REQUEST, id, operationType, msg);
+        log(MessageType.CRITICAL_WRITE_REQUEST, id, operationType, msg);
     }
 
     public static void criticalWriteVote(String id, LoggerOperationType operationType, int key, boolean isOk) {
         String msg = String.format(CRITICAL_WRITE_VOTE, key, isOk);
-        log(LoggerType.CRITICAL_WRITE_VOTE, id, operationType, msg);
+        log(MessageType.CRITICAL_WRITE_VOTE, id, operationType, msg);
     }
 
-    public static void error(String id, LoggerType messageType, int key, boolean forceTimeout, String description) {
+    public static void error(String id, MessageType messageType, int key, boolean forceTimeout, String description) {
         String msg = String.format(ERROR_FORMAT, messageType, key, forceTimeout, description);
-        log(LoggerType.ERROR, id, LoggerOperationType.ERROR, msg);
+        log(MessageType.ERROR, id, LoggerOperationType.ERROR, msg);
     }
 
     public static void fill(String id, LoggerOperationType operationType, int key, int newValue, int oldValue, int newUc, int oldUc) {
@@ -112,26 +112,26 @@ public final class Logger {
             msg = String.format(FILL_FORMAT_SEND, key, newValue, newUc);
         }
 
-        log(LoggerType.FILL, id, operationType, msg);
+        log(MessageType.FILL, id, operationType, msg);
     }
 
     public static void flush(String id, LoggerOperationType operationType) {
-        log(LoggerType.FLUSH, id, operationType, null);
+        log(MessageType.FLUSH, id, operationType, null);
     }
 
     public static void initRead(String id, int key, boolean isCritical) {
         String msg = String.format(INIT_READ_FORMAT, key, isCritical);
-        log(LoggerType.INIT_READ, id, LoggerOperationType.RECEIVED, msg);
+        log(MessageType.INIT_READ, id, LoggerOperationType.RECEIVED, msg);
     }
 
     public static void initWrite(String id, int key, int value, boolean isCritical) {
         String msg = String.format(INIT_WRITE_FORMAT, key, value, isCritical);
-        log(LoggerType.INIT_WRITE, id, LoggerOperationType.RECEIVED, msg);
+        log(MessageType.INIT_WRITE, id, LoggerOperationType.RECEIVED, msg);
     }
 
     public static void join(String id, String groupName, int groupSize) {
         String msg = String.format(JOIN_FORMAT, groupName, groupSize);
-        log(LoggerType.JOIN, id, LoggerOperationType.RECEIVED, msg);
+        log(MessageType.JOIN, id, LoggerOperationType.RECEIVED, msg);
     }
 
     public static void read(String id, LoggerOperationType operationType, int key, int msgUpdateCount, int actorUpdateCount, boolean isLocked, boolean isOlder, boolean isUnconfirmed) {
@@ -143,7 +143,7 @@ public final class Logger {
             msg = String.format(READ_FORMAT_SEND, key, msgUpdateCount);
         }
 
-        log(LoggerType.READ, id, operationType, msg);
+        log(MessageType.READ, id, operationType, msg);
     }
 
     public static void readReply(String id, LoggerOperationType operationType, int key, int newValue, int oldValue, int newUc, int oldUc) {
@@ -155,11 +155,11 @@ public final class Logger {
             msg = String.format(FILL_FORMAT_SEND, key, newValue, newUc);
         }
 
-        log(LoggerType.READ_REPLY, id, operationType, msg);
+        log(MessageType.READ_REPLY, id, operationType, msg);
     }
 
     public static void recover(String id, LoggerOperationType operationType) {
-        log(LoggerType.RECOVER, id, operationType, null);
+        log(MessageType.RECOVER, id, operationType, null);
     }
 
     public static void refill(String id, LoggerOperationType operationType, int key, int newValue, int oldValue, int msgUc, int actorUc, boolean isLocked, boolean isUnconfirmed, boolean mustUpdate) {
@@ -171,12 +171,12 @@ public final class Logger {
             msg = String.format(FILL_FORMAT_SEND, key, newValue, msgUc);
         }
 
-        log(LoggerType.REFILL, id, operationType, msg);
+        log(MessageType.REFILL, id, operationType, msg);
     }
 
-    public static void timeout(String id, TimeoutType type) {
+    public static void timeout(String id, MessageType type) {
         String msg = String.format(TIMEOUT_FORMAT, type);
-        log(LoggerType.TIMEOUT, id, LoggerOperationType.RECEIVED, msg);
+        log(MessageType.TIMEOUT, id, LoggerOperationType.RECEIVED, msg);
     }
 
     public static void write(String id, LoggerOperationType operationType, int key, int value, boolean isLocked) {
@@ -188,7 +188,7 @@ public final class Logger {
             msg = String.format(WRITE_FORMAT_SEND, key, value);
         }
 
-        log(LoggerType.WRITE, id, operationType, msg);
+        log(MessageType.WRITE, id, operationType, msg);
     }
 
     public static void writeConfirm(String id, LoggerOperationType operationType, int key, int newValue, int oldValue, int newUc, int oldUc) {
@@ -200,7 +200,7 @@ public final class Logger {
             msg = String.format(FILL_FORMAT_SEND, key, newValue, newUc);
         }
 
-        log(LoggerType.WRITE_CONFIRM, id, operationType, msg);
+        log(MessageType.WRITE_CONFIRM, id, operationType, msg);
     }
 
 }

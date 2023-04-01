@@ -3,10 +3,9 @@ package it.unitn.disi.ds1.multi_level_cache.actors;
 import akka.actor.ActorRef;
 import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
-import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerOperationType;
-import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerType;
+import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageType;
 
 import java.io.Serializable;
 import java.util.List;
@@ -25,9 +24,9 @@ public class L2Cache extends Cache {
     }
 
     @Override
-    protected void forwardMessageToNext(Serializable message, TimeoutType timeoutType) {
+    protected void forwardMessageToNext(Serializable message, MessageType messageType) {
         this.mainL1Cache.tell(message, this.getSelf());
-        this.setTimeout(message, this.mainL1Cache, timeoutType);
+        this.setTimeout(message, this.mainL1Cache, messageType);
     }
 
     @Override
@@ -54,7 +53,7 @@ public class L2Cache extends Cache {
     @Override
     protected void handleTimeoutMessage(TimeoutMessage message) {
         // forward message to DB, no need for timeout since DB can't timeout
-        if (message.getType() == TimeoutType.READ) {
+        if (message.getType() == MessageType.READ) {
             ReadMessage readMessage = (ReadMessage) message.getMessage();
             int key = readMessage.getKey();
 
@@ -65,7 +64,7 @@ public class L2Cache extends Cache {
                         this.data.getUpdateCountForKey(key).orElse(0), this.data.isLocked(key), false, true);
                 this.database.tell(readMessage, this.getSelf());
             }
-        } else if (message.getType() == TimeoutType.CRIT_READ) {
+        } else if (message.getType() == MessageType.CRITICAL_READ) {
             CritReadMessage critReadMessage = (CritReadMessage) message.getMessage();
             int key = critReadMessage.getKey();
 
@@ -74,7 +73,7 @@ public class L2Cache extends Cache {
                 Logger.timeout(this.id, message.getType());
                 this.database.tell(critReadMessage, this.getSelf());
             }
-        } else if (message.getType() == TimeoutType.WRITE) {
+        } else if (message.getType() == MessageType.WRITE) {
             WriteMessage writeMessage = (WriteMessage) message.getMessage();
             int key = writeMessage.getKey();
 
@@ -83,7 +82,7 @@ public class L2Cache extends Cache {
                 Logger.write(this.id, LoggerOperationType.SEND, key, writeMessage.getValue(), this.data.isLocked(key));
                 this.database.tell(writeMessage, this.getSelf());
             }
-        } else if (message.getType() == TimeoutType.CRIT_WRITE) {
+        } else if (message.getType() == MessageType.CRITICAL_WRITE) {
             CritWriteMessage writeMessage = (CritWriteMessage) message.getMessage();
             int key = writeMessage.getKey();
 
@@ -103,7 +102,7 @@ public class L2Cache extends Cache {
         this.addUnconfirmedWrite(message.getKey(),this.getSender());
         this.isPrimaryL2ForCritWrite = true;
         // forward to L1
-        this.forwardMessageToNext(message, TimeoutType.CRIT_WRITE);
+        this.forwardMessageToNext(message, MessageType.CRITICAL_WRITE);
     }
 
     @Override
@@ -161,29 +160,29 @@ public class L2Cache extends Cache {
 
     @Override
     protected void handleErrorMessage(ErrorMessage message) {
-        TimeoutType messageType = message.getMessageType();
+        MessageType messageType = message.getMessageType();
         int key = message.getKey();
 
-        if (messageType == TimeoutType.WRITE && this.isWriteUnconfirmed(key)) {
-            Logger.error(this.id, LoggerType.WRITE, key, false, "Received error message");
+        if (messageType == MessageType.WRITE && this.isWriteUnconfirmed(key)) {
+            Logger.error(this.id, MessageType.WRITE, key, false, "Received error message");
             // tell L2 about message
             ActorRef client = this.unconfirmedWrites.get(key);
             client.tell(message, this.getSelf());
             // reset
             this.resetWriteConfig(key);
-        } else if (messageType == TimeoutType.CRIT_WRITE && !this.isWriteUnconfirmed(key)) {
-            Logger.error(this.id, LoggerType.CRITICAL_WRITE, key, false, "Received error message");
+        } else if (messageType == MessageType.CRITICAL_WRITE && !this.isWriteUnconfirmed(key)) {
+            Logger.error(this.id, MessageType.CRITICAL_WRITE, key, false, "Received error message");
             // tell L2 about message
             ActorRef client = this.unconfirmedWrites.get(key);
             client.tell(message, this.getSelf());
             // reset and just timeout
             this.isPrimaryL2ForCritWrite = false;
             this.resetWriteConfig(key);
-        } else if ((messageType == TimeoutType.READ || messageType == TimeoutType.CRIT_READ) && this.isReadUnconfirmed(key)) {
-            if (messageType == TimeoutType.READ) {
-                Logger.error(this.id, LoggerType.READ, key, false, "Received error message");
+        } else if ((messageType == MessageType.READ || messageType == MessageType.CRITICAL_READ) && this.isReadUnconfirmed(key)) {
+            if (messageType == MessageType.READ) {
+                Logger.error(this.id, MessageType.READ, key, false, "Received error message");
             } else {
-                Logger.error(this.id, LoggerType.CRITICAL_READ, key, false, "Received error message");
+                Logger.error(this.id, MessageType.CRITICAL_READ, key, false, "Received error message");
             }
 
             // tell L2 about message

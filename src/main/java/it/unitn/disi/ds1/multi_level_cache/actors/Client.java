@@ -5,10 +5,9 @@ import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.CacheCrashConfig;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.ErrorType;
-import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerOperationType;
-import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerType;
+import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageType;
 
 import java.util.*;
 
@@ -76,12 +75,12 @@ public class Client extends Node {
             WriteMessage writeMessage = new WriteMessage(key, value, l1CrashConfig, l2CrashConfig);
             l2Cache.tell(writeMessage, this.getSelf());
             // set timeout
-            this.setTimeout(writeMessage, l2Cache, TimeoutType.WRITE);
+            this.setTimeout(writeMessage, l2Cache, MessageType.WRITE);
             // set config
             this.isWaitingForWriteConfirm = true;
         } else {
             Logger.criticalWrite(this.id, LoggerOperationType.SEND, key, value, false);
-            Logger.error(this.id, LoggerType.WRITE, key, true, "Waiting for another response");
+            Logger.error(this.id, MessageType.WRITE, key, true, "Waiting for another response");
         }
     }
 
@@ -100,12 +99,12 @@ public class Client extends Node {
 
             CritWriteMessage critWriteMessage = new CritWriteMessage(key, value, l1CrashConfig, l2CrashConfig);
             // set timeout
-            this.setTimeout(critWriteMessage, l2Cache, TimeoutType.CRIT_WRITE);
+            this.setTimeout(critWriteMessage, l2Cache, MessageType.CRITICAL_WRITE);
             l2Cache.tell(critWriteMessage, this.getSelf());
             // set config
             this.isWaitingForWriteConfirm = true;
         } else {
-            Logger.error(this.id, LoggerType.CRITICAL_WRITE, key, true, "Waiting for another response");
+            Logger.error(this.id, MessageType.CRITICAL_WRITE, key, true, "Waiting for another response");
         }
     }
 
@@ -161,7 +160,7 @@ public class Client extends Node {
         ReadMessage readMessage = new ReadMessage(key, this.data.getUpdateCountForKey(key).orElse(0),
                 l1CrashConfig, l2CrashConfig);
         // set timeout
-        this.setTimeout(readMessage, l2Cache, TimeoutType.READ);
+        this.setTimeout(readMessage, l2Cache, MessageType.READ);
 
         if (this.canInstantiateNewWriteConversation(key)) {
             boolean isLocked = this.data.isLocked(key);
@@ -171,7 +170,7 @@ public class Client extends Node {
             // set config
             this.addUnconfirmedReadMessage(key, l2Cache);
         } else {
-            Logger.error(this.id, LoggerType.INIT_READ, key, true, "Waiting for another response");
+            Logger.error(this.id, MessageType.INIT_READ, key, true, "Waiting for another response");
         }
     }
 
@@ -187,7 +186,7 @@ public class Client extends Node {
         CritReadMessage critReadMessage = new CritReadMessage(key, this.data.getUpdateCountForKey(key).orElse(0),
                 l1CrashConfig, l2CrashConfig);
         // set timeout
-        this.setTimeout(critReadMessage, l2Cache, TimeoutType.CRIT_READ);
+        this.setTimeout(critReadMessage, l2Cache, MessageType.CRITICAL_READ);
 
         if (this.canInstantiateNewReadConversation(key)) {
             Logger.criticalRead(this.id, LoggerOperationType.SEND, key, critReadMessage.getUpdateCount(), 0, false);
@@ -195,7 +194,7 @@ public class Client extends Node {
             // set config
             this.addUnconfirmedReadMessage(key, l2Cache);
         } else {
-            Logger.error(this.id, LoggerType.INIT_READ, key, true, "Waiting for another response");
+            Logger.error(this.id, MessageType.INIT_READ, key, true, "Waiting for another response");
         }
     }
 
@@ -302,14 +301,14 @@ public class Client extends Node {
         boolean isCritical = message.isCritical();
 
         if (!this.canInstantiateNewWriteConversation(key)) {
-            Logger.error(this.id, LoggerType.INIT_WRITE, key, false,
+            Logger.error(this.id, MessageType.INIT_WRITE, key, false,
                     String.format("Can't write %d, waiting for another write response", value));
             return;
         }
 
         ActorRef l2Cache = message.getL2Cache();
         if (!this.l2Caches.contains(l2Cache)) {
-            Logger.error(this.id, LoggerType.INIT_WRITE, key, false, "L2 cache is unknown");
+            Logger.error(this.id, MessageType.INIT_WRITE, key, false, "L2 cache is unknown");
             return;
         }
 
@@ -363,7 +362,7 @@ public class Client extends Node {
 
         ActorRef l2Cache = message.getL2Cache();
         if (!this.l2Caches.contains(l2Cache)) {
-            Logger.error(this.id, LoggerType.INIT_READ, key, true, "L2 is unknown");
+            Logger.error(this.id, MessageType.INIT_READ, key, true, "L2 is unknown");
             return;
         }
 
@@ -401,8 +400,8 @@ public class Client extends Node {
     }
 
     private void onTimeoutMessage(TimeoutMessage message) {
-        TimeoutType type = message.getType();
-        if (type == TimeoutType.WRITE && this.isWaitingForWriteConfirm) {
+        MessageType type = message.getType();
+        if (type == MessageType.WRITE && this.isWaitingForWriteConfirm) {
             WriteMessage writeMessage = (WriteMessage) message.getMessage();
             int key = writeMessage.getKey();
             int value = writeMessage.getValue();
@@ -412,7 +411,7 @@ public class Client extends Node {
             // try again
             this.retryWriteMessage(message.getUnreachableActor(), key, value, false, CacheCrashConfig.empty(),
                     CacheCrashConfig.empty());
-        } else if (type == TimeoutType.READ) {
+        } else if (type == MessageType.READ) {
             ReadMessage readMessage = (ReadMessage) message.getMessage();
             int key = readMessage.getKey();
 
@@ -422,7 +421,7 @@ public class Client extends Node {
                 this.retryReadMessage(message.getUnreachableActor(), key, false, CacheCrashConfig.empty(),
                         CacheCrashConfig.empty());
             }
-        } else if (type == TimeoutType.CRIT_READ) {
+        } else if (type == MessageType.CRITICAL_READ) {
             CritReadMessage critReadMessage = (CritReadMessage) message.getMessage();
             int key = critReadMessage.getKey();
 
@@ -431,7 +430,7 @@ public class Client extends Node {
                 this.retryReadMessage(message.getUnreachableActor(), key, true, CacheCrashConfig.empty(),
                         CacheCrashConfig.empty());
             }
-        } else if (type == TimeoutType.CRIT_WRITE && this.isWaitingForWriteConfirm) {
+        } else if (type == MessageType.CRITICAL_WRITE && this.isWaitingForWriteConfirm) {
             CritWriteMessage critWriteMessage = (CritWriteMessage) message.getMessage();
             int key = critWriteMessage.getKey();
             int value = critWriteMessage.getValue();
@@ -446,13 +445,13 @@ public class Client extends Node {
 
     private void onErrorMessage(ErrorMessage message) {
         ErrorType errorType = message.getErrorType();
-        TimeoutType messageType = message.getMessageType();
+        MessageType messageType = message.getMessageType();
         int key = message.getKey();
-        Logger.error(this.id, LoggerType.READ, message.getKey(), false, "RECEIVED AN ERROR MESSAGE");
+        Logger.error(this.id, MessageType.READ, message.getKey(), false, "RECEIVED AN ERROR MESSAGE");
 
-        if (messageType == TimeoutType.READ || messageType == TimeoutType.CRIT_READ) {
+        if (messageType == MessageType.READ || messageType == MessageType.CRITICAL_READ) {
             this.resetReadConfig(key);
-        } else if (messageType == TimeoutType.WRITE || messageType == TimeoutType.CRIT_WRITE) {
+        } else if (messageType == MessageType.WRITE || messageType == MessageType.CRITICAL_WRITE) {
             this.resetWriteConfig();
         }
     }

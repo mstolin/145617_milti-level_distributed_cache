@@ -3,10 +3,9 @@ package it.unitn.disi.ds1.multi_level_cache.actors;
 import akka.actor.ActorRef;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.CacheCrashConfig;
-import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerOperationType;
-import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerType;
+import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageType;
 
 import java.io.Serializable;
 import java.util.*;
@@ -48,7 +47,7 @@ public abstract class Cache extends Node {
 
     protected abstract void handleFill(int key);
 
-    protected abstract void forwardMessageToNext(Serializable message, TimeoutType timeoutType);
+    protected abstract void forwardMessageToNext(Serializable message, MessageType messageType);
 
     protected abstract void handleWriteMessage(WriteMessage message);
 
@@ -176,11 +175,11 @@ public abstract class Cache extends Node {
     }
 
     private void forwardReadMessageToNext(Serializable message, int key) {
-        this.forwardMessageToNext(message, TimeoutType.READ);
+        this.forwardMessageToNext(message, MessageType.READ);
     }
 
     private void forwardCritReadMessageToNext(Serializable message, int key) {
-        this.forwardMessageToNext(message, TimeoutType.CRIT_READ);
+        this.forwardMessageToNext(message, MessageType.CRITICAL_READ);
     }
 
     private void onJoinDatabase(JoinDatabaseMessage message) {
@@ -212,7 +211,7 @@ public abstract class Cache extends Node {
         Logger.write(this.id, LoggerOperationType.RECEIVED, key, value, isLocked);
 
         if (!this.canInstantiateNewWriteConversation(key)) {
-            this.getSender().tell(ErrorMessage.lockedKey(key, TimeoutType.WRITE), this.getSelf());
+            this.getSender().tell(ErrorMessage.lockedKey(key, MessageType.WRITE), this.getSelf());
             return;
         }
 
@@ -227,7 +226,7 @@ public abstract class Cache extends Node {
         this.addUnconfirmedWrite(message.getKey(), this.getSender());
         // forward to next
         Logger.write(this.id, LoggerOperationType.SEND, key, value, isLocked);
-        this.forwardMessageToNext(message, TimeoutType.WRITE);
+        this.forwardMessageToNext(message, MessageType.WRITE);
     }
 
     private void onCritWriteMessage(CritWriteMessage message) {
@@ -235,7 +234,7 @@ public abstract class Cache extends Node {
         Logger.criticalWrite(this.id, LoggerOperationType.RECEIVED, key, message.getValue(), this.data.isLocked(key));
 
         if (!this.canInstantiateNewWriteConversation(key)) {
-            this.getSender().tell(ErrorMessage.lockedKey(key, TimeoutType.CRIT_WRITE), this.getSelf());
+            this.getSender().tell(ErrorMessage.lockedKey(key, MessageType.CRITICAL_WRITE), this.getSelf());
             return;
         }
 
@@ -322,8 +321,8 @@ public abstract class Cache extends Node {
 
         if (!this.canInstantiateNewReadConversation(key)) {
             // Not allowed to handle received message -> time out
-            Logger.error(this.id, LoggerType.READ, key, true, "Can't read value, because it's locked");
-            this.getSender().tell(ErrorMessage.lockedKey(key, TimeoutType.READ), this.getSelf());
+            Logger.error(this.id, MessageType.READ, key, true, "Can't read value, because it's locked");
+            this.getSender().tell(ErrorMessage.lockedKey(key, MessageType.READ), this.getSelf());
             return;
         }
 
@@ -365,8 +364,8 @@ public abstract class Cache extends Node {
 
         if (!this.canInstantiateNewReadConversation(key)) {
             // Not allowed to handle received message -> time out
-            Logger.error(this.id, LoggerType.CRITICAL_READ, key, true, "Can't read value, because it's locked");
-            this.getSender().tell(ErrorMessage.lockedKey(key, TimeoutType.CRIT_READ), this.getSelf());
+            Logger.error(this.id, MessageType.CRITICAL_READ, key, true, "Can't read value, because it's locked");
+            this.getSender().tell(ErrorMessage.lockedKey(key, MessageType.CRITICAL_READ), this.getSelf());
             return;
         }
 

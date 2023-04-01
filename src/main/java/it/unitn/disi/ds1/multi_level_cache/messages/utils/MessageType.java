@@ -1,6 +1,6 @@
-package it.unitn.disi.ds1.multi_level_cache.utils.Logger;
+package it.unitn.disi.ds1.multi_level_cache.messages.utils;
 
-public enum LoggerType {
+public enum MessageType {
 
     WRITE,
     READ,

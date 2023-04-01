@@ -3,10 +3,9 @@ package it.unitn.disi.ds1.multi_level_cache.actors;
 import akka.actor.ActorRef;
 import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
-import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerOperationType;
-import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerType;
+import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageType;
 
 import java.util.*;
 
@@ -51,7 +50,7 @@ public class Database extends Node implements Coordinator {
             // reset the config
             this.resetReadConfig(key);
         } else {
-            Logger.error(this.id, LoggerType.READ, key, true, "Key is unknown");
+            Logger.error(this.id, MessageType.READ, key, true, "Key is unknown");
             // todo send error response
         }
     }
@@ -72,9 +71,9 @@ public class Database extends Node implements Coordinator {
         boolean isLocked = this.data.isLocked(key);
 
         if (!this.canInstantiateNewWriteConversation(key)) {
-            Logger.error(this.id, LoggerType.WRITE, key, true,
+            Logger.error(this.id, MessageType.WRITE, key, true,
                     "Can't write value, because key is locked or unconfirmed");
-            this.getSender().tell(ErrorMessage.lockedKey(key, TimeoutType.WRITE), this.getSelf());
+            this.getSender().tell(ErrorMessage.lockedKey(key, MessageType.WRITE), this.getSelf());
             return;
         }
 
@@ -109,9 +108,9 @@ public class Database extends Node implements Coordinator {
         boolean isLocked = this.data.isLocked(key);
 
         if (!this.canInstantiateNewWriteConversation(key)) {
-            Logger.error(this.id, LoggerType.CRITICAL_WRITE, key, true,
+            Logger.error(this.id, MessageType.CRITICAL_WRITE, key, true,
                     "Can't write value, because key is locked or unconfirmed");
-            this.getSender().tell(ErrorMessage.lockedKey(key, TimeoutType.CRIT_WRITE), this.getSelf());
+            this.getSender().tell(ErrorMessage.lockedKey(key, MessageType.CRITICAL_WRITE), this.getSelf());
             return;
         }
 
@@ -123,7 +122,7 @@ public class Database extends Node implements Coordinator {
         CritWriteRequestMessage critWriteRequestMessage = new CritWriteRequestMessage(key);
         Logger.criticalWriteRequest(this.id, LoggerOperationType.MULTICAST, key, true);
         this.multicast(critWriteRequestMessage, this.l1Caches);
-        this.setMulticastTimeout(critWriteRequestMessage, TimeoutType.CRIT_WRITE_REQUEST);
+        this.setMulticastTimeout(critWriteRequestMessage, MessageType.CRITICAL_WRITE_REQUEST);
         // set crit write config
         this.acCoordinator.setCritWriteConfig(value);
     }
@@ -137,15 +136,15 @@ public class Database extends Node implements Coordinator {
         int key = message.getKey();
 
         if (!this.data.containsKey(key)) {
-            Logger.error(this.id, LoggerType.READ, key, false, String.format("Can't read, because key %d is unknown", key));
-            this.getSender().tell(ErrorMessage.unknownKey(key, TimeoutType.READ), this.getSelf());
+            Logger.error(this.id, MessageType.READ, key, false, String.format("Can't read, because key %d is unknown", key));
+            this.getSender().tell(ErrorMessage.unknownKey(key, MessageType.READ), this.getSelf());
             return;
         }
 
         if (!this.canInstantiateNewReadConversation(key)) {
             // force timeout
-            Logger.error(this.id, LoggerType.READ, key, true, "Can't read value, because it's locked");
-            this.getSender().tell(ErrorMessage.lockedKey(key, TimeoutType.READ), this.getSelf());
+            Logger.error(this.id, MessageType.READ, key, true, "Can't read value, because it's locked");
+            this.getSender().tell(ErrorMessage.lockedKey(key, MessageType.READ), this.getSelf());
             return;
         }
         boolean isLocked = this.data.isLocked(key);
@@ -165,15 +164,15 @@ public class Database extends Node implements Coordinator {
         int key = message.getKey();
 
         if (!this.data.containsKey(key)) {
-            Logger.error(this.id, LoggerType.CRITICAL_READ, key, false, String.format("Can't read, because key %d is unknown", key));
-            this.getSender().tell(ErrorMessage.unknownKey(key, TimeoutType.CRIT_READ), this.getSelf());
+            Logger.error(this.id, MessageType.CRITICAL_READ, key, false, String.format("Can't read, because key %d is unknown", key));
+            this.getSender().tell(ErrorMessage.unknownKey(key, MessageType.CRITICAL_READ), this.getSelf());
             return;
         }
 
         if (!this.canInstantiateNewReadConversation(key)) {
             // force timeout
-            Logger.error(this.id, LoggerType.CRITICAL_READ, key, true, "Can't read value, because it's locked");
-            this.getSender().tell(ErrorMessage.lockedKey(key, TimeoutType.CRIT_READ), this.getSelf());
+            Logger.error(this.id, MessageType.CRITICAL_READ, key, true, "Can't read value, because it's locked");
+            this.getSender().tell(ErrorMessage.lockedKey(key, MessageType.CRITICAL_READ), this.getSelf());
             return;
         }
 
@@ -253,9 +252,9 @@ public class Database extends Node implements Coordinator {
     }
 
     private void onTimeoutMessage(TimeoutMessage message) {
-        if (message.getType() == TimeoutType.CRIT_WRITE_REQUEST && this.acCoordinator.hasRequestedCritWrite()) {
+        if (message.getType() == MessageType.CRITICAL_WRITE_REQUEST && this.acCoordinator.hasRequestedCritWrite()) {
             CritWriteRequestMessage requestMessage = (CritWriteRequestMessage) message.getMessage();
-            Logger.timeout(this.id, TimeoutType.CRIT_WRITE_REQUEST);
+            Logger.timeout(this.id, MessageType.CRITICAL_WRITE_REQUEST);
             this.abortCritWrite(requestMessage.getKey());
         }
     }

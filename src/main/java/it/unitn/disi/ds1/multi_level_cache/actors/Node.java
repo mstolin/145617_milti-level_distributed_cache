@@ -4,7 +4,7 @@ import akka.actor.AbstractActor;
 import akka.actor.ActorRef;
 import it.unitn.disi.ds1.multi_level_cache.actors.utils.DataStore;
 import it.unitn.disi.ds1.multi_level_cache.messages.TimeoutMessage;
-import it.unitn.disi.ds1.multi_level_cache.messages.utils.TimeoutType;
+import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageType;
 
 import java.io.Serializable;
 import java.time.Duration;
@@ -103,13 +103,13 @@ public abstract class Node extends AbstractActor {
     /**
      * Sends a TimeoutMessage to itself, after the given duration.
      */
-    protected void setTimeout(Serializable message, ActorRef receiver, TimeoutType timeoutType) {
-        TimeoutMessage timeoutMessage = new TimeoutMessage(message, receiver, timeoutType);
+    protected void setTimeout(Serializable message, ActorRef receiver, MessageType messageType) {
+        TimeoutMessage timeoutMessage = new TimeoutMessage(message, receiver, messageType);
         this.scheduleMessageToSelf(timeoutMessage, this.getTimeoutSeconds());
     }
 
-    protected void setMulticastTimeout(Serializable message, TimeoutType timeoutType) {
-        TimeoutMessage timeoutMessage = new TimeoutMessage(message, ActorRef.noSender(), timeoutType);
+    protected void setMulticastTimeout(Serializable message, MessageType messageType) {
+        TimeoutMessage timeoutMessage = new TimeoutMessage(message, ActorRef.noSender(), messageType);
         this.scheduleMessageToSelf(timeoutMessage, this.getTimeoutSeconds());
     }
 
