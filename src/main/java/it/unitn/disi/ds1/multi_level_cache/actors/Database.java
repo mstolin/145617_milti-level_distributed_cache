@@ -40,13 +40,13 @@ public class Database extends Node implements Coordinator {
     private void setDefaultData(int size) throws IllegalAccessException {
         for (int i = 0; i < size; i++) {
             int value = new Random().nextInt(1000);
-            this.data.setValueForKey(i, value, 1);
+            this.setValue(i, value, 1);
         }
     }
 
     private void responseFill(int key) {
-        Optional<Integer> value = this.data.getValueForKey(key);
-        Optional<Integer> updateCount = this.data.getUpdateCountForKey(key);
+        Optional<Integer> value = this.getValue(key);
+        Optional<Integer> updateCount = this.getUpdateCount(key);
         if (this.isReadUnconfirmed(key) && value.isPresent() && updateCount.isPresent()) {
             // multicast to everyone who has requested the value
             ActorRef sender = this.getActorForUnconfirmedRead(key);
@@ -74,7 +74,7 @@ public class Database extends Node implements Coordinator {
     private void onWriteMessage(WriteMessage message) {
         int key = message.getKey();
         int value = message.getValue();
-        boolean isLocked = this.data.isLocked(key);
+        boolean isLocked = this.isKeyLocked(key);
 
         if (this.isKeyLocked(key) || this.isWriteUnconfirmed(key)) {
             Logger.error(this.id, MessageType.WRITE, key, true,
@@ -87,13 +87,13 @@ public class Database extends Node implements Coordinator {
 
         try {
             // write data
-            this.data.setValueForKey(key, value);
+            this.setValue(key, value);
 
             // Lock data until write confirm and refill has been sent
-            this.data.lockValueForKey(key);
+            this.lockKey(key);
 
             // we can be sure it exists, since we set value previously
-            int updateCount = this.data.getUpdateCountForKey(key).get();
+            int updateCount = this.getUpdateCountOrElse(key);
 
             // Send refill to all other L1 caches
             // todo make own method
@@ -102,7 +102,7 @@ public class Database extends Node implements Coordinator {
             this.multicast(refillMessage, this.l1Caches);
 
             // Unlock value
-            this.data.unLockValueForKey(key);
+            this.unlockKey(key);
         } catch(IllegalAccessException e) {
             // force timeout, either locked by another write or critical write
         }
@@ -111,7 +111,7 @@ public class Database extends Node implements Coordinator {
     private void onCritWriteMessage(CritWriteMessage message) {
         int key = message.getKey();
         int value = message.getValue();
-        boolean isLocked = this.data.isLocked(key);
+        boolean isLocked = this.isKeyLocked(key);
 
         if (this.isKeyLocked(key) || this.isWriteUnconfirmed(key)) {
             Logger.error(this.id, MessageType.CRITICAL_WRITE, key, true,
@@ -123,7 +123,7 @@ public class Database extends Node implements Coordinator {
         Logger.criticalWrite(this.id, LoggerOperationType.RECEIVED, key, value, isLocked);
 
         // lock value from now on
-        this.data.lockValueForKey(key);
+        this.lockKey(key);
         // Multicast vote request to all L1s // todo make own method
         CritWriteRequestMessage critWriteRequestMessage = new CritWriteRequestMessage(key);
         Logger.criticalWriteRequest(this.id, LoggerOperationType.MULTICAST, key, true);
@@ -153,15 +153,15 @@ public class Database extends Node implements Coordinator {
             this.getSender().tell(ErrorMessage.lockedKey(key, MessageType.READ), this.getSelf());
             return;
         }
-        boolean isLocked = this.data.isLocked(key);
+        boolean isLocked = this.isKeyLocked(key);
         boolean isUnconfirmed = this.isReadUnconfirmed(key);
-        Logger.read(this.id, LoggerOperationType.RECEIVED, key, message.getUpdateCount(), this.data.getUpdateCountForKey(key).orElse(0),
+        Logger.read(this.id, LoggerOperationType.RECEIVED, key, message.getUpdateCount(), this.getUpdateCountOrElse(key),
                 isLocked, false, isUnconfirmed);
 
         // add read as unconfirmed
         this.addUnconfirmedRead(key, this.getSender());
         // lock value until fill has been sent
-        this.data.lockValueForKey(key);
+        this.lockKey(key);
         // send fill message
         this.responseFill(key);
     }
@@ -183,12 +183,12 @@ public class Database extends Node implements Coordinator {
         }
 
         Logger.criticalRead(this.id, LoggerOperationType.RECEIVED, key, message.getUpdateCount(),
-                this.data.getUpdateCountForKey(key).orElse(0), this.data.isLocked(key));
+                this.getUpdateCountOrElse(key), this.isKeyLocked(key));
 
         // add read as unconfirmed
         this.addUnconfirmedRead(key, this.getSender());
         // lock value until fill has been sent
-        this.data.lockValueForKey(key); // todo remove
+        this.lockKey(key); // todo remove
         // send fill message
         this.responseFill(key);
     }
@@ -204,11 +204,11 @@ public class Database extends Node implements Coordinator {
         this.acCoordinator.resetCritWriteConfig();
 
         // update value
-        this.data.unLockValueForKey(key);
+        this.unlockKey(key);
         try {
-            this.data.setValueForKey(key, value);
+            this.setValue(key, value);
 
-            int updateCount = this.data.getUpdateCountForKey(key).get();
+            int updateCount = this.getUpdateCountOrElse(key);
             // now all participants have locked the data, then send a commit message to update the value
             // todo make own method
             CritWriteCommitMessage commitMessage = new CritWriteCommitMessage(key, value, updateCount);
@@ -222,7 +222,7 @@ public class Database extends Node implements Coordinator {
     @Override
     public void abortCritWrite(int key) {
         this.acCoordinator.resetCritWriteConfig();
-        this.data.unLockValueForKey(key);
+        this.unlockKey(key);
         // multicast abort message
         CritWriteAbortMessage abortMessage = new CritWriteAbortMessage(key);
         Logger.criticalWriteAbort(this.id, LoggerOperationType.MULTICAST, key);

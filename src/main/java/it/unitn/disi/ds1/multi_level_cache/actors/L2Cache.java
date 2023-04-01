@@ -61,7 +61,7 @@ public class L2Cache extends Cache {
             if (this.isReadUnconfirmed(key)) {
                 Logger.timeout(this.id, message.getType());
                 Logger.read(this.id, LoggerOperationType.SEND, key, readMessage.getUpdateCount(),
-                        this.data.getUpdateCountForKey(key).orElse(0), this.data.isLocked(key), false, true);
+                        this.getUpdateCountOrElse(key), this.isKeyLocked(key), false, true);
                 this.database.tell(readMessage, this.getSelf());
             }
         } else if (message.getType() == MessageType.CRITICAL_READ) {
@@ -79,7 +79,7 @@ public class L2Cache extends Cache {
 
             if (this.isWriteUnconfirmed(key)) {
                 Logger.timeout(this.id, message.getType());
-                Logger.write(this.id, LoggerOperationType.SEND, key, writeMessage.getValue(), this.data.isLocked(key));
+                Logger.write(this.id, LoggerOperationType.SEND, key, writeMessage.getValue(), this.isKeyLocked(key));
                 this.database.tell(writeMessage, this.getSelf());
             }
         } else if (message.getType() == MessageType.CRITICAL_WRITE) {
@@ -109,7 +109,7 @@ public class L2Cache extends Cache {
         int key = message.getKey();
         if (isOk) {
             // just lock data
-            this.data.lockValueForKey(key);
+            this.lockKey(key);
 
             if (!this.isPrimaryL2ForCritWrite) {
                 // is this is not the L2 contacted by the client, add write as unconfirmed with no sender
@@ -192,9 +192,9 @@ public class L2Cache extends Cache {
     @Override
     protected boolean isCritWriteOk(int key) {
         if (this.isPrimaryL2ForCritWrite) {
-            return !this.data.isLocked(key) && this.isWriteUnconfirmed(key);
+            return !this.isKeyLocked(key) && this.isWriteUnconfirmed(key);
         } else {
-            return !this.data.isLocked(key) && !this.isWriteUnconfirmed(key);
+            return !this.isKeyLocked(key) && !this.isWriteUnconfirmed(key);
         }
     }
 
@@ -225,8 +225,8 @@ public class L2Cache extends Cache {
     @Override
     protected void handleFill(int key) {
         if (this.isReadUnconfirmed(key)) {
-            int value = this.data.getValueForKey(key).get();
-            int updateCount = this.data.getUpdateCountForKey(key).get();
+            int value = this.getValueOrElse(key);
+            int updateCount = this.getUpdateCountOrElse(key);
 
             // multicast to clients who have requested the key
             List<ActorRef> clients = this.getUnconfirmedActorsForRead(key);

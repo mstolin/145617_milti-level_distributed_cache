@@ -90,7 +90,7 @@ public abstract class Cache extends Node {
 
     protected void abortWrite(int key) {
         this.removeUnconfirmedWrite(key);
-        this.data.unLockValueForKey(key);
+        this.unlockKey(key);
     }
 
     /**
@@ -138,7 +138,7 @@ public abstract class Cache extends Node {
     private void onWriteMessage(WriteMessage message) {
         int key = message.getKey();
         int value = message.getValue();
-        boolean isLocked = this.data.isLocked(key);
+        boolean isLocked = this.isKeyLocked(key);
         Logger.write(this.id, LoggerOperationType.RECEIVED, key, value, isLocked);
 
         if (this.isKeyLocked(key) || this.isWriteUnconfirmed(key)) {
@@ -152,7 +152,7 @@ public abstract class Cache extends Node {
         this.makeSelfCrashIfNeeded(l1CrashConfig, l2CrashConfig);
 
         // lock
-        this.data.lockValueForKey(key);
+        this.lockKey(key);
         // set as unconfirmed
         this.addUnconfirmedWrite(message.getKey(), this.getSender());
         // forward to next
@@ -162,7 +162,7 @@ public abstract class Cache extends Node {
 
     private void onCritWriteMessage(CritWriteMessage message) {
         int key = message.getKey();
-        Logger.criticalWrite(this.id, LoggerOperationType.RECEIVED, key, message.getValue(), this.data.isLocked(key));
+        Logger.criticalWrite(this.id, LoggerOperationType.RECEIVED, key, message.getValue(), this.isKeyLocked(key));
 
         if (this.isKeyLocked(key) || this.isWriteUnconfirmed(key)) {
             this.getSender().tell(ErrorMessage.lockedKey(key, MessageType.CRITICAL_WRITE), this.getSelf());
@@ -199,13 +199,13 @@ public abstract class Cache extends Node {
         int value = message.getValue();
         int updateCount = message.getUpdateCount();
 
-        Logger.criticalWriteCommit(this.id, LoggerOperationType.RECEIVED, key, value, this.data.getValueForKey(key).orElse(-1), updateCount,
-                this.data.getUpdateCountForKey(key).orElse(0));
+        Logger.criticalWriteCommit(this.id, LoggerOperationType.RECEIVED, key, value, this.getValueOrElse(key), updateCount,
+                this.getUpdateCountOrElse(key));
 
         // unlock and update
-        this.data.unLockValueForKey(key);
+        this.unlockKey(key);
         try {
-            this.data.setValueForKey(key, value, updateCount);
+            this.setValue(key, value, updateCount);
             this.handleCritWriteCommitMessage(message);
         } catch (IllegalAccessException e) {
             // nothing going on here, value is unlocked anyway
@@ -217,29 +217,29 @@ public abstract class Cache extends Node {
         int key = message.getKey();
         int value = message.getValue();
         int updateCount = message.getUpdateCount();
-        boolean isLocked = this.data.isLocked(key);
+        boolean isLocked = this.isKeyLocked(key);
         boolean isUnconfirmed = this.isWriteUnconfirmed(key);
         /*
         Only update if either,
         1. the data is locked and write-operation is unconfirmed (then, this was the requested Cache by client/L2)
         2. the data is unlocked and the message uc is newer than the current one (always update a write from the DB)
          */
-        int actorUpdateCount = this.data.getUpdateCountForKey(key).orElse(0);
+        int actorUpdateCount = this.getUpdateCountOrElse(key);
         boolean isMsgNewer = updateCount > actorUpdateCount;
         boolean isLockedAndUnconfirmed = isLocked && isUnconfirmed;
         boolean mustUpdate =  isLockedAndUnconfirmed || (!isLocked && isMsgNewer);
 
-        Logger.refill(this.id, LoggerOperationType.RECEIVED, key, value, this.data.getValueForKey(key).orElse(-1),
+        Logger.refill(this.id, LoggerOperationType.RECEIVED, key, value, this.getValueOrElse(key),
                 updateCount, actorUpdateCount, isLocked, isUnconfirmed, mustUpdate);
 
         if (mustUpdate) {
             if (isLockedAndUnconfirmed) {
                 // only unlock if this is the requested cache
-                this.data.unLockValueForKey(key);
+                this.unlockKey(key);
             }
 
             try {
-                this.data.setValueForKey(key, value, updateCount);
+                this.setValue(key, value, updateCount);
                 this.handleRefillMessage(message);
             } catch (IllegalAccessException e) {
                 // Do nothing, if the data is locked then we don't update since critical write has priority
@@ -263,11 +263,11 @@ public abstract class Cache extends Node {
         this.makeSelfCrashIfNeeded(l1CrashConfig, l2CrashConfig);
 
         int updateCount = message.getUpdateCount();
-        int actorUpdateCount = this.data.getUpdateCountForKey(key).orElse(0);
+        int actorUpdateCount = this.getUpdateCountOrElse(key);
         // only forward if the message update count is older, or we don't know the value
-        boolean isLocked = this.data.isLocked(key);
+        boolean isLocked = this.isKeyLocked(key);
         boolean isOlder = updateCount > actorUpdateCount;
-        boolean mustForward = isOlder || !this.data.containsKey(key);
+        boolean mustForward = isOlder || !this.isKeyAvailable(key);
         boolean isUnconfirmed = this.isReadUnconfirmed(key);
         Logger.read(this.id, LoggerOperationType.RECEIVED, key, updateCount, actorUpdateCount, isLocked, isOlder,
                 isUnconfirmed);
@@ -309,11 +309,11 @@ public abstract class Cache extends Node {
 
         // print confirm
         int updateCount = message.getUpdateCount();
-        Logger.criticalRead(this.id, LoggerOperationType.RECEIVED, key, updateCount, this.data.getUpdateCountForKey(key).orElse(0),
-                this.data.isLocked(key));
+        Logger.criticalRead(this.id, LoggerOperationType.RECEIVED, key, updateCount, this.getUpdateCountOrElse(key),
+                this.isKeyLocked(key));
 
         // Forward to next
-        Logger.criticalRead(this.id, LoggerOperationType.SEND, key, updateCount, 0, this.data.isLocked(key));
+        Logger.criticalRead(this.id, LoggerOperationType.SEND, key, updateCount, 0, this.isKeyLocked(key));
         this.forwardCritReadMessageToNext(message, key);
     }
 
@@ -325,12 +325,12 @@ public abstract class Cache extends Node {
         int key = message.getKey();
         int value = message.getValue();
         int updateCount = message.getUpdateCount();
-        Logger.fill(this.id, LoggerOperationType.RECEIVED, key, value, this.data.getValueForKey(key).orElse(-1), updateCount,
-                this.data.getUpdateCountForKey(key).orElse(0));
+        Logger.fill(this.id, LoggerOperationType.RECEIVED, key, value, this.getValueOrElse(key), updateCount,
+                this.getUpdateCountOrElse(key));
 
         // Update value
         try {
-            this.data.setValueForKey(key, message.getValue(), message.getUpdateCount());
+            this.setValue(key, message.getValue(), message.getUpdateCount());
             this.handleFill(key);
             // reset
             this.removeUnconfirmedRead(key);

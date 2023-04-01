@@ -156,7 +156,7 @@ public class L1Cache extends Cache implements Coordinator {
 
     @Override
     protected boolean isCritWriteOk(int key) {
-        return !this.data.isLocked(key) && !this.isWriteUnconfirmed(key);
+        return !this.isKeyLocked(key) && !this.isWriteUnconfirmed(key);
     }
 
     @Override
@@ -183,8 +183,8 @@ public class L1Cache extends Cache implements Coordinator {
     @Override
     protected void handleFill(int key) {
         if (this.isReadUnconfirmed(key)) {
-            int value = this.data.getValueForKey(key).get();
-            int updateCount = this.data.getUpdateCountForKey(key).get();
+            int value = this.getValueOrElse(key);
+            int updateCount = this.getUpdateCountOrElse(key);
 
             // multicast to L2s who have requested the key
             List<ActorRef> requestedL2s = this.getUnconfirmedActorsForRead(key);
@@ -222,7 +222,7 @@ public class L1Cache extends Cache implements Coordinator {
         // crit write request is now confirmed
         this.isCritWriteRequestConfirmed = true;
         // got OK vote from all L2s, lock and answer back to DB
-        this.data.lockValueForKey(key);
+        this.lockKey(key);
         // set as unconfirmed with no sender, just to block all new write requests
         this.addUnconfirmedWrite(key, ActorRef.noSender());
 
