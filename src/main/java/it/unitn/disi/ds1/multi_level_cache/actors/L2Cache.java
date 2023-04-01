@@ -13,7 +13,7 @@ import java.util.List;
 public class L2Cache extends Cache {
 
     /** Is this the L2 requested by the client for critical write? */
-    private boolean isPrimaryL2ForCritWrite = false; // todo abortCritWrite
+    private boolean isPrimaryL2ForCritWrite = false;
 
     public L2Cache(String id) {
         super(id);
@@ -89,8 +89,7 @@ public class L2Cache extends Cache {
             if (this.isWriteUnconfirmed(key)) {
                 // do not forward to DB when crit write fails
                 Logger.timeout(this.id, message.getType());
-                this.abortWrite(key);
-                this.isPrimaryL2ForCritWrite = false;
+                this.abortCritWrite(key);
             }
         }
     }
@@ -149,13 +148,11 @@ public class L2Cache extends Cache {
                 WriteConfirmMessage confirmMessage = new WriteConfirmMessage(key, value, updateCount);
                 Logger.writeConfirm(this.id, LoggerOperationType.SEND, key, value, 0, updateCount, 0);
                 client.tell(confirmMessage, this.getSelf());
-                // reset
-                this.isPrimaryL2ForCritWrite = false;
             }
         }
 
         // reset critical write
-        this.abortWrite(key);
+        this.abortCritWrite(key);
     }
 
     @Override
@@ -176,8 +173,7 @@ public class L2Cache extends Cache {
             ActorRef client = this.getUnconfirmedActorForWrit(key);
             client.tell(message, this.getSelf());
             // reset and just timeout
-            this.isPrimaryL2ForCritWrite = false;
-            this.abortWrite(key);
+            this.abortCritWrite(key);
         } else if ((messageType == MessageType.READ || messageType == MessageType.CRITICAL_READ) && this.isReadUnconfirmed(key)) {
             if (messageType == MessageType.READ) {
                 Logger.error(this.id, MessageType.READ, key, false, "Received error message");
@@ -200,6 +196,12 @@ public class L2Cache extends Cache {
         } else {
             return !this.data.isLocked(key) && !this.isWriteUnconfirmed(key);
         }
+    }
+
+    @Override
+    protected void abortCritWrite(int key) {
+        this.abortWrite(key);
+        this.isPrimaryL2ForCritWrite = false;
     }
 
     @Override

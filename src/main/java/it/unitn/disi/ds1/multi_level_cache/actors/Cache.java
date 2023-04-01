@@ -66,6 +66,8 @@ public abstract class Cache extends Node {
 
     protected abstract boolean isCritWriteOk(int key);
 
+    protected abstract void abortCritWrite(int key);
+
     protected abstract boolean isL1Cache();
 
     /**
