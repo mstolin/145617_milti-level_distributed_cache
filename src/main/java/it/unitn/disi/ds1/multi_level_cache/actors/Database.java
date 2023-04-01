@@ -14,7 +14,6 @@ public class Database extends Node implements Coordinator {
     private final ACCoordinator acCoordinator = new ACCoordinator(this);
     private List<ActorRef> l1Caches;
     private List<ActorRef> l2Caches;
-    private Map<Integer, ActorRef> unconfirmedReads = new HashMap<>();
 
     public Database() {
         super("Database");
@@ -31,6 +30,13 @@ public class Database extends Node implements Coordinator {
         return Props.create(Database.class, () -> new Database());
     }
 
+    private ActorRef getActorForUnconfirmedRead(int key) {
+        if (this.isReadUnconfirmed(key)) {
+            return this.getUnconfirmedActorsForRead(key).get(0);
+        }
+        return ActorRef.noSender();
+    }
+
     private void setDefaultData(int size) throws IllegalAccessException {
         for (int i = 0; i < size; i++) {
             int value = new Random().nextInt(1000);
@@ -43,7 +49,7 @@ public class Database extends Node implements Coordinator {
         Optional<Integer> updateCount = this.data.getUpdateCountForKey(key);
         if (this.isReadUnconfirmed(key) && value.isPresent() && updateCount.isPresent()) {
             // multicast to everyone who has requested the value
-            ActorRef sender = this.unconfirmedReads.get(key);
+            ActorRef sender = this.getActorForUnconfirmedRead(key);
             FillMessage fillMessage = new FillMessage(key, value.get(), updateCount.get());
             Logger.fill(this.id, LoggerOperationType.SEND, key, value.get(), 0, updateCount.get(), 0);
             sender.tell(fillMessage, this.getSelf());

@@ -25,4 +25,11 @@ public class WriteConfig {
         }
     }
 
+    public ActorRef getUnconfirmedActor(int key) {
+        if (this.isWriteUnconfirmed(key)) {
+            return this.unconfirmedWrites.get(key);
+        }
+        return ActorRef.noSender();
+    }
+
 }

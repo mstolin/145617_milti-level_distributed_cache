@@ -24,9 +24,6 @@ public abstract class Cache extends Node {
      * Null if this cache is a L2 cache.
      */
     protected List<ActorRef> l2Caches;
-    /** Determines if this Node has crashed */
-    protected Map<Integer, List<ActorRef>> unconfirmedReads = new HashMap<>();
-    protected Map<Integer, ActorRef> unconfirmedWrites = new HashMap<>();
 
     public Cache(String id) {
         super(id);
@@ -72,15 +69,6 @@ public abstract class Cache extends Node {
     protected abstract boolean isL1Cache();
 
     /**
-     * Flushes all temporary data.
-     */
-    protected void flush() {
-        this.data.resetData();
-        this.unconfirmedReads = new HashMap<>();
-        this.unconfirmedWrites = new HashMap<>();
-    }
-
-    /**
      * Crashes this node
      */
     protected void recoverAfter(long recoverDelay) {
@@ -98,22 +86,8 @@ public abstract class Cache extends Node {
         this.getContext().become(this.createReceive());
     }
 
-    protected void addUnconfirmedWrite(int key, ActorRef sender) {
-        if (!this.unconfirmedWrites.containsKey(key)) {
-            this.unconfirmedWrites.put(key, sender);
-        }
-    }
-
-    protected boolean isWriteUnconfirmed(int key) {
-        return this.unconfirmedWrites.containsKey(key);
-    }
-
-    protected void resetWriteConfig(int key) { // todo rename abortWrite
-        // remove from unconfirmed
-        if (this.unconfirmedWrites.containsKey(key)) {
-            this.unconfirmedWrites.remove(key);
-        }
-        // unlock
+    protected void abortWrite(int key) {
+        this.removeUnconfirmedWrite(key);
         this.data.unLockValueForKey(key);
     }
 
@@ -402,10 +376,10 @@ public abstract class Cache extends Node {
 
         if (messageType == MessageType.WRITE && this.isWriteUnconfirmed(key)) {
             // tell L2 about message
-            ActorRef l2Cache = this.unconfirmedWrites.get(key);
+            ActorRef l2Cache = this.getUnconfirmedActorForWrit(key);
             l2Cache.tell(message, this.getSelf());
             // reset
-            this.resetWriteConfig(key);
+            this.abortWrite(key);
         } else if (messageType == MessageType.CRITICAL_WRITE && !this.isCritWriteRequestConfirmed) {
             // tell L2 about message
             ActorRef l2Cache = this.unconfirmedWrites.get(key);
@@ -416,7 +390,7 @@ public abstract class Cache extends Node {
         } else if ((messageType == MessageType.READ || messageType == MessageType.CRITICAL_READ) && this.isReadUnconfirmed(key)) {
 
             // tell L2 about message
-            List<ActorRef> l2Caches = this.unconfirmedReads.get(key);
+            List<ActorRef> l2Caches = this.getUnconfirmedActorsForRead(key);
             this.multicast(message, l2Caches);
             // reset
             this.removeUnconfirmedRead(key);

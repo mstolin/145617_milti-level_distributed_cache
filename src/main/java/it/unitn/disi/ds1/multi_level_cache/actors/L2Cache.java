@@ -13,7 +13,7 @@ import java.util.List;
 public class L2Cache extends Cache {
 
     /** Is this the L2 requested by the client for critical write? */
-    private boolean isPrimaryL2ForCritWrite = false;
+    private boolean isPrimaryL2ForCritWrite = false; // todo abortCritWrite
 
     public L2Cache(String id) {
         super(id);
@@ -39,14 +39,14 @@ public class L2Cache extends Cache {
         int key = message.getKey();
         if (this.isWriteUnconfirmed(key)) {
             // tell client write confirm
-            ActorRef client = this.unconfirmedWrites.get(key);
+            ActorRef client = this.getUnconfirmedActorForWrit(key);
             int value = message.getValue();
             int updateCount = message.getUpdateCount();
             WriteConfirmMessage confirmMessage = new WriteConfirmMessage(key, value, updateCount);
             Logger.writeConfirm(this.id, LoggerOperationType.SEND, key, value, 0, updateCount, 0);
             client.tell(confirmMessage, this.getSelf());
             // reset timeout
-            this.resetWriteConfig(key);
+            this.abortWrite(key);
         }
     }
 
@@ -89,7 +89,7 @@ public class L2Cache extends Cache {
             if (this.isWriteUnconfirmed(key)) {
                 // do not forward to DB when crit write fails
                 Logger.timeout(this.id, message.getType());
-                this.resetWriteConfig(key);
+                this.abortWrite(key);
                 this.isPrimaryL2ForCritWrite = false;
             }
         }
@@ -132,7 +132,7 @@ public class L2Cache extends Cache {
 
     @Override
     protected void handleCritWriteAbortMessage(CritWriteAbortMessage message) {
-        this.resetWriteConfig(message.getKey());
+        this.abortWrite(message.getKey());
     }
 
     @Override
@@ -144,7 +144,7 @@ public class L2Cache extends Cache {
 
         // response to client if needed
         if (this.isWriteUnconfirmed(key)) {
-            ActorRef client = this.unconfirmedWrites.get(key);
+            ActorRef client = this.getUnconfirmedActorForWrit(key);
             if (this.isPrimaryL2ForCritWrite && client != ActorRef.noSender()) {
                 WriteConfirmMessage confirmMessage = new WriteConfirmMessage(key, value, updateCount);
                 Logger.writeConfirm(this.id, LoggerOperationType.SEND, key, value, 0, updateCount, 0);
@@ -155,7 +155,7 @@ public class L2Cache extends Cache {
         }
 
         // reset critical write
-        this.resetWriteConfig(key);
+        this.abortWrite(key);
     }
 
     @Override
@@ -166,18 +166,18 @@ public class L2Cache extends Cache {
         if (messageType == MessageType.WRITE && this.isWriteUnconfirmed(key)) {
             Logger.error(this.id, MessageType.WRITE, key, false, "Received error message");
             // tell L2 about message
-            ActorRef client = this.unconfirmedWrites.get(key);
+            ActorRef client = this.getUnconfirmedActorForWrit(key);
             client.tell(message, this.getSelf());
             // reset
-            this.resetWriteConfig(key);
+            this.abortWrite(key);
         } else if (messageType == MessageType.CRITICAL_WRITE && !this.isWriteUnconfirmed(key)) {
             Logger.error(this.id, MessageType.CRITICAL_WRITE, key, false, "Received error message");
             // tell L2 about message
-            ActorRef client = this.unconfirmedWrites.get(key);
+            ActorRef client = this.getUnconfirmedActorForWrit(key);
             client.tell(message, this.getSelf());
             // reset and just timeout
             this.isPrimaryL2ForCritWrite = false;
-            this.resetWriteConfig(key);
+            this.abortWrite(key);
         } else if ((messageType == MessageType.READ || messageType == MessageType.CRITICAL_READ) && this.isReadUnconfirmed(key)) {
             if (messageType == MessageType.READ) {
                 Logger.error(this.id, MessageType.READ, key, false, "Received error message");
@@ -186,7 +186,7 @@ public class L2Cache extends Cache {
             }
 
             // tell L2 about message
-            List<ActorRef> clients = this.unconfirmedReads.get(key);
+            List<ActorRef> clients = this.getUnconfirmedActorsForRead(key);
             this.multicast(message, clients);
             // reset
             this.removeUnconfirmedRead(key);
@@ -227,7 +227,7 @@ public class L2Cache extends Cache {
             int updateCount = this.data.getUpdateCountForKey(key).get();
 
             // multicast to clients who have requested the key
-            List<ActorRef> clients = this.unconfirmedReads.get(key);
+            List<ActorRef> clients = this.getUnconfirmedActorsForRead(key);
             ReadReplyMessage readReplyMessage = new ReadReplyMessage(key, value, updateCount);
             Logger.readReply(this.id, LoggerOperationType.MULTICAST, key, value, 0, updateCount, 0);
             this.multicast(readReplyMessage, clients);

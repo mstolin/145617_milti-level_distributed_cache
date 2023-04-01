@@ -23,8 +23,8 @@ public class L1Cache extends Cache implements Coordinator {
         return Props.create(Cache.class, () -> new L1Cache(id));
     }
 
-    private void resetCritWriteConfig(int key) {
-        this.resetWriteConfig(key);
+    private void resetCritWriteConfig(int key) { // todo rename abort critwrite
+        this.abortWrite(key);
         this.acCoordinator.resetCritWriteConfig();
     }
 
@@ -44,7 +44,7 @@ public class L1Cache extends Cache implements Coordinator {
         Logger.refill(this.id, LoggerOperationType.MULTICAST, message.getKey(), message.getValue(), 0,
                 message.getUpdateCount(), 0, false, false, true);
         this.multicast(message, this.l2Caches);
-        this.resetWriteConfig(message.getKey());
+        this.abortWrite(message.getKey());
     }
 
     @Override
@@ -66,7 +66,7 @@ public class L1Cache extends Cache implements Coordinator {
             if (this.isWriteUnconfirmed(key)) {
                 Logger.timeout(this.id, message.getType());
                 // reset and timeout
-                this.resetWriteConfig(key);
+                this.abortWrite(key);
             }
         } else if (message.getType() == MessageType.READ) {
             ReadMessage readMessage = (ReadMessage) message.getMessage();
@@ -134,14 +134,14 @@ public class L1Cache extends Cache implements Coordinator {
         if (messageType == MessageType.WRITE && this.isWriteUnconfirmed(key)) {
             Logger.error(this.id, MessageType.WRITE, key, false, "Received error message");
             // tell L2 about message
-            ActorRef l2Cache = this.unconfirmedWrites.get(key);
+            ActorRef l2Cache = this.getUnconfirmedActorForWrit(key);
             l2Cache.tell(message, this.getSelf());
             // reset
-            this.resetWriteConfig(key);
+            this.abortWrite(key);
         } else if (messageType == MessageType.CRITICAL_WRITE && !this.isCritWriteRequestConfirmed) {
             Logger.error(this.id, MessageType.CRITICAL_WRITE, key, false, "Received error message");
             // tell L2 about message
-            ActorRef l2Cache = this.unconfirmedWrites.get(key);
+            ActorRef l2Cache = this.getUnconfirmedActorForWrit(key);
             l2Cache.tell(message, this.getSelf());
             // reset and just timeout
             this.resetCritWriteConfig(key);
@@ -154,7 +154,7 @@ public class L1Cache extends Cache implements Coordinator {
             }
 
             // tell L2 about message
-            List<ActorRef> l2Caches = this.unconfirmedReads.get(key);
+            List<ActorRef> l2Caches = this.getUnconfirmedActorsForRead(key);
             this.multicast(message, l2Caches);
             // reset
             this.removeUnconfirmedRead(key);
@@ -194,7 +194,7 @@ public class L1Cache extends Cache implements Coordinator {
             int updateCount = this.data.getUpdateCountForKey(key).get();
 
             // multicast to L2s who have requested the key
-            List<ActorRef> requestedL2s = this.unconfirmedReads.get(key);
+            List<ActorRef> requestedL2s = this.getUnconfirmedActorsForRead(key);
             FillMessage fillMessage = new FillMessage(key, value, updateCount);
             Logger.fill(this.id, LoggerOperationType.MULTICAST, key, value, 0, updateCount, 0);
             this.multicast(fillMessage, requestedL2s);

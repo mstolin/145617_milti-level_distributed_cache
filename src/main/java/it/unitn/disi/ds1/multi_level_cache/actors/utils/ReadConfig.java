@@ -2,10 +2,7 @@ package it.unitn.disi.ds1.multi_level_cache.actors.utils;
 
 import akka.actor.ActorRef;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class ReadConfig {
 
@@ -30,6 +27,13 @@ public class ReadConfig {
         if (this.isReadUnconfirmed(key)) {
             this.unconfirmedReads.remove(key);
         }
+    }
+
+    public List<ActorRef> getUnconfirmedActors(int key) {
+        if (this.isReadUnconfirmed(key)) {
+            return this.unconfirmedReads.get(key);
+        }
+        return Collections.emptyList();
     }
 
 }

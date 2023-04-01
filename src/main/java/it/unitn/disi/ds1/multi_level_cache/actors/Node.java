@@ -48,6 +48,10 @@ public abstract class Node extends AbstractActor {
         this.writeConfig.removeUnconfirmedWrite(key);
     }
 
+    protected ActorRef getUnconfirmedActorForWrit(int key) {
+        return this.writeConfig.getUnconfirmedActor(key);
+    }
+
     protected boolean isReadUnconfirmed(int key) {
         return this.readConfig.isReadUnconfirmed(key);
     }
@@ -58,6 +62,10 @@ public abstract class Node extends AbstractActor {
 
     protected void removeUnconfirmedRead(int key) {
         this.readConfig.removeUnconfirmedRead(key);
+    }
+
+    protected List<ActorRef> getUnconfirmedActorsForRead(int key) {
+        return this.readConfig.getUnconfirmedActors(key);
     }
 
     /**
@@ -74,6 +82,12 @@ public abstract class Node extends AbstractActor {
 
     protected void send(Serializable message, ActorRef receiver) {
         receiver.tell(message, this.getSelf());
+    }
+
+    protected void flush() {
+        this.data = new DataStore();
+        this.writeConfig = new WriteConfig();
+        this.readConfig = new ReadConfig();
     }
 
     /**
