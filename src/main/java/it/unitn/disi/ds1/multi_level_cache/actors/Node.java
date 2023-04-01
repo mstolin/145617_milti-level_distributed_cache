@@ -3,6 +3,8 @@ package it.unitn.disi.ds1.multi_level_cache.actors;
 import akka.actor.AbstractActor;
 import akka.actor.ActorRef;
 import it.unitn.disi.ds1.multi_level_cache.actors.utils.DataStore;
+import it.unitn.disi.ds1.multi_level_cache.actors.utils.ReadConfig;
+import it.unitn.disi.ds1.multi_level_cache.actors.utils.WriteConfig;
 import it.unitn.disi.ds1.multi_level_cache.messages.TimeoutMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageType;
 
@@ -12,10 +14,12 @@ import java.util.List;
 
 public abstract class Node extends AbstractActor {
 
-    /** The timeout duration */
-    static final long TIMEOUT_SECONDS = 6;
-    /** Data the Node knows about */
+    private WriteConfig writeConfig = new WriteConfig();
+    private ReadConfig readConfig = new ReadConfig();
     protected DataStore data = new DataStore();
+    /** The timeout duration */
+    static final long TIMEOUT_SECONDS = 6; // todo make milliseconds
+    /** Data the Node knows about */
     /** ID of this node */
     public String id;
 
@@ -44,27 +48,29 @@ public abstract class Node extends AbstractActor {
      */
     protected abstract boolean canInstantiateNewReadConversation(int key);
 
-    /**
-     * Adds the key to the unconfirmed read list.
-     *
-     * @param key Key of the read message
-     */
-    protected abstract void addUnconfirmedReadMessage(int key, ActorRef sender);
+    protected boolean isWriteUnconfirmed(int key) {
+        return this.writeConfig.isWriteUnconfirmed(key);
+    }
 
-    /**
-     * Determines if an unconfirmed read message for the given key has been sent.
-     *
-     * @param key Key of the read
-     * @return Boolean
-     */
-    protected abstract boolean isReadUnconfirmed(int key);
+    protected void addUnconfirmedWrite(int key, ActorRef actor) {
+        this.writeConfig.addUnconfirmedWrite(key, actor);
+    }
 
-    /**
-     * Removed the key from the unconfirmed read list.
-     *
-     * @param key Key of the read message
-     */
-    protected abstract void resetReadConfig(int key);
+    protected void removeUnconfirmedWrite(int key) {
+        this.writeConfig.removeUnconfirmedWrite(key);
+    }
+
+    protected boolean isReadUnconfirmed(int key) {
+        return this.readConfig.isReadUnconfirmed(key);
+    }
+
+    protected void addUnconfirmedRead(int key, ActorRef actor) {
+        this.readConfig.addUnconfirmedRead(key, actor);
+    }
+
+    protected void removeUnconfirmedRead(int key) {
+        this.readConfig.removeUnconfirmedRead(key);
+    }
 
     /**
      * Sends a message to all actors in the given group.
@@ -76,6 +82,10 @@ public abstract class Node extends AbstractActor {
         for (ActorRef actor: group) {
             actor.tell(message, this.getSelf());
         }
+    }
+
+    protected void send(Serializable message, ActorRef receiver) {
+        receiver.tell(message, this.getSelf());
     }
 
     /**
