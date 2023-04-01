@@ -189,7 +189,7 @@ public class L2Cache extends Cache {
             List<ActorRef> clients = this.unconfirmedReads.get(key);
             this.multicast(message, clients);
             // reset
-            this.resetReadConfig(key);
+            this.removeUnconfirmedRead(key);
         }
     }
 
@@ -232,7 +232,7 @@ public class L2Cache extends Cache {
             Logger.readReply(this.id, LoggerOperationType.MULTICAST, key, value, 0, updateCount, 0);
             this.multicast(readReplyMessage, clients);
             // reset for key
-            this.resetReadConfig(key);
+            this.removeUnconfirmedRead(key);
         }
     }
 }

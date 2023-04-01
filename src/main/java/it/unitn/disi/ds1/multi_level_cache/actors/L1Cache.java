@@ -74,7 +74,7 @@ public class L1Cache extends Cache implements Coordinator {
 
             if (this.isReadUnconfirmed(key)) {
                 Logger.timeout(this.id, message.getType());
-                this.resetReadConfig(key);
+                this.removeUnconfirmedRead(key);
             }
         }
     }
@@ -157,7 +157,7 @@ public class L1Cache extends Cache implements Coordinator {
             List<ActorRef> l2Caches = this.unconfirmedReads.get(key);
             this.multicast(message, l2Caches);
             // reset
-            this.resetReadConfig(key);
+            this.removeUnconfirmedRead(key);
         }
     }
 
@@ -199,7 +199,7 @@ public class L1Cache extends Cache implements Coordinator {
             Logger.fill(this.id, LoggerOperationType.MULTICAST, key, value, 0, updateCount, 0);
             this.multicast(fillMessage, requestedL2s);
             // afterwards reset for key
-            this.resetReadConfig(key);
+            this.removeUnconfirmedRead(key);
         }
     }
 

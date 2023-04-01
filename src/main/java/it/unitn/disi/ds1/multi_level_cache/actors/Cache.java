@@ -118,51 +118,6 @@ public abstract class Cache extends Node {
     }
 
     /**
-     * A Cache a cannot handle the read conversation if the value is locked.
-     *
-     * @param key
-     * @return
-     */
-    @Override
-    protected boolean canInstantiateNewReadConversation(int key) {
-        return !this.data.isLocked(key);
-    }
-
-    /**
-     * A Cache cannot handle a new write conversation, if the value is locked
-     * or another actor has already requested to write this key.
-     *
-     * @param key
-     * @return
-     */
-    @Override
-    protected boolean canInstantiateNewWriteConversation(int key) {
-        return !this.data.isLocked(key) && !this.isWriteUnconfirmed(key);
-    }
-
-    @Override
-    protected void addUnconfirmedReadMessage(int key, ActorRef sender) {
-        if (this.unconfirmedReads.containsKey(key)) {
-            this.unconfirmedReads.get(key).add(sender);
-        } else {
-            List<ActorRef> actors = new ArrayList<>(List.of(sender));
-            this.unconfirmedReads.put(key, actors);
-        }
-    }
-
-    @Override
-    protected boolean isReadUnconfirmed(int key) {
-        return this.unconfirmedReads.containsKey(key);
-    }
-
-    @Override
-    protected void resetReadConfig(int key) {
-        if (this.unconfirmedReads.containsKey(key)) {
-            this.unconfirmedReads.remove(key);
-        }
-    }
-
-    /**
      * Creates a Receive instance for when this Node has crashed.
      * THen, this Node will only handle RecoveryMessages.
      *
@@ -210,7 +165,7 @@ public abstract class Cache extends Node {
         boolean isLocked = this.data.isLocked(key);
         Logger.write(this.id, LoggerOperationType.RECEIVED, key, value, isLocked);
 
-        if (!this.canInstantiateNewWriteConversation(key)) {
+        if (this.isKeyLocked(key) || this.isWriteUnconfirmed(key)) {
             this.getSender().tell(ErrorMessage.lockedKey(key, MessageType.WRITE), this.getSelf());
             return;
         }
@@ -233,7 +188,7 @@ public abstract class Cache extends Node {
         int key = message.getKey();
         Logger.criticalWrite(this.id, LoggerOperationType.RECEIVED, key, message.getValue(), this.data.isLocked(key));
 
-        if (!this.canInstantiateNewWriteConversation(key)) {
+        if (this.isKeyLocked(key) || this.isWriteUnconfirmed(key)) {
             this.getSender().tell(ErrorMessage.lockedKey(key, MessageType.CRITICAL_WRITE), this.getSelf());
             return;
         }
@@ -319,7 +274,7 @@ public abstract class Cache extends Node {
     private void onReadMessage(ReadMessage message) {
         int key = message.getKey();
 
-        if (!this.canInstantiateNewReadConversation(key)) {
+        if (this.isKeyLocked(key)) {
             // Not allowed to handle received message -> time out
             Logger.error(this.id, MessageType.READ, key, true, "Can't read value, because it's locked");
             this.getSender().tell(ErrorMessage.lockedKey(key, MessageType.READ), this.getSelf());
@@ -349,20 +304,19 @@ public abstract class Cache extends Node {
                         false);
                 this.forwardReadMessageToNext(message, key);
             }
-            // add sender to queue
-            this.addUnconfirmedReadMessage(key, this.getSender());
         } else {
             // response accordingly
             this.handleFill(key);
-            // add sender to queue
-            this.addUnconfirmedReadMessage(key, this.getSender());
         }
+
+        // set read as unconfirmed
+        this.addUnconfirmedRead(key, this.getSender());
     }
 
     private void onCritReadMessage(CritReadMessage message) {
         int key = message.getKey();
 
-        if (!this.canInstantiateNewReadConversation(key)) {
+        if (this.isKeyLocked(key)) {
             // Not allowed to handle received message -> time out
             Logger.error(this.id, MessageType.CRITICAL_READ, key, true, "Can't read value, because it's locked");
             this.getSender().tell(ErrorMessage.lockedKey(key, MessageType.CRITICAL_READ), this.getSelf());
@@ -375,7 +329,7 @@ public abstract class Cache extends Node {
         this.makeSelfCrashIfNeeded(l1CrashConfig, l2CrashConfig);
 
         // add as unconfirmed
-        this.addUnconfirmedReadMessage(key, this.getSender());
+        this.addUnconfirmedRead(key, this.getSender());
 
         // print confirm
         int updateCount = message.getUpdateCount();
@@ -403,7 +357,7 @@ public abstract class Cache extends Node {
             this.data.setValueForKey(key, message.getValue(), message.getUpdateCount());
             this.handleFill(key);
             // reset
-            this.resetReadConfig(key);
+            this.removeUnconfirmedRead(key);
         } catch (IllegalAccessException e) {
             // Do nothing, critical write has higher priority, just timeout
         }
@@ -443,7 +397,35 @@ public abstract class Cache extends Node {
     }
 
     private void onErrorMessage(ErrorMessage message) {
+        MessageType messageType = message.getMessageType();
+        int key = message.getKey();
+
+        if (messageType == MessageType.WRITE && this.isWriteUnconfirmed(key)) {
+            // tell L2 about message
+            ActorRef l2Cache = this.unconfirmedWrites.get(key);
+            l2Cache.tell(message, this.getSelf());
+            // reset
+            this.resetWriteConfig(key);
+        } else if (messageType == MessageType.CRITICAL_WRITE && !this.isCritWriteRequestConfirmed) {
+            // tell L2 about message
+            ActorRef l2Cache = this.unconfirmedWrites.get(key);
+            l2Cache.tell(message, this.getSelf());
+            // reset and just timeout
+            this.resetCritWriteConfig(key);
+            this.isCritWriteRequestConfirmed = false;
+        } else if ((messageType == MessageType.READ || messageType == MessageType.CRITICAL_READ) && this.isReadUnconfirmed(key)) {
+
+            // tell L2 about message
+            List<ActorRef> l2Caches = this.unconfirmedReads.get(key);
+            this.multicast(message, l2Caches);
+            // reset
+            this.removeUnconfirmedRead(key);
+        }
+
+        Logger.error(this.id, messageType, key, false, "Received error message");
         this.handleErrorMessage(message);
+        // propagate the error message back until it reaches the conversation initiator
+
     }
 
     @Override
