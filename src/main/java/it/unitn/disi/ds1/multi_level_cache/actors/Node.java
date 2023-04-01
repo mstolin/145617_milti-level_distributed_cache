@@ -28,25 +28,13 @@ public abstract class Node extends AbstractActor {
         this.id = id;
     }
 
-    /**
-     * Determines if this actor is allowed to instantiate a new conversation
-     * for write. The rule is, an actor either allowed to handle a single write message
-     * or multiple read messages at the same time. Therefore, no write or any read
-     * conversation is allowed.
-     *
-     * @return Boolean that state if a write conversation is allowed
-     */
-    protected abstract boolean canInstantiateNewWriteConversation(int key);
+    protected boolean isKeyLocked(int key) {
+        return this.data.isLocked(key);
+    }
 
-    /**
-     * Determines if this actor is allowed to instantiate a new conversation
-     * for read. The rule is, an actor either allowed to handle a single write message
-     * or multiple read messages at the same time. Therefore, no current write conversation
-     * is allowed.
-     *
-     * @return Boolean that state if a read conversation is allowed
-     */
-    protected abstract boolean canInstantiateNewReadConversation(int key);
+    protected boolean isKeyAvailable(int key) {
+        return this.data.containsKey(key);
+    }
 
     protected boolean isWriteUnconfirmed(int key) {
         return this.writeConfig.isWriteUnconfirmed(key);
