@@ -42,7 +42,7 @@ public class L1Cache extends Cache implements Coordinator {
             CritWriteRequestMessage requestMessage = (CritWriteRequestMessage) message.getMessage();
             int key = requestMessage.getKey();
 
-            if (!this.isWriteUnconfirmed(key)) {
+            if (this.isWriteUnconfirmed(key)) {
                 Logger.timeout(this.id, message.getType());
                 // reset and just timeout
                 this.abortCritWrite(key);
@@ -55,6 +55,14 @@ public class L1Cache extends Cache implements Coordinator {
                 Logger.timeout(this.id, message.getType());
                 // reset and timeout
                 this.abortWrite(key);
+            }
+        } else if (message.getType() == MessageType.CRITICAL_WRITE) {
+            CritWriteMessage critWriteMessage = (CritWriteMessage) message.getMessage();
+            int key = critWriteMessage.getKey();
+
+            if (this.isWriteUnconfirmed(key)) {
+                Logger.timeout(this.id, message.getType());
+                this.abortCritWrite(key);
             }
         } else if (message.getType() == MessageType.READ) {
             ReadMessage readMessage = (ReadMessage) message.getMessage();

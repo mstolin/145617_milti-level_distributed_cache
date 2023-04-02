@@ -59,8 +59,6 @@ public abstract class Cache extends OperationalNode {
         // forward to next
         Logger.criticalWrite(this.id, LoggerOperationType.SEND, message.getKey(), message.getValue(), false);
         this.forwardMessageToNext(message, MessageType.CRITICAL_WRITE);
-
-        this.handleCritWriteMessage(message); // todo What todo here?
     }
 
     @Override
