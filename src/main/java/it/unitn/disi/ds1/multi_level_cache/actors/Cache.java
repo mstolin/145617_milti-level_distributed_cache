@@ -10,7 +10,7 @@ import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageType;
 import java.io.Serializable;
 import java.util.*;
 
-public abstract class Cache extends Node {
+public abstract class Cache extends OperationalNode {
 
     /** A direct reference to the database */
     protected ActorRef database;
@@ -27,6 +27,94 @@ public abstract class Cache extends Node {
 
     public Cache(String id) {
         super(id);
+    }
+
+    @Override
+    protected void handleWriteMessage(WriteMessage message) {
+        int key = message.getKey();
+        int value = message.getValue();
+
+        // make crash
+        CacheCrashConfig l1CrashConfig = message.getL1CrashConfig();
+        CacheCrashConfig l2CrashConfig = message.getL2CrashConfig();
+        this.makeSelfCrashIfNeeded(l1CrashConfig, l2CrashConfig);
+
+        // lock
+        this.lockKey(key);
+        // set as unconfirmed
+        this.addUnconfirmedWrite(message.getKey(), this.getSender());
+        // forward to next
+        Logger.write(this.id, LoggerOperationType.SEND, key, value, this.isKeyLocked(key));
+        this.forwardMessageToNext(message, MessageType.WRITE);
+    }
+
+    @Override
+    protected void handleCritWriteMessage(CritWriteMessage message) {
+        // make crash
+        CacheCrashConfig l1CrashConfig = message.getL1CrashConfig();
+        CacheCrashConfig l2CrashConfig = message.getL2CrashConfig();
+        this.makeSelfCrashIfNeeded(l1CrashConfig, l2CrashConfig);
+        // set as unconfirmed
+        this.addUnconfirmedWrite(message.getKey(), this.getSender());
+        // forward to next
+        Logger.criticalWrite(this.id, LoggerOperationType.SEND, message.getKey(), message.getValue(), false);
+        this.forwardMessageToNext(message, MessageType.CRITICAL_WRITE);
+
+        this.handleCritWriteMessage(message); // todo What todo here?
+    }
+
+    @Override
+    protected void handleReadMessage(ReadMessage message) {
+        int key = message.getKey();
+
+        // make crash
+        CacheCrashConfig l1CrashConfig = message.getL1CrashConfig();
+        CacheCrashConfig l2CrashConfig = message.getL2CrashConfig();
+        this.makeSelfCrashIfNeeded(l1CrashConfig, l2CrashConfig);
+
+        int updateCount = message.getUpdateCount();
+        int actorUpdateCount = this.getUpdateCountOrElse(key);
+        // only forward if the message update count is older, or we don't know the value
+        boolean isLocked = this.isKeyLocked(key);
+        boolean isOlder = updateCount > actorUpdateCount;
+        boolean mustForward = isOlder || !this.isKeyAvailable(key);
+        boolean isUnconfirmed = this.isReadUnconfirmed(key);
+
+        // set read as unconfirmed
+        this.addUnconfirmedRead(key, this.getSender());
+
+        // check if we own a more recent or an equal value
+        if (mustForward) {
+            if (!isUnconfirmed) {
+                // Maybe another client already requested to read this key, then only add as unconfirmed and wait for response
+                Logger.read(this.id, LoggerOperationType.SEND, key, updateCount, 0, isLocked, isOlder,
+                        false);
+                this.forwardReadMessageToNext(message, key);
+            }
+        } else {
+            // response accordingly
+            this.handleFill(key);
+        }
+    }
+
+    @Override
+    protected void handleCritReadMessage(CritReadMessage message) {
+        int key = message.getKey();
+
+        // make crash
+        CacheCrashConfig l1CrashConfig = message.getL1CrashConfig();
+        CacheCrashConfig l2CrashConfig = message.getL2CrashConfig();
+        this.makeSelfCrashIfNeeded(l1CrashConfig, l2CrashConfig);
+
+        // add as unconfirmed
+        this.addUnconfirmedRead(key, this.getSender());
+
+        // print confirm
+        int updateCount = message.getUpdateCount();
+
+        // Forward to next
+        Logger.criticalRead(this.id, LoggerOperationType.SEND, key, updateCount, 0, this.isKeyLocked(key));
+        this.forwardCritReadMessageToNext(message, key);
     }
 
     private void makeSelfCrash(long crashAfter, long recoverAfter) {
@@ -46,15 +134,9 @@ public abstract class Cache extends Node {
 
     protected abstract void forwardMessageToNext(Serializable message, MessageType messageType);
 
-    protected abstract void handleWriteMessage(WriteMessage message);
-
     protected abstract void handleRefillMessage(RefillMessage message);
 
-    protected abstract void handleCritWriteMessage(CritWriteMessage message);
-
     protected abstract void handleCritWriteRequestMessage(CritWriteRequestMessage message, boolean isOk);
-
-    protected abstract void handleCritWriteVoteMessage(CritWriteVoteMessage message);
 
     protected abstract void handleCritWriteAbortMessage(CritWriteAbortMessage message);
 
@@ -124,64 +206,11 @@ public abstract class Cache extends Node {
         Logger.join(this.id, "L2 Caches", this.l2Caches.size());
     }
 
-    /**
-     * Listener whenever this actor receives a WriteMessage. Then, this cache
-     * is supposed to forward the message to the next actor. For L1 caches, this is
-     * the DB, for L2 caches, the L1 cache.
-     *
-     * @param message The received write-message
-     */
-    private void onWriteMessage(WriteMessage message) {
-        int key = message.getKey();
-        int value = message.getValue();
-        boolean isLocked = this.isKeyLocked(key);
-        Logger.write(this.id, LoggerOperationType.RECEIVED, key, value, isLocked);
-
-        if (this.isKeyLocked(key) || this.isWriteUnconfirmed(key)) {
-            this.getSender().tell(ErrorMessage.lockedKey(key, MessageType.WRITE), this.getSelf());
-            return;
-        }
-
-        // make crash
-        CacheCrashConfig l1CrashConfig = message.getL1CrashConfig();
-        CacheCrashConfig l2CrashConfig = message.getL2CrashConfig();
-        this.makeSelfCrashIfNeeded(l1CrashConfig, l2CrashConfig);
-
-        // lock
-        this.lockKey(key);
-        // set as unconfirmed
-        this.addUnconfirmedWrite(message.getKey(), this.getSender());
-        // forward to next
-        Logger.write(this.id, LoggerOperationType.SEND, key, value, isLocked);
-        this.forwardMessageToNext(message, MessageType.WRITE);
-    }
-
-    private void onCritWriteMessage(CritWriteMessage message) {
-        int key = message.getKey();
-        Logger.criticalWrite(this.id, LoggerOperationType.RECEIVED, key, message.getValue(), this.isKeyLocked(key));
-
-        if (this.isKeyLocked(key) || this.isWriteUnconfirmed(key)) {
-            this.getSender().tell(ErrorMessage.lockedKey(key, MessageType.CRITICAL_WRITE), this.getSelf());
-            return;
-        }
-
-        // make crash
-        CacheCrashConfig l1CrashConfig = message.getL1CrashConfig();
-        CacheCrashConfig l2CrashConfig = message.getL2CrashConfig();
-        this.makeSelfCrashIfNeeded(l1CrashConfig, l2CrashConfig);
-
-        this.handleCritWriteMessage(message);
-    }
-
     private void onCritWriteRequestMessage(CritWriteRequestMessage message) {
         int key = message.getKey();
         boolean isOk = this.isCritWriteOk(key);
         Logger.criticalWriteRequest(this.id, LoggerOperationType.RECEIVED, key, isOk);
         this.handleCritWriteRequestMessage(message, isOk);
-    }
-
-    private void onCritWriteVoteMessage(CritWriteVoteMessage message) {
-        this.handleCritWriteVoteMessage(message);
     }
 
     private void onCritWriteAbortMessage(CritWriteAbortMessage message) {
@@ -241,76 +270,6 @@ public abstract class Cache extends Node {
                 // Do nothing, if the data is locked then we don't update since critical write has priority
             }
         }
-    }
-
-    private void onReadMessage(ReadMessage message) {
-        int key = message.getKey();
-
-        if (this.isKeyLocked(key)) {
-            // Not allowed to handle received message -> time out
-            Logger.error(this.id, MessageType.READ, key, true, "Can't read value, because it's locked");
-            this.getSender().tell(ErrorMessage.lockedKey(key, MessageType.READ), this.getSelf());
-            return;
-        }
-
-        // make crash
-        CacheCrashConfig l1CrashConfig = message.getL1CrashConfig();
-        CacheCrashConfig l2CrashConfig = message.getL2CrashConfig();
-        this.makeSelfCrashIfNeeded(l1CrashConfig, l2CrashConfig);
-
-        int updateCount = message.getUpdateCount();
-        int actorUpdateCount = this.getUpdateCountOrElse(key);
-        // only forward if the message update count is older, or we don't know the value
-        boolean isLocked = this.isKeyLocked(key);
-        boolean isOlder = updateCount > actorUpdateCount;
-        boolean mustForward = isOlder || !this.isKeyAvailable(key);
-        boolean isUnconfirmed = this.isReadUnconfirmed(key);
-        Logger.read(this.id, LoggerOperationType.RECEIVED, key, updateCount, actorUpdateCount, isLocked, isOlder,
-                isUnconfirmed);
-
-        // check if we own a more recent or an equal value
-        if (mustForward) {
-            if (!isUnconfirmed) {
-                // Maybe another client already requested to read this key, then only add as unconfirmed and wait for response
-                Logger.read(this.id, LoggerOperationType.SEND, key, updateCount, 0, isLocked, isOlder,
-                        false);
-                this.forwardReadMessageToNext(message, key);
-            }
-        } else {
-            // response accordingly
-            this.handleFill(key);
-        }
-
-        // set read as unconfirmed
-        this.addUnconfirmedRead(key, this.getSender());
-    }
-
-    private void onCritReadMessage(CritReadMessage message) {
-        int key = message.getKey();
-
-        if (this.isKeyLocked(key)) {
-            // Not allowed to handle received message -> time out
-            Logger.error(this.id, MessageType.CRITICAL_READ, key, true, "Can't read value, because it's locked");
-            this.getSender().tell(ErrorMessage.lockedKey(key, MessageType.CRITICAL_READ), this.getSelf());
-            return;
-        }
-
-        // make crash
-        CacheCrashConfig l1CrashConfig = message.getL1CrashConfig();
-        CacheCrashConfig l2CrashConfig = message.getL2CrashConfig();
-        this.makeSelfCrashIfNeeded(l1CrashConfig, l2CrashConfig);
-
-        // add as unconfirmed
-        this.addUnconfirmedRead(key, this.getSender());
-
-        // print confirm
-        int updateCount = message.getUpdateCount();
-        Logger.criticalRead(this.id, LoggerOperationType.RECEIVED, key, updateCount, this.getUpdateCountOrElse(key),
-                this.isKeyLocked(key));
-
-        // Forward to next
-        Logger.criticalRead(this.id, LoggerOperationType.SEND, key, updateCount, 0, this.isKeyLocked(key));
-        this.forwardCritReadMessageToNext(message, key);
     }
 
     /**

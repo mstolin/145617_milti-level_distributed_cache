@@ -13,7 +13,7 @@ import java.util.List;
 public class L1Cache extends Cache implements Coordinator {
 
     private final ACCoordinator acCoordinator = new ACCoordinator(this);
-    private boolean isCritWriteRequestConfirmed = false;
+    private boolean isCritWriteRequestConfirmed = false; // todo replace isWriteUnconfirmed
 
     public L1Cache(String id) {
         super(id);
@@ -26,11 +26,6 @@ public class L1Cache extends Cache implements Coordinator {
     @Override
     protected void forwardMessageToNext(Serializable message, MessageType messageType) {
         this.database.tell(message, this.getSelf());
-    }
-
-    @Override
-    protected void handleWriteMessage(WriteMessage message) {
-        // what todo here, also L2
     }
 
     @Override
@@ -71,12 +66,6 @@ public class L1Cache extends Cache implements Coordinator {
                 this.removeUnconfirmedRead(key);
             }
         }
-    }
-
-    @Override
-    protected void handleCritWriteMessage(CritWriteMessage message) {
-        Logger.criticalWrite(this.id, LoggerOperationType.SEND, message.getKey(), message.getValue(), false);
-        this.forwardMessageToNext(message, MessageType.CRITICAL_WRITE);
     }
 
     @Override
@@ -156,29 +145,25 @@ public class L1Cache extends Cache implements Coordinator {
 
     @Override
     protected boolean isCritWriteOk(int key) {
-        return !this.isKeyLocked(key) && !this.isWriteUnconfirmed(key);
+        if (this.isWriteUnconfirmed(key)) {
+            /*
+            This is the L1 contacted by the L2. The write is already unconfirmed.
+            Therefore, only need to check if key is locked.
+             */
+            return !this.isKeyLocked(key);
+        } else {
+            /*
+            This L1 has not been contacted by the initiating L2. Therefore, the write can't
+            be unconfirmed by another request and must be unlocked.
+             */
+            return !this.isKeyLocked(key) && !this.isWriteUnconfirmed(key);
+        }
     }
 
     @Override
     protected boolean isL1Cache() {
         return true;
     }
-
-    /*@Override
-    protected void multicastReFillMessageIfNeeded(int key, int value, int updateCount, ActorRef sender) {
-        RefillMessage reFillMessage = new RefillMessage(key, value, updateCount);
-        Logger.refill(this.id, LoggerOperationType.MULTICAST, key, value, 0, updateCount, 0, false, false, true);
-
-        // todo heck this, why???
-        /*if (sender != ActorRef.noSender()) {
-            this.multicast(reFillMessage, this.l2Caches);
-        }*/
-        /*for (ActorRef cache: this.l2Caches) {
-            if (cache != sender) {
-                cache.tell(reFillMessage, this.getSelf());
-            }
-        }
-    }*/
 
     @Override
     protected void handleFill(int key) {
