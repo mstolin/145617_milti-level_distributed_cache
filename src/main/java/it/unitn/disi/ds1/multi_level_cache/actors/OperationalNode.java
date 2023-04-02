@@ -32,7 +32,7 @@ public abstract class OperationalNode extends Node {
         Logger.write(this.id, LoggerOperationType.RECEIVED, key, value, this.isKeyLocked(key));
 
         if (this.isKeyLocked(key) || this.isWriteUnconfirmed(key)) {
-            Logger.error(this.id, MessageType.WRITE, key, false, "Can't read value, because it's locked");
+            Logger.error(this.id, LoggerOperationType.SEND, MessageType.WRITE, key, false, "Can't read value, because it's locked");
             this.sendLockedErrorToSender(key, MessageType.WRITE);
         } else {
             this.handleWriteMessage(message);
@@ -45,7 +45,7 @@ public abstract class OperationalNode extends Node {
         Logger.criticalWrite(this.id, LoggerOperationType.RECEIVED, key, value, this.isKeyLocked(key));
 
         if (this.isKeyLocked(key) || this.isWriteUnconfirmed(key)) {
-            Logger.error(this.id, MessageType.CRITICAL_WRITE, key, false, "Can't read value, because it's locked");
+            Logger.error(this.id, LoggerOperationType.SEND, MessageType.CRITICAL_WRITE, key, false, "Can't read value, because it's locked");
             this.sendLockedErrorToSender(key, MessageType.CRITICAL_WRITE);
         } else {
             this.handleCritWriteMessage(message);
@@ -63,7 +63,7 @@ public abstract class OperationalNode extends Node {
                 this.isKeyLocked(key), false, this.isReadUnconfirmed(key)); // todo is older is not always false here
 
         if (this.isKeyLocked(key) || this.isWriteUnconfirmed(key)) {
-            Logger.error(this.id, MessageType.READ, key, false, "Can't read value, because it's locked");
+            Logger.error(this.id, LoggerOperationType.SEND, MessageType.READ, key, false, "Can't read value, because it's locked");
             this.sendLockedErrorToSender(key, MessageType.READ);
         } else {
             this.handleReadMessage(message);
@@ -76,7 +76,7 @@ public abstract class OperationalNode extends Node {
                 this.getUpdateCountOrElse(key), this.isKeyLocked(key));
 
         if (this.isKeyLocked(key) || this.isWriteUnconfirmed(key)) {
-            Logger.error(this.id, MessageType.CRITICAL_READ, key, false, "Can't read value, because it's locked");
+            Logger.error(this.id, LoggerOperationType.SEND, MessageType.CRITICAL_READ, key, false, "Can't read value, because it's locked");
             this.sendLockedErrorToSender(key, MessageType.CRITICAL_READ);
         } else {
             this.handleCritReadMessage(message);

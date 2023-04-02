@@ -45,19 +45,26 @@ public class Database extends OperationalNode implements Coordinator {
     }
 
     private void responseFill(int key) {
-        Optional<Integer> value = this.getValue(key);
-        Optional<Integer> updateCount = this.getUpdateCount(key);
-        if (this.isReadUnconfirmed(key) && value.isPresent() && updateCount.isPresent()) {
-            // multicast to everyone who has requested the value
+        if (this.isReadUnconfirmed(key)) {
+            Optional<Integer> value = this.getValue(key);
+            Optional<Integer> updateCount = this.getUpdateCount(key);
             ActorRef sender = this.getActorForUnconfirmedRead(key);
-            FillMessage fillMessage = new FillMessage(key, value.get(), updateCount.get());
-            Logger.fill(this.id, LoggerOperationType.SEND, key, value.get(), 0, updateCount.get(), 0);
-            sender.tell(fillMessage, this.getSelf());
-            // reset the config
-            this.removeUnconfirmedRead(key);
+
+            if (value.isPresent() && updateCount.isPresent()) {
+                // multicast to everyone who has requested the value
+                FillMessage fillMessage = new FillMessage(key, value.get(), updateCount.get());
+                Logger.fill(this.id, LoggerOperationType.SEND, key, value.get(), 0, updateCount.get(), 0);
+                sender.tell(fillMessage, this.getSelf());
+                // reset the config
+                this.removeUnconfirmedRead(key);
+            } else {
+                Logger.error(this.id, LoggerOperationType.SEND, MessageType.FILL, key, false, "Key is unknown");
+                ErrorMessage errorMessage = ErrorMessage.unknownKey(key, MessageType.FILL);
+                this.send(errorMessage, sender);
+            }
         } else {
-            Logger.error(this.id, MessageType.READ, key, true, "Key is unknown");
-            // todo send error response
+            Logger.error(this.id, LoggerOperationType.ERROR, MessageType.FILL, key, false,
+                    String.format("No ongoing read operation for key %d", key));
         }
     }
 
@@ -124,7 +131,8 @@ public class Database extends OperationalNode implements Coordinator {
         int key = message.getKey();
 
         if (!this.isKeyAvailable(key)) {
-            Logger.error(this.id, MessageType.READ, key, false, String.format("Can't read, because key %d is unknown", key));
+            Logger.error(this.id, LoggerOperationType.SEND, MessageType.READ, key, false,
+                    String.format("Can't read, because key %d is unknown", key));
             this.getSender().tell(ErrorMessage.unknownKey(key, MessageType.READ), this.getSelf());
             return;
         }
@@ -142,7 +150,8 @@ public class Database extends OperationalNode implements Coordinator {
         int key = message.getKey();
 
         if (!this.isKeyAvailable(key)) {
-            Logger.error(this.id, MessageType.CRITICAL_READ, key, false, String.format("Can't read, because key %d is unknown", key));
+            Logger.error(this.id, LoggerOperationType.SEND, MessageType.CRITICAL_READ, key, false,
+                    String.format("Can't read, because key %d is unknown", key));
             this.getSender().tell(ErrorMessage.unknownKey(key, MessageType.CRITICAL_READ), this.getSelf());
             return;
         }

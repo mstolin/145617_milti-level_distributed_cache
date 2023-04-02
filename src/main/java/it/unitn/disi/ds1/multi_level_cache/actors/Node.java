@@ -8,6 +8,7 @@ import it.unitn.disi.ds1.multi_level_cache.messages.ErrorMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.TimeoutMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageType;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
+import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerOperationType;
 
 import java.io.Serializable;
 import java.time.Duration;
@@ -123,7 +124,7 @@ public abstract class Node extends DataNode {
     }
 
     protected void onErrorMessage(ErrorMessage message) {
-        Logger.error(this.id, message.getMessageType(), message.getKey(), false, "Received error message");
+        Logger.error(this.id, LoggerOperationType.RECEIVED, message.getMessageType(), message.getKey(), false, "Received error message");
         this.handleErrorMessage(message);
     }
 

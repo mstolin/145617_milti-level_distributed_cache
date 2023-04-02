@@ -18,7 +18,7 @@ public class Client extends Node {
      * time-out delay for the client is slightly longer than the one
      * for the caches.
      */
-    static final long TIMEOUT_SECONDS = 15;
+    static final long TIMEOUT_SECONDS = 15; // todo make millis
     /** Max. number to retry write or read operations */
     static final int MAX_RETRY_COUNT = 3;
     /** List of level 2 caches, the client knows about */
@@ -67,21 +67,14 @@ public class Client extends Node {
      * @param key Key that has to be written
      * @param value Value used to update the key
      */
-    private void tellWriteMessage(ActorRef l2Cache, int key, int value, boolean isRetry, CacheCrashConfig l1CrashConfig,
+    private void sendWriteMessage(ActorRef l2Cache, int key, int value, CacheCrashConfig l1CrashConfig,
                                   CacheCrashConfig l2CrashConfig) {
-        if (!this.isWriteUnconfirmed(key) || isRetry) {
-            Logger.write(this.id, LoggerOperationType.SEND, key, value, false);
-
-            WriteMessage writeMessage = new WriteMessage(key, value, l1CrashConfig, l2CrashConfig);
-            l2Cache.tell(writeMessage, this.getSelf());
-            // set timeout
-            this.setTimeout(writeMessage, l2Cache, MessageType.WRITE);
-            // set config
-            this.isWaitingForWriteConfirm = true;
-        } else {
-            Logger.criticalWrite(this.id, LoggerOperationType.SEND, key, value, false);
-            Logger.error(this.id, MessageType.WRITE, key, true, "Waiting for another response");
-        }
+        WriteMessage writeMessage = new WriteMessage(key, value, l1CrashConfig, l2CrashConfig);
+        this.send(writeMessage, l2Cache);
+        // set timeout
+        this.setTimeout(writeMessage, l2Cache, MessageType.WRITE);
+        // set config
+        this.isWaitingForWriteConfirm = true;
     }
 
     /**
@@ -92,20 +85,14 @@ public class Client extends Node {
      * @param key Key that has to be written
      * @param value Value used to update the key
      */
-    private void tellCritWriteMessage(ActorRef l2Cache, int key, int value, boolean isRetry,
-                                      CacheCrashConfig l1CrashConfig, CacheCrashConfig l2CrashConfig) {
-        if (!isWriteUnconfirmed(key) || isRetry) {
-            Logger.criticalWrite(this.id, LoggerOperationType.SEND, key, value, false);
-
-            CritWriteMessage critWriteMessage = new CritWriteMessage(key, value, l1CrashConfig, l2CrashConfig);
-            // set timeout
-            this.setTimeout(critWriteMessage, l2Cache, MessageType.CRITICAL_WRITE);
-            l2Cache.tell(critWriteMessage, this.getSelf());
-            // set config
-            this.isWaitingForWriteConfirm = true;
-        } else {
-            Logger.error(this.id, MessageType.CRITICAL_WRITE, key, true, "Waiting for another response");
-        }
+    private void sendCritWriteMessage(ActorRef l2Cache, int key, int value, CacheCrashConfig l1CrashConfig,
+                                      CacheCrashConfig l2CrashConfig) {
+        CritWriteMessage critWriteMessage = new CritWriteMessage(key, value, l1CrashConfig, l2CrashConfig);
+        this.send(critWriteMessage, l2Cache);
+        // set timeout
+        this.setTimeout(critWriteMessage, l2Cache, MessageType.CRITICAL_WRITE);
+        // set config
+        this.isWaitingForWriteConfirm = true;
     }
 
     /**
@@ -128,10 +115,10 @@ public class Client extends Node {
             this.writeRetryCount = this.writeRetryCount + 1;
             // send message
             if (isCritical) {
-                this.tellCritWriteMessage(randomActor, key, value, true, l1CrashConfig, l2CrashConfig);
+                this.sendCritWriteMessage(randomActor, key, value, l1CrashConfig, l2CrashConfig);
                 Logger.criticalWrite(this.id, LoggerOperationType.RETRY, key, value, false);
             } else {
-                this.tellWriteMessage(randomActor, key, value, true, l1CrashConfig, l2CrashConfig);
+                this.sendWriteMessage(randomActor, key, value, l1CrashConfig, l2CrashConfig);
                 Logger.write(this.id, LoggerOperationType.RETRY, key, value, false);
             }
         } else {
@@ -155,23 +142,15 @@ public class Client extends Node {
      * @param l2Cache Target L2 cache
      * @param key Key to be read
      */
-    private void tellReadMessage(ActorRef l2Cache, int key, CacheCrashConfig l1CrashConfig,
+    private void sendReadMessage(ActorRef l2Cache, int key, CacheCrashConfig l1CrashConfig,
                                  CacheCrashConfig l2CrashConfig) {
         ReadMessage readMessage = new ReadMessage(key, this.getUpdateCountOrElse(key),
                 l1CrashConfig, l2CrashConfig);
+        this.send(readMessage, l2Cache);
+        // set config
+        this.addUnconfirmedRead(key, l2Cache);
         // set timeout
         this.setTimeout(readMessage, l2Cache, MessageType.READ);
-
-        if (!this.isWriteUnconfirmed(key)) {
-            boolean isLocked = this.isKeyLocked(key);
-            boolean isUnconfirmed = this.isReadUnconfirmed(key);
-            Logger.read(this.id, LoggerOperationType.SEND, key, readMessage.getUpdateCount(), 0, isLocked, true, isUnconfirmed);
-            l2Cache.tell(readMessage, this.getSelf());
-            // set config
-            this.addUnconfirmedRead(key, l2Cache);
-        } else {
-            Logger.error(this.id, MessageType.INIT_READ, key, true, "Waiting for another response");
-        }
     }
 
     /**
@@ -181,21 +160,15 @@ public class Client extends Node {
      * @param l2Cache Target L2 cache
      * @param key Key to be read
      */
-    private void tellCritReadMessage(ActorRef l2Cache, int key, CacheCrashConfig l1CrashConfig,
+    private void sendCritReadMessage(ActorRef l2Cache, int key, CacheCrashConfig l1CrashConfig,
                                      CacheCrashConfig l2CrashConfig) {
         CritReadMessage critReadMessage = new CritReadMessage(key, this.getUpdateCountOrElse(key),
                 l1CrashConfig, l2CrashConfig);
+        this.send(critReadMessage, l2Cache);
+        // set config
+        this.addUnconfirmedRead(key, l2Cache);
         // set timeout
         this.setTimeout(critReadMessage, l2Cache, MessageType.CRITICAL_READ);
-
-        if (!this.isWriteUnconfirmed(key)) {
-            Logger.criticalRead(this.id, LoggerOperationType.SEND, key, critReadMessage.getUpdateCount(), 0, false);
-            l2Cache.tell(critReadMessage, this.getSelf());
-            // set config
-            this.addUnconfirmedRead(key, l2Cache);
-        } else {
-            Logger.error(this.id, MessageType.INIT_READ, key, true, "Waiting for another response");
-        }
     }
 
     /**
@@ -219,22 +192,24 @@ public class Client extends Node {
             boolean isLocked = this.isKeyLocked(key);
             boolean isUnconfirmed = this.isReadUnconfirmed(key);
             // send message
-            if (isCritical) {
-                this.tellCritReadMessage(randomActor, key, l1CrashConfig, l2CrashConfig);
-                Logger.criticalRead(this.id, LoggerOperationType.RETRY, key,
-                        this.getUpdateCountOrElse(key),
-                        this.getUpdateCountOrElse(key),
-                        isLocked);
-            } else {
-                this.tellReadMessage(randomActor, key, l1CrashConfig, l2CrashConfig);
-                Logger.read(this.id, LoggerOperationType.RETRY, key,
-                        this.getUpdateCountOrElse(key),
-                        this.getUpdateCountOrElse(key),
-                        isLocked,
-                        true,
-                        isUnconfirmed);
+            if (isUnconfirmed) {
+                if (isCritical) {
+                    this.sendCritReadMessage(randomActor, key, l1CrashConfig, l2CrashConfig);
+                    Logger.criticalRead(this.id, LoggerOperationType.RETRY, key,
+                            this.getUpdateCountOrElse(key),
+                            this.getUpdateCountOrElse(key),
+                            isLocked);
+                } else {
+                    this.sendReadMessage(randomActor, key, l1CrashConfig, l2CrashConfig);
+                    Logger.read(this.id, LoggerOperationType.RETRY, key,
+                            this.getUpdateCountOrElse(key),
+                            this.getUpdateCountOrElse(key),
+                            isLocked,
+                            true,
+                            true);
+                }
+                this.increaseCountForUnconfirmedReadMessage(key);
             }
-            this.increaseCountForUnconfirmedReadMessage(key);
         } else {
             // abort retries
             this.removeUnconfirmedRead(key);
@@ -288,25 +263,25 @@ public class Client extends Node {
         boolean isCritical = message.isCritical();
 
         if (this.isWriteUnconfirmed(key)) {
-            Logger.error(this.id, MessageType.INIT_WRITE, key, false,
-                    String.format("Can't write %d, waiting for another write response", value));
+            Logger.error(this.id, LoggerOperationType.ERROR, MessageType.INIT_WRITE, key, false,
+                    String.format("Waiting for another response for key %d", key));
             return;
         }
 
         ActorRef l2Cache = message.getL2Cache();
         if (!this.l2Caches.contains(l2Cache)) {
-            Logger.error(this.id, MessageType.INIT_WRITE, key, false, "L2 cache is unknown");
+            Logger.error(this.id, LoggerOperationType.ERROR, MessageType.INIT_WRITE, key, false, "L2 cache is unknown");
             return;
         }
 
         Logger.initWrite(this.id, key, value, isCritical);
 
         if (isCritical) {
-            this.tellCritWriteMessage(l2Cache, key, value, false, message.getL1CrashConfig(),
-                    message.getL2CrashConfig());
+            Logger.criticalWrite(this.id, LoggerOperationType.SEND, key, value, false);
+            this.sendCritWriteMessage(l2Cache, key, value, message.getL1CrashConfig(), message.getL2CrashConfig());
         } else {
-            this.tellWriteMessage(l2Cache, key, value, false, message.getL1CrashConfig(),
-                    message.getL2CrashConfig());
+            Logger.write(this.id, LoggerOperationType.SEND, key, value, false);
+            this.sendWriteMessage(l2Cache, key, value, message.getL1CrashConfig(), message.getL2CrashConfig());
         }
     }
 
@@ -347,20 +322,26 @@ public class Client extends Node {
         int key = message.getKey();
         boolean isCritical = message.isCritical();
 
-        // todo is write unconfirmed?
+        if (this.isReadUnconfirmed(key) || this.isWriteUnconfirmed(key)) {
+            Logger.error(this.id, LoggerOperationType.ERROR, MessageType.INIT_READ, key, false,
+                    String.format("Waiting for another response for key %d", key));
+            return;
+        }
 
         ActorRef l2Cache = message.getL2Cache();
         if (!this.l2Caches.contains(l2Cache)) {
-            Logger.error(this.id, MessageType.INIT_READ, key, true, "L2 is unknown");
+            Logger.error(this.id, LoggerOperationType.ERROR, MessageType.INIT_READ, key, false, "L2 is unknown");
             return;
         }
 
         Logger.initRead(this.id, key, isCritical);
 
         if (isCritical) {
-            this.tellCritReadMessage(l2Cache, key, message.getL1CrashConfig(), message.getL2CrashConfig());
+            Logger.criticalRead(this.id, LoggerOperationType.SEND, key, this.getUpdateCountOrElse(key), this.getUpdateCountOrElse(key), false);
+            this.sendCritReadMessage(l2Cache, key, message.getL1CrashConfig(), message.getL2CrashConfig());
         } else {
-            this.tellReadMessage(l2Cache, key, message.getL1CrashConfig(), message.getL2CrashConfig());
+            Logger.read(this.id, LoggerOperationType.SEND, key, this.getUpdateCountOrElse(key), this.getUpdateCountOrElse(key), this.isKeyLocked(key), true, false);
+            this.sendReadMessage(l2Cache, key, message.getL1CrashConfig(), message.getL2CrashConfig());
         }
     }
 
@@ -438,7 +419,6 @@ public class Client extends Node {
         ErrorType errorType = message.getErrorType();
         MessageType messageType = message.getMessageType();
         int key = message.getKey();
-        Logger.error(this.id, MessageType.READ, message.getKey(), false, "RECEIVED AN ERROR MESSAGE");
 
         if (messageType == MessageType.READ || messageType == MessageType.CRITICAL_READ) {
             this.removeUnconfirmedRead(key);

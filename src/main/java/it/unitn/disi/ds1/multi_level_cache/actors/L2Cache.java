@@ -136,14 +136,14 @@ public class L2Cache extends Cache {
         int key = message.getKey();
 
         if (messageType == MessageType.WRITE && this.isWriteUnconfirmed(key)) {
-            Logger.error(this.id, MessageType.WRITE, key, false, "Received error message");
+            Logger.error(this.id, LoggerOperationType.SEND, messageType, key, false, "Forward error message");
             // tell L2 about message
             ActorRef client = this.getUnconfirmedActorForWrit(key);
             client.tell(message, this.getSelf());
             // reset
             this.abortWrite(key);
         } else if (messageType == MessageType.CRITICAL_WRITE && !this.isWriteUnconfirmed(key)) {
-            Logger.error(this.id, MessageType.CRITICAL_WRITE, key, false, "Received error message");
+            Logger.error(this.id, LoggerOperationType.SEND, messageType, key, false, "Forward error message");
             // tell L2 about message
             ActorRef client = this.getUnconfirmedActorForWrit(key);
             client.tell(message, this.getSelf());
@@ -151,9 +151,9 @@ public class L2Cache extends Cache {
             this.abortCritWrite(key);
         } else if ((messageType == MessageType.READ || messageType == MessageType.CRITICAL_READ) && this.isReadUnconfirmed(key)) {
             if (messageType == MessageType.READ) {
-                Logger.error(this.id, MessageType.READ, key, false, "Received error message");
+                Logger.error(this.id, LoggerOperationType.MULTICAST, messageType, key, false, "Forward error message");
             } else {
-                Logger.error(this.id, MessageType.CRITICAL_READ, key, false, "Received error message");
+                Logger.error(this.id, LoggerOperationType.MULTICAST, messageType, key, false, "Forward error message");
             }
 
             // tell L2 about message
