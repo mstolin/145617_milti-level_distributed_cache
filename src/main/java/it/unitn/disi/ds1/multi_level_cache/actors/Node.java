@@ -1,6 +1,5 @@
 package it.unitn.disi.ds1.multi_level_cache.actors;
 
-import akka.actor.AbstractActor;
 import akka.actor.ActorRef;
 import it.unitn.disi.ds1.multi_level_cache.actors.utils.DataStore;
 import it.unitn.disi.ds1.multi_level_cache.actors.utils.ReadConfig;
@@ -13,13 +12,12 @@ import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
 import java.io.Serializable;
 import java.time.Duration;
 import java.util.List;
-import java.util.Optional;
 
-public abstract class Node extends AbstractActor {
+public abstract class Node extends DataNode {
 
     private WriteConfig writeConfig = new WriteConfig();
     private ReadConfig readConfig = new ReadConfig();
-    private DataStore data = new DataStore();
+
     /** The timeout duration */
     static final long TIMEOUT_SECONDS = 6; // todo make milliseconds
     /** Data the Node knows about */
@@ -34,46 +32,6 @@ public abstract class Node extends AbstractActor {
     protected abstract void handleErrorMessage(ErrorMessage message);
 
     protected abstract void handleTimeoutMessage(TimeoutMessage message);
-
-    protected void lockKey(int key) {
-        this.data.lockValueForKey(key);
-    }
-
-    protected void unlockKey(int key) {
-        this.data.unLockValueForKey(key);
-    }
-
-    protected Optional<Integer> getValue(int key) {
-        return this.data.getValueForKey(key);
-    }
-
-    protected int getValueOrElse(int key) {
-        return this.data.getValueForKey(key).orElse(-1);
-    }
-
-    protected Optional<Integer> getUpdateCount(int key) {
-        return this.data.getUpdateCountForKey(key);
-    }
-
-    protected int getUpdateCountOrElse(int key) {
-        return this.data.getUpdateCountForKey(key).orElse(0);
-    }
-
-    protected void setValue(int key, int value) throws IllegalAccessException {
-        this.data.setValueForKey(key, value);
-    }
-
-    protected void setValue(int key, int value, int updateCount) throws IllegalAccessException {
-        this.data.setValueForKey(key, value, updateCount);
-    }
-
-    protected boolean isKeyLocked(int key) {
-        return this.data.isLocked(key);
-    }
-
-    protected boolean isKeyAvailable(int key) {
-        return this.data.containsKey(key);
-    }
 
     protected boolean isWriteUnconfirmed(int key) {
         return this.writeConfig.isWriteUnconfirmed(key);
@@ -124,7 +82,7 @@ public abstract class Node extends AbstractActor {
     }
 
     protected void flush() {
-        this.data = new DataStore();
+        this.flushData();
         this.writeConfig = new WriteConfig();
         this.readConfig = new ReadConfig();
     }
