@@ -25,6 +25,17 @@ public class Main {
         ActorEnvironment actorEnvironment = new ActorEnvironment(
                 "Multi-Level-Cache", numberOfL1Caches, numberOfL2Caches, numberOfClients);
 
+        /*
+        TODO
+        - Error message from L2 (Key unknown error message)
+        - Cache on read also check if write is unconfirmed for key
+        - No lock on (crit-)read
+        - On critread doe L2 forward to DB on crash?
+        - L1 cache lock on CritWriteVoteMessage
+        - Database lock on CritWrite message
+        - Send error message to client, when aborting during critwrite
+         */
+
         try {
             ActorRef firstClient = actorEnvironment.getClient(0).orElseThrow();
             ActorRef secondClient = actorEnvironment.getClient(1).orElseThrow();
@@ -51,8 +62,13 @@ public class Main {
             /*
             READ A VALUE, MAKE L1 CRASH AFTER RECEIVED
              */
-            actorEnvironment.makeClientRead(firstClient, l211, 9,
-                    CacheCrashConfig.create(0, 10000), CacheCrashConfig.empty());
+            /*actorEnvironment.makeClientRead(firstClient, l211, 9,
+                    CacheCrashConfig.create(0, 10000), CacheCrashConfig.empty());*/
+
+            /*
+            READ UNKNOWN KEY
+             */
+            actorEnvironment.makeClientRead(firstClient, l211, 989898989);
 
             /*
             READ, TWO DIFFERENT CLIENTS AT THE SAME TIME, SAME L2
@@ -112,8 +128,7 @@ public class Main {
             /*
             WRITE A VALUE
              */
-            /*sleepAndDelimiter(2000);
-            actorEnvironment.makeClientWrite(firstClient, l211, 3, 100);*/
+            //actorEnvironment.makeClientWrite(firstClient, l211, 3, 100);
 
             /*
             WRITE A VALUE AND IMMEDIATELY INSTANTIATE ANOTHER WRITE MESSAGE
