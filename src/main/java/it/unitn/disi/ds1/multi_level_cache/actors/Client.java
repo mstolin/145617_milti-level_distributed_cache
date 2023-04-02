@@ -388,7 +388,8 @@ public class Client extends Node {
         }
     }
 
-    private void onTimeoutMessage(TimeoutMessage message) {
+    @Override
+    protected void handleTimeoutMessage(TimeoutMessage message) {
         MessageType type = message.getType();
         if (type == MessageType.WRITE && this.isWaitingForWriteConfirm) {
             WriteMessage writeMessage = (WriteMessage) message.getMessage();
@@ -432,7 +433,8 @@ public class Client extends Node {
         }
     }
 
-    private void onErrorMessage(ErrorMessage message) {
+    @Override
+    protected void handleErrorMessage(ErrorMessage message) {
         ErrorType errorType = message.getErrorType();
         MessageType messageType = message.getMessageType();
         int key = message.getKey();

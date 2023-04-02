@@ -220,6 +220,20 @@ public class Database extends Node implements Coordinator {
     }
 
     @Override
+    protected void handleErrorMessage(ErrorMessage message) {
+        // Do nothing, DB is not expected to receive error messages
+    }
+
+    @Override
+    protected void handleTimeoutMessage(TimeoutMessage message) {
+        if (message.getType() == MessageType.CRITICAL_WRITE_REQUEST && this.acCoordinator.hasRequestedCritWrite()) {
+            CritWriteRequestMessage requestMessage = (CritWriteRequestMessage) message.getMessage();
+            Logger.timeout(this.id, MessageType.CRITICAL_WRITE_REQUEST);
+            this.abortCritWrite(requestMessage.getKey());
+        }
+    }
+
+    @Override
     public void abortCritWrite(int key) {
         this.acCoordinator.resetCritWriteConfig();
         this.unlockKey(key);
@@ -227,15 +241,6 @@ public class Database extends Node implements Coordinator {
         CritWriteAbortMessage abortMessage = new CritWriteAbortMessage(key);
         Logger.criticalWriteAbort(this.id, LoggerOperationType.MULTICAST, key);
         this.multicast(abortMessage, this.l1Caches);
-    }
-
-
-    private void onTimeoutMessage(TimeoutMessage message) {
-        if (message.getType() == MessageType.CRITICAL_WRITE_REQUEST && this.acCoordinator.hasRequestedCritWrite()) {
-            CritWriteRequestMessage requestMessage = (CritWriteRequestMessage) message.getMessage();
-            Logger.timeout(this.id, MessageType.CRITICAL_WRITE_REQUEST);
-            this.abortCritWrite(requestMessage.getKey());
-        }
     }
 
     @Override

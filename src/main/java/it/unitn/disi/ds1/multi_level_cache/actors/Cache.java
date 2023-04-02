@@ -50,8 +50,6 @@ public abstract class Cache extends Node {
 
     protected abstract void handleRefillMessage(RefillMessage message);
 
-    protected abstract void handleTimeoutMessage(TimeoutMessage message);
-
     protected abstract void handleCritWriteMessage(CritWriteMessage message);
 
     protected abstract void handleCritWriteRequestMessage(CritWriteRequestMessage message, boolean isOk);
@@ -61,8 +59,6 @@ public abstract class Cache extends Node {
     protected abstract void handleCritWriteAbortMessage(CritWriteAbortMessage message);
 
     protected abstract void handleCritWriteCommitMessage(CritWriteCommitMessage message);
-
-    protected abstract void handleErrorMessage(ErrorMessage message);
 
     protected abstract boolean isCritWriteOk(int key);
 
@@ -363,45 +359,9 @@ public abstract class Cache extends Node {
         this.recover();
     }
 
-    private void onTimeoutMessage(TimeoutMessage message) {
-        this.handleTimeoutMessage(message);
-    }
-
     private void onFlushMessage(FlushMessage message) {
         this.flush();
         Logger.flush(this.id, LoggerOperationType.RECEIVED);
-    }
-
-    private void onErrorMessage(ErrorMessage message) {
-        MessageType messageType = message.getMessageType();
-        int key = message.getKey();
-
-        if (messageType == MessageType.WRITE && this.isWriteUnconfirmed(key)) {
-            // tell L2 about message
-            ActorRef l2Cache = this.getUnconfirmedActorForWrit(key);
-            l2Cache.tell(message, this.getSelf());
-            // reset
-            this.abortWrite(key);
-        } else if (messageType == MessageType.CRITICAL_WRITE && !this.isCritWriteRequestConfirmed) {
-            // tell L2 about message
-            ActorRef l2Cache = this.unconfirmedWrites.get(key);
-            l2Cache.tell(message, this.getSelf());
-            // reset and just timeout
-            this.resetCritWriteConfig(key);
-            this.isCritWriteRequestConfirmed = false;
-        } else if ((messageType == MessageType.READ || messageType == MessageType.CRITICAL_READ) && this.isReadUnconfirmed(key)) {
-
-            // tell L2 about message
-            List<ActorRef> l2Caches = this.getUnconfirmedActorsForRead(key);
-            this.multicast(message, l2Caches);
-            // reset
-            this.removeUnconfirmedRead(key);
-        }
-
-        Logger.error(this.id, messageType, key, false, "Received error message");
-        this.handleErrorMessage(message);
-        // propagate the error message back until it reaches the conversation initiator
-
     }
 
     @Override

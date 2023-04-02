@@ -5,8 +5,10 @@ import akka.actor.ActorRef;
 import it.unitn.disi.ds1.multi_level_cache.actors.utils.DataStore;
 import it.unitn.disi.ds1.multi_level_cache.actors.utils.ReadConfig;
 import it.unitn.disi.ds1.multi_level_cache.actors.utils.WriteConfig;
+import it.unitn.disi.ds1.multi_level_cache.messages.ErrorMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.TimeoutMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageType;
+import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
 
 import java.io.Serializable;
 import java.time.Duration;
@@ -28,6 +30,10 @@ public abstract class Node extends AbstractActor {
         super();
         this.id = id;
     }
+
+    protected abstract void handleErrorMessage(ErrorMessage message);
+
+    protected abstract void handleTimeoutMessage(TimeoutMessage message);
 
     protected void lockKey(int key) {
         this.data.lockValueForKey(key);
@@ -156,6 +162,15 @@ public abstract class Node extends AbstractActor {
     protected void setMulticastTimeout(Serializable message, MessageType messageType) {
         TimeoutMessage timeoutMessage = new TimeoutMessage(message, ActorRef.noSender(), messageType);
         this.scheduleMessageToSelf(timeoutMessage, this.getTimeoutSeconds());
+    }
+
+    protected void onErrorMessage(ErrorMessage message) {
+        Logger.error(this.id, message.getMessageType(), message.getKey(), false, "Received error message");
+        this.handleErrorMessage(message);
+    }
+
+    protected void onTimeoutMessage(TimeoutMessage message) {
+        this.handleTimeoutMessage(message);
     }
 
     @Override
