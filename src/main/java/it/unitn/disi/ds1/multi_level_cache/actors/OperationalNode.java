@@ -1,9 +1,9 @@
 package it.unitn.disi.ds1.multi_level_cache.actors;
 
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
-import it.unitn.disi.ds1.multi_level_cache.messages.utils.CacheCrashConfig;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageType;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
+import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerOperationType;
 
 public abstract class OperationalNode extends Node {
 
@@ -28,6 +28,9 @@ public abstract class OperationalNode extends Node {
 
     protected void onWriteMessage(WriteMessage message) {
         int key = message.getKey();
+        int value = message.getValue();
+        Logger.write(this.id, LoggerOperationType.RECEIVED, key, value, this.isKeyLocked(key));
+
         if (this.isKeyLocked(key) || this.isWriteUnconfirmed(key)) {
             Logger.error(this.id, MessageType.WRITE, key, false, "Can't read value, because it's locked");
             this.sendLockedErrorToSender(key, MessageType.WRITE);
@@ -38,6 +41,9 @@ public abstract class OperationalNode extends Node {
 
     protected void onCritWriteMessage(CritWriteMessage message) {
         int key = message.getKey();
+        int value = message.getValue();
+        Logger.criticalWrite(this.id, LoggerOperationType.RECEIVED, key, value, this.isKeyLocked(key));
+
         if (this.isKeyLocked(key) || this.isWriteUnconfirmed(key)) {
             Logger.error(this.id, MessageType.CRITICAL_WRITE, key, false, "Can't read value, because it's locked");
             this.sendLockedErrorToSender(key, MessageType.CRITICAL_WRITE);
@@ -47,11 +53,15 @@ public abstract class OperationalNode extends Node {
     }
 
     protected void onCritWriteVoteMessage(CritWriteVoteMessage message) {
+        Logger.criticalWriteVote(this.id, LoggerOperationType.RECEIVED, message.getKey(), message.isOk());
         this.handleCritWriteVoteMessage(message);
     }
 
     protected void onReadMessage(ReadMessage message) {
         int key = message.getKey();
+        Logger.read(this.id, LoggerOperationType.RECEIVED, key, message.getUpdateCount(), this.getUpdateCountOrElse(key),
+                this.isKeyLocked(key), false, this.isReadUnconfirmed(key)); // todo is older is not always false here
+
         if (this.isKeyLocked(key) || this.isWriteUnconfirmed(key)) {
             Logger.error(this.id, MessageType.READ, key, false, "Can't read value, because it's locked");
             this.sendLockedErrorToSender(key, MessageType.READ);
@@ -62,6 +72,9 @@ public abstract class OperationalNode extends Node {
 
     protected void onCritReadMessage(CritReadMessage message) {
         int key = message.getKey();
+        Logger.criticalRead(this.id, LoggerOperationType.RECEIVED, key, message.getUpdateCount(),
+                this.getUpdateCountOrElse(key), this.isKeyLocked(key));
+
         if (this.isKeyLocked(key) || this.isWriteUnconfirmed(key)) {
             Logger.error(this.id, MessageType.CRITICAL_READ, key, false, "Can't read value, because it's locked");
             this.sendLockedErrorToSender(key, MessageType.CRITICAL_READ);

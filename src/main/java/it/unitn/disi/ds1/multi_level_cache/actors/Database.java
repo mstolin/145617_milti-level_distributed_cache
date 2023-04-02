@@ -9,7 +9,7 @@ import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageType;
 
 import java.util.*;
 
-public class Database extends Node implements Coordinator {
+public class Database extends OperationalNode implements Coordinator {
 
     private final ACCoordinator acCoordinator = new ACCoordinator(this);
     private List<ActorRef> l1Caches;
@@ -71,19 +71,10 @@ public class Database extends Node implements Coordinator {
         Logger.join(this.id, "L2 Caches", this.l2Caches.size());
     }
 
-    private void onWriteMessage(WriteMessage message) {
+    @Override
+    protected void handleWriteMessage(WriteMessage message) {
         int key = message.getKey();
         int value = message.getValue();
-        boolean isLocked = this.isKeyLocked(key);
-
-        if (this.isKeyLocked(key) || this.isWriteUnconfirmed(key)) {
-            Logger.error(this.id, MessageType.WRITE, key, true,
-                    "Can't write value, because key is locked or unconfirmed");
-            this.getSender().tell(ErrorMessage.lockedKey(key, MessageType.WRITE), this.getSelf());
-            return;
-        }
-
-        Logger.write(this.id, LoggerOperationType.RECEIVED, key, value, isLocked);
 
         try {
             // write data
@@ -108,20 +99,10 @@ public class Database extends Node implements Coordinator {
         }
     }
 
-    private void onCritWriteMessage(CritWriteMessage message) {
+    @Override
+    protected void handleCritWriteMessage(CritWriteMessage message) {
         int key = message.getKey();
         int value = message.getValue();
-        boolean isLocked = this.isKeyLocked(key);
-
-        if (this.isKeyLocked(key) || this.isWriteUnconfirmed(key)) {
-            Logger.error(this.id, MessageType.CRITICAL_WRITE, key, true,
-                    "Can't write value, because key is locked or unconfirmed");
-            this.getSender().tell(ErrorMessage.lockedKey(key, MessageType.CRITICAL_WRITE), this.getSelf());
-            return;
-        }
-
-        Logger.criticalWrite(this.id, LoggerOperationType.RECEIVED, key, value, isLocked);
-
         // lock value from now on
         this.lockKey(key);
         // Multicast vote request to all L1s // todo make own method
@@ -133,12 +114,13 @@ public class Database extends Node implements Coordinator {
         this.acCoordinator.setCritWriteConfig(value);
     }
 
-    private void onCritWriteVoteMessage(CritWriteVoteMessage message) {
-        Logger.criticalWriteVote(this.id, LoggerOperationType.RECEIVED, message.getKey(), message.isOk());
+    @Override
+    protected void handleCritWriteVoteMessage(CritWriteVoteMessage message) {
         this.acCoordinator.onCritWriteVoteMessage(message);
     }
 
-    private void onReadMessage(ReadMessage message) {
+    @Override
+    protected void handleReadMessage(ReadMessage message) {
         int key = message.getKey();
 
         if (!this.isKeyAvailable(key)) {
@@ -146,17 +128,6 @@ public class Database extends Node implements Coordinator {
             this.getSender().tell(ErrorMessage.unknownKey(key, MessageType.READ), this.getSelf());
             return;
         }
-
-        if (this.isKeyLocked(key)) {
-            // force timeout
-            Logger.error(this.id, MessageType.READ, key, true, "Can't read value, because it's locked");
-            this.getSender().tell(ErrorMessage.lockedKey(key, MessageType.READ), this.getSelf());
-            return;
-        }
-        boolean isLocked = this.isKeyLocked(key);
-        boolean isUnconfirmed = this.isReadUnconfirmed(key);
-        Logger.read(this.id, LoggerOperationType.RECEIVED, key, message.getUpdateCount(), this.getUpdateCountOrElse(key),
-                isLocked, false, isUnconfirmed);
 
         // add read as unconfirmed
         this.addUnconfirmedRead(key, this.getSender());
@@ -166,7 +137,8 @@ public class Database extends Node implements Coordinator {
         this.responseFill(key);
     }
 
-    private void onCritReadMessage(CritReadMessage message) {
+    @Override
+    protected void handleCritReadMessage(CritReadMessage message) {
         int key = message.getKey();
 
         if (!this.isKeyAvailable(key)) {
@@ -175,20 +147,8 @@ public class Database extends Node implements Coordinator {
             return;
         }
 
-        if (this.isKeyLocked(key)) {
-            // force timeout
-            Logger.error(this.id, MessageType.CRITICAL_READ, key, true, "Can't read value, because it's locked");
-            this.getSender().tell(ErrorMessage.lockedKey(key, MessageType.CRITICAL_READ), this.getSelf());
-            return;
-        }
-
-        Logger.criticalRead(this.id, LoggerOperationType.RECEIVED, key, message.getUpdateCount(),
-                this.getUpdateCountOrElse(key), this.isKeyLocked(key));
-
         // add read as unconfirmed
         this.addUnconfirmedRead(key, this.getSender());
-        // lock value until fill has been sent
-        this.lockKey(key); // todo remove
         // send fill message
         this.responseFill(key);
     }
