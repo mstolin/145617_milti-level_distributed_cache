@@ -13,7 +13,6 @@ import java.util.List;
 public class L1Cache extends Cache implements Coordinator {
 
     private final ACCoordinator acCoordinator = new ACCoordinator(this);
-    private boolean isCritWriteRequestConfirmed = false; // todo replace isWriteUnconfirmed
 
     public L1Cache(String id) {
         super(id);
@@ -43,7 +42,7 @@ public class L1Cache extends Cache implements Coordinator {
             CritWriteRequestMessage requestMessage = (CritWriteRequestMessage) message.getMessage();
             int key = requestMessage.getKey();
 
-            if (!this.isCritWriteRequestConfirmed) {
+            if (!this.isWriteUnconfirmed(key)) {
                 Logger.timeout(this.id, message.getType());
                 // reset and just timeout
                 this.abortCritWrite(key);
@@ -75,8 +74,9 @@ public class L1Cache extends Cache implements Coordinator {
             Logger.criticalWriteRequest(this.id, LoggerOperationType.MULTICAST, message.getKey(), true);
             this.acCoordinator.setCritWriteConfig(message.getKey());
             this.multicast(message, this.l2Caches);
-            this.isCritWriteRequestConfirmed = false;
             this.setMulticastTimeout(message, MessageType.CRITICAL_WRITE_REQUEST);
+            // set as unconfirmed with no sender if not already srt as unconfirmed
+            this.addUnconfirmedWrite(message.getKey(), ActorRef.noSender());
         }
     }
 
@@ -121,7 +121,7 @@ public class L1Cache extends Cache implements Coordinator {
             l2Cache.tell(message, this.getSelf());
             // reset
             this.abortWrite(key);
-        } else if (messageType == MessageType.CRITICAL_WRITE && !this.isCritWriteRequestConfirmed) {
+        } else if (messageType == MessageType.CRITICAL_WRITE && this.isWriteUnconfirmed(key)) {
             Logger.error(this.id, MessageType.CRITICAL_WRITE, key, false, "Received error message");
             // tell L2 about message
             ActorRef l2Cache = this.getUnconfirmedActorForWrit(key);
@@ -184,7 +184,6 @@ public class L1Cache extends Cache implements Coordinator {
     @Override
     protected void flush() {
         super.flush();
-        this.isCritWriteRequestConfirmed = false;
         this.acCoordinator.resetCritWriteConfig();
     }
 
@@ -204,8 +203,6 @@ public class L1Cache extends Cache implements Coordinator {
 
     @Override
     public void onVoteOk(int key, int value) {
-        // crit write request is now confirmed
-        this.isCritWriteRequestConfirmed = true;
         // got OK vote from all L2s, lock and answer back to DB
         this.lockKey(key);
         // set as unconfirmed with no sender, just to block all new write requests
@@ -220,6 +217,5 @@ public class L1Cache extends Cache implements Coordinator {
     public void abortCritWrite(int key) {
         this.abortWrite(key);
         this.acCoordinator.resetCritWriteConfig();
-        this.isCritWriteRequestConfirmed = false;
     }
 }
