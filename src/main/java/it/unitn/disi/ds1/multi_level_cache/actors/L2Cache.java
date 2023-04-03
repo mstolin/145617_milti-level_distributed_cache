@@ -63,7 +63,9 @@ public class L2Cache extends Cache {
             // if the key is in this map, then no ReadReply has been received for the key
             if (this.isReadUnconfirmed(key)) {
                 Logger.timeout(this.id, message.getType());
-                this.database.tell(critReadMessage, this.getSelf());
+                Logger.criticalRead(this.id, LoggerOperationType.SEND, key, critReadMessage.getUpdateCount(),
+                        this.getUpdateCountOrElse(key), this.isKeyLocked(key));
+                this.send(critReadMessage, this.database);
             }
         } else if (message.getType() == MessageType.WRITE) {
             WriteMessage writeMessage = (WriteMessage) message.getMessage();
