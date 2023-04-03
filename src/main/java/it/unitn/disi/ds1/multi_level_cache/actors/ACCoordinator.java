@@ -34,7 +34,7 @@ public class ACCoordinator <T extends Coordinator> {
         int key = message.getKey();
         if (!message.isOk()) {
             // abort
-            this.coordinator.abortCritWrite(key);
+            this.coordinator.abortCritWrite(key, true);
             return;
         }
 

@@ -14,6 +14,6 @@ public interface Coordinator {
      */
     void onVoteOk(int key, int value);
 
-    void abortCritWrite(int key);
+    void abortCritWrite(int key, boolean multicastAbort);
 
 }

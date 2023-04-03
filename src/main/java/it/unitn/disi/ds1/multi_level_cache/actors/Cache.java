@@ -142,7 +142,7 @@ public abstract class Cache extends OperationalNode {
 
     protected abstract boolean isCritWriteOk(int key);
 
-    protected abstract void abortCritWrite(int key);
+    protected abstract void abortCritWrite(int key, boolean multicastAbort);
 
     protected abstract boolean isL1Cache();
 
