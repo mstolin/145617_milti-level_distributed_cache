@@ -83,7 +83,7 @@ public class L2Cache extends Cache {
             if (this.isWriteUnconfirmed(key)) {
                 // do not forward to DB when crit write fails
                 Logger.timeout(this.id, message.getType());
-                this.abortCritWrite(key);
+                this.abortCritWrite(key, false);
             }
         }
     }
@@ -129,7 +129,7 @@ public class L2Cache extends Cache {
         }
 
         // reset critical write
-        this.abortCritWrite(key);
+        this.abortCritWrite(key, false);
     }
 
     @Override
@@ -150,7 +150,7 @@ public class L2Cache extends Cache {
             ActorRef client = this.getUnconfirmedActorForWrit(key);
             client.tell(message, this.getSelf());
             // reset and just timeout
-            this.abortCritWrite(key);
+            this.abortCritWrite(key, false);
         } else if ((messageType == MessageType.READ || messageType == MessageType.CRITICAL_READ) && this.isReadUnconfirmed(key)) {
             if (messageType == MessageType.READ) {
                 Logger.error(this.id, LoggerOperationType.MULTICAST, messageType, key, false, "Forward error message");
@@ -184,7 +184,15 @@ public class L2Cache extends Cache {
     }
 
     @Override
-    protected void abortCritWrite(int key) {
+    protected void abortCritWrite(int key, boolean multicastAbort) {
+        // send error to client
+        if (this.isWriteUnconfirmed(key)) {
+            ActorRef client = this.getUnconfirmedActorForWrit(key);
+            ErrorMessage errorMessage = ErrorMessage.internalError(key, MessageType.CRITICAL_WRITE);
+            Logger.error(this.id, LoggerOperationType.SEND, MessageType.ERROR, key, false, "");
+            this.send(errorMessage, client);
+        }
+
         this.abortWrite(key);
     }
 
