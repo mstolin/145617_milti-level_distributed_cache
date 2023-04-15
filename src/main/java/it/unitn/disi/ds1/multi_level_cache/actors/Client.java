@@ -3,8 +3,6 @@ package it.unitn.disi.ds1.multi_level_cache.actors;
 import akka.actor.ActorRef;
 import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
-import it.unitn.disi.ds1.multi_level_cache.messages.utils.CacheCrashConfig;
-import it.unitn.disi.ds1.multi_level_cache.messages.utils.ErrorType;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageConfig;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerOperationType;
@@ -15,11 +13,11 @@ import java.util.*;
 public class Client extends Node {
 
     /**
-     * The timeout duration in seconds. It is important that the
+     * The timeout duration in millis. It is important that the
      * time-out delay for the client is slightly longer than the one
      * for the caches.
      */
-    static final long TIMEOUT_SECONDS = 15; // todo make millis
+    static final long TIMEOUT_MILLIS = 15000;
     /** Max. number to retry write or read operations */
     static final int MAX_RETRY_COUNT = 3;
     /** List of level 2 caches, the client knows about */
@@ -44,7 +42,7 @@ public class Client extends Node {
 
     @Override
     protected long getTimeoutSeconds() {
-        return TIMEOUT_SECONDS;
+        return TIMEOUT_MILLIS;
     }
 
     /**
@@ -103,8 +101,7 @@ public class Client extends Node {
      * @param value Value used to update the key
      * @param isCritical Determines if the message is of critical nature
      */
-    private void retryWriteMessage(ActorRef unreachableActor, int key, int value, boolean isCritical,
-                                   MessageConfig messageConfig) {
+    private void retryWriteMessage(ActorRef unreachableActor, int key, int value, boolean isCritical) {
         if (this.writeRetryCount < MAX_RETRY_COUNT) {
             // get random actor
             List<ActorRef> workingL2Caches = this.l2Caches
@@ -114,10 +111,10 @@ public class Client extends Node {
             this.writeRetryCount = this.writeRetryCount + 1;
             // send message
             if (isCritical) {
-                this.sendCritWriteMessage(randomActor, key, value, messageConfig);
+                this.sendCritWriteMessage(randomActor, key, value, MessageConfig.none());
                 Logger.criticalWrite(this.id, LoggerOperationType.RETRY, key, value, false);
             } else {
-                this.sendWriteMessage(randomActor, key, value, messageConfig);
+                this.sendWriteMessage(randomActor, key, value, MessageConfig.none());
                 Logger.write(this.id, LoggerOperationType.RETRY, key, value, false);
             }
         } else {
@@ -174,7 +171,7 @@ public class Client extends Node {
      * @param key Key to be read
      * @param isCritical Determines if the message is of critical nature
      */
-    private void retryReadMessage(ActorRef unreachableActor, int key, boolean isCritical, MessageConfig messageConfig) {
+    private void retryReadMessage(ActorRef unreachableActor, int key, boolean isCritical) {
         int retryCountForKey = this.getRetryCountForRead(key);
         if (retryCountForKey < MAX_RETRY_COUNT) {
             // get another actor (hoping it will work)
@@ -188,13 +185,13 @@ public class Client extends Node {
             // send message
             if (isUnconfirmed) {
                 if (isCritical) {
-                    this.sendCritReadMessage(randomActor, key, messageConfig);
+                    this.sendCritReadMessage(randomActor, key, MessageConfig.none());
                     Logger.criticalRead(this.id, LoggerOperationType.RETRY, key,
                             this.getUpdateCountOrElse(key),
                             this.getUpdateCountOrElse(key),
                             isLocked);
                 } else {
-                    this.sendReadMessage(randomActor, key, messageConfig);
+                    this.sendReadMessage(randomActor, key, MessageConfig.none());
                     Logger.read(this.id, LoggerOperationType.RETRY, key,
                             this.getUpdateCountOrElse(key),
                             this.getUpdateCountOrElse(key),
@@ -374,7 +371,7 @@ public class Client extends Node {
             Logger.timeout(this.id, type);
 
             // try again
-            this.retryWriteMessage(message.getUnreachableActor(), key, value, false, writeMessage.getMessageConfig());
+            this.retryWriteMessage(message.getUnreachableActor(), key, value, false);
         } else if (type == MessageType.READ) {
             ReadMessage readMessage = (ReadMessage) message.getMessage();
             int key = readMessage.getKey();
@@ -382,7 +379,7 @@ public class Client extends Node {
             // if the key is in this map, then no ReadReply has been received for the key
             if (this.isReadUnconfirmed(key)) {
                 Logger.timeout(this.id, type);
-                this.retryReadMessage(message.getUnreachableActor(), key, false, readMessage.getMessageConfig());
+                this.retryReadMessage(message.getUnreachableActor(), key, false);
             }
         } else if (type == MessageType.CRITICAL_READ) {
             CritReadMessage critReadMessage = (CritReadMessage) message.getMessage();
@@ -390,7 +387,7 @@ public class Client extends Node {
 
             if (this.isReadUnconfirmed(key)) {
                 Logger.timeout(this.id, type);
-                this.retryReadMessage(message.getUnreachableActor(), key, true, critReadMessage.getMessageConfig());
+                this.retryReadMessage(message.getUnreachableActor(), key, true);
             }
         } else if (type == MessageType.CRITICAL_WRITE && this.isWaitingForWriteConfirm) {
             CritWriteMessage critWriteMessage = (CritWriteMessage) message.getMessage();
@@ -400,7 +397,7 @@ public class Client extends Node {
             Logger.timeout(this.id, type);
 
             // try again
-            this.retryWriteMessage(message.getUnreachableActor(), key, value, true, critWriteMessage.getMessageConfig());
+            this.retryWriteMessage(message.getUnreachableActor(), key, value, true);
         }
     }
 
