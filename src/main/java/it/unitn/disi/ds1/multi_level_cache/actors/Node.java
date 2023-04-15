@@ -20,7 +20,7 @@ public abstract class Node extends DataNode {
     private ReadConfig readConfig = new ReadConfig();
 
     /** The timeout duration */
-    static final long TIMEOUT_MILLIS = 60000;
+    static final long TIMEOUT_MILLIS = 6000;
     /** Data the Node knows about */
     /** ID of this node */
     public String id;
@@ -95,9 +95,9 @@ public abstract class Node extends DataNode {
     /**
      * Returns the seconds used for a time-out.
      *
-     * @return Seconds
+     * @return millis
      */
-    protected long getTimeoutSeconds() {
+    protected long getTimeoutMillis() {
         return TIMEOUT_MILLIS;
     }
 
@@ -123,12 +123,12 @@ public abstract class Node extends DataNode {
      */
     protected void setTimeout(Serializable message, ActorRef receiver, MessageType messageType) {
         TimeoutMessage timeoutMessage = new TimeoutMessage(message, receiver, messageType);
-        this.scheduleMessageToSelf(timeoutMessage, this.getTimeoutSeconds());
+        this.scheduleMessageToSelf(timeoutMessage, this.getTimeoutMillis());
     }
 
     protected void setMulticastTimeout(Serializable message, MessageType messageType) {
         TimeoutMessage timeoutMessage = new TimeoutMessage(message, ActorRef.noSender(), messageType);
-        this.scheduleMessageToSelf(timeoutMessage, this.getTimeoutSeconds());
+        this.scheduleMessageToSelf(timeoutMessage, this.getTimeoutMillis());
     }
 
     protected void onErrorMessage(ErrorMessage message) {

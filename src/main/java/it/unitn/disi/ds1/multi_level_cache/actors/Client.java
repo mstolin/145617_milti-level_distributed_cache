@@ -41,7 +41,7 @@ public class Client extends Node {
     }
 
     @Override
-    protected long getTimeoutSeconds() {
+    protected long getTimeoutMillis() {
         return TIMEOUT_MILLIS;
     }
 
@@ -144,7 +144,7 @@ public class Client extends Node {
         // set config
         this.addUnconfirmedRead(key, l2Cache);
         // set timeout
-        this.setTimeout(readMessage, l2Cache, MessageType.READ);
+        //this.setTimeout(readMessage, l2Cache, MessageType.READ);
     }
 
     /**
