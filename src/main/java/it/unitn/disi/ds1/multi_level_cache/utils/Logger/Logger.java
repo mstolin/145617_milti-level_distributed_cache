@@ -2,6 +2,9 @@ package it.unitn.disi.ds1.multi_level_cache.utils.Logger;
 
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageType;
 
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
 public final class Logger {
 
     private final static String CRASH_FORMAT = "recover-after: %ds";
@@ -11,7 +14,7 @@ public final class Logger {
     private final static String CRITICAL_WRITE_REQUEST_REC = "key: %d";
     private final static String CRITICAL_WRITE_REQUEST_SEND = "key: %d";
     private final static String CRITICAL_WRITE_VOTE= "key: %d, is-ok: %b";
-    private final static String ERROR_FORMAT = "msg-type: %s, key: %d, force-timeout: %b, description: %s";
+    private final static String ERROR_FORMAT = "key: %d, msg-type: %s, force-timeout: %b, description: %s";
     private final static String FILL_FORMAT_REC = "key: %d, new-value: %d, old-value: %d, new-uc: %d, old-uc: %d";
     private final static String FILL_FORMAT_SEND = "key: %d, value: %d, uc: %d";
     private final static String INIT_READ_FORMAT = "key: %d, is-critical: %b";
@@ -27,6 +30,13 @@ public final class Logger {
 
     private static boolean isSendAction(LoggerOperationType operationType) {
         return operationType == LoggerOperationType.SEND || operationType == LoggerOperationType.MULTICAST || operationType == LoggerOperationType.RETRY;
+    }
+
+    public static void printHeader() {
+        String header = String.format(LOG_FORMAT, "ID", "ACT", "MESSAGE TYPE", "INFO");
+        String line = String.format(LOG_FORMAT, "-".repeat(8), "-".repeat(3), "-".repeat(18), "-".repeat(30));
+        System.out.println(header);
+        System.out.println(line);
     }
 
     public static void log(MessageType type, String id, LoggerOperationType operationType, String info) {
@@ -98,9 +108,9 @@ public final class Logger {
         log(MessageType.CRITICAL_WRITE_VOTE, id, operationType, msg);
     }
 
-    public static void error(String id, MessageType messageType, int key, boolean forceTimeout, String description) {
-        String msg = String.format(ERROR_FORMAT, messageType, key, forceTimeout, description);
-        log(MessageType.ERROR, id, LoggerOperationType.ERROR, msg);
+    public static void error(String id, LoggerOperationType operationType, MessageType messageType, int key, boolean forceTimeout, String description) {
+        String msg = String.format(ERROR_FORMAT, key, messageType, forceTimeout, description);
+        log(MessageType.ERROR, id, operationType, msg);
     }
 
     public static void fill(String id, LoggerOperationType operationType, int key, int newValue, int oldValue, int newUc, int oldUc) {
