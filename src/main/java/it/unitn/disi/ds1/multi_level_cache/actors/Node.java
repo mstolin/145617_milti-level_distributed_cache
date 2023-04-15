@@ -1,11 +1,11 @@
 package it.unitn.disi.ds1.multi_level_cache.actors;
 
 import akka.actor.ActorRef;
-import it.unitn.disi.ds1.multi_level_cache.actors.utils.DataStore;
 import it.unitn.disi.ds1.multi_level_cache.actors.utils.ReadConfig;
 import it.unitn.disi.ds1.multi_level_cache.actors.utils.WriteConfig;
 import it.unitn.disi.ds1.multi_level_cache.messages.ErrorMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.TimeoutMessage;
+import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageConfig;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageType;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerOperationType;
@@ -20,7 +20,7 @@ public abstract class Node extends DataNode {
     private ReadConfig readConfig = new ReadConfig();
 
     /** The timeout duration */
-    static final long TIMEOUT_SECONDS = 6; // todo make milliseconds
+    static final long TIMEOUT_MILLIS = 60000;
     /** Data the Node knows about */
     /** ID of this node */
     public String id;
@@ -79,7 +79,11 @@ public abstract class Node extends DataNode {
     }
 
     protected void send(Serializable message, ActorRef receiver) {
-        receiver.tell(message, this.getSelf());
+        this.send(message, receiver, 0);
+    }
+
+    protected void send(Serializable message, ActorRef receiver, long delay) {
+        this.scheduleMessageTo(message, delay, receiver);
     }
 
     protected void flush() {
@@ -94,20 +98,24 @@ public abstract class Node extends DataNode {
      * @return Seconds
      */
     protected long getTimeoutSeconds() {
-        return TIMEOUT_SECONDS;
+        return TIMEOUT_MILLIS;
     }
 
-    protected void scheduleMessageToSelf(Serializable message, long millis) {
+    protected void scheduleMessageTo(Serializable message, long millis, ActorRef receiver) {
         this.getContext()
                 .system()
                 .scheduler()
                 .scheduleOnce(
                         Duration.ofMillis(millis),
-                        this.getSelf(),
+                        receiver,
                         message,
                         this.getContext().system().dispatcher(),
                         this.getSelf()
                 );
+    }
+
+    protected void scheduleMessageToSelf(Serializable message, long millis) {
+        this.scheduleMessageTo(message, millis, this.getSelf());
     }
 
     /**
