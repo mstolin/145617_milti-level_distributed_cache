@@ -73,19 +73,19 @@ public abstract class Cache extends OperationalNode {
         boolean isLocked = this.isKeyLocked(key);
         boolean isOlder = updateCount > actorUpdateCount;
         boolean mustForward = isOlder || !this.isKeyAvailable(key);
-        boolean isUnconfirmed = this.isReadUnconfirmed(key);
 
-        // set read as unconfirmed
-        this.addUnconfirmedRead(key, this.getSender());
 
         // check if we own a more recent or an equal value
         if (mustForward) {
-            if (!isUnconfirmed) {
+            if (!this.isReadUnconfirmed(key)) {
                 // Maybe another client already requested to read this key, then only add as unconfirmed and wait for response
                 Logger.read(this.id, LoggerOperationType.SEND, key, updateCount, 0, isLocked, isOlder,
                         false);
                 this.forwardReadMessageToNext(message);
             }
+
+            // set read as unconfirmed
+            this.addUnconfirmedRead(key, this.getSender());
         } else {
             // response accordingly
             this.handleFill(key);
