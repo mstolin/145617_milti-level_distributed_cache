@@ -24,6 +24,14 @@ public class L1Cache extends Cache implements Coordinator {
 
     @Override
     protected void forwardMessageToNext(Serializable message, MessageType messageType) {
+        if (message instanceof Message) {
+            Message msg = (Message) message;
+            if (msg.isMessageDelayedAtL1()) {
+                this.send(message, this.database, msg.getL1MessageDelay());
+                return;
+            }
+        }
+
         this.send(message, this.database);
     }
 

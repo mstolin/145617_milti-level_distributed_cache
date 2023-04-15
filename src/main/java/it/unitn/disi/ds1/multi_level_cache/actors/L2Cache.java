@@ -22,6 +22,15 @@ public class L2Cache extends Cache {
 
     @Override
     protected void forwardMessageToNext(Serializable message, MessageType messageType) {
+        if (message instanceof Message) {
+            Message msg = (Message) message;
+            if (msg.isMessageDelayedAtL2()) {
+                this.send(message, this.mainL1Cache, msg.getL2MessageDelay());
+                //this.setTimeout(message, this.mainL1Cache, messageType);
+                return;
+            }
+        }
+
         this.send(message, this.mainL1Cache);
         this.setTimeout(message, this.mainL1Cache, messageType);
     }
