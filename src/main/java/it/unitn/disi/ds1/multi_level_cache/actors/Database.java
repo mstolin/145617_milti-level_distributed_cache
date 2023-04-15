@@ -140,8 +140,6 @@ public class Database extends OperationalNode implements Coordinator {
 
         // add read as unconfirmed
         this.addUnconfirmedRead(key, this.getSender());
-        // lock value until fill has been sent
-        this.lockKey(key);
         // send fill message
         this.responseFill(key);
     }
