@@ -25,6 +25,10 @@ public class ErrorMessage implements Serializable {
         return new ErrorMessage(ErrorType.LOCKED_KEY, key, messageType);
     }
 
+    public static ErrorMessage internalError(int key, MessageType messageType) {
+        return new ErrorMessage(ErrorType.INTERNAL_ERROR, key, messageType);
+    }
+
     public ErrorType getErrorType() {
         return this.errorType;
     }

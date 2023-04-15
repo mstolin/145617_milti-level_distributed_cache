@@ -1,15 +1,15 @@
 package it.unitn.disi.ds1.multi_level_cache.messages;
 
-import it.unitn.disi.ds1.multi_level_cache.messages.utils.CacheCrashConfig;
+import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageConfig;
 
-public class CritWriteMessage extends CrashableMessage {
+public class CritWriteMessage extends Message {
 
     private final int key;
 
     private final int value;
 
-    public CritWriteMessage(int key, int value, CacheCrashConfig l1CrashConfig, CacheCrashConfig l2CrashConfig) {
-        super(l1CrashConfig, l2CrashConfig);
+    public CritWriteMessage(int key, int value, MessageConfig messageConfig) {
+        super(messageConfig);
         this.key = key;
         this.value = value;
     }

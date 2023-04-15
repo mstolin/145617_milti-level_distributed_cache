@@ -1,16 +1,15 @@
 package it.unitn.disi.ds1.multi_level_cache.messages;
 
-import it.unitn.disi.ds1.multi_level_cache.messages.utils.CacheCrashConfig;
+import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageConfig;
 
-public class CritReadMessage extends CrashableMessage {
+public class CritReadMessage extends Message {
 
     private final int key;
 
     private final int updateCount;
 
-    public CritReadMessage(int key, int updateCount,
-                           CacheCrashConfig l1CrashConfig, CacheCrashConfig l2CrashConfig) {
-        super(l1CrashConfig, l2CrashConfig);
+    public CritReadMessage(int key, int updateCount, MessageConfig messageConfig) {
+        super(messageConfig);
         this.key = key;
         this.updateCount = updateCount;
     }

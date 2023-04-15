@@ -1,17 +1,16 @@
 package it.unitn.disi.ds1.multi_level_cache.messages;
 
 import akka.actor.ActorRef;
-import it.unitn.disi.ds1.multi_level_cache.messages.utils.CacheCrashConfig;
+import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageConfig;
 
-public class InstantiateReadMessage extends CrashableMessage {
+public class InstantiateReadMessage extends Message {
 
     private final int key;
     private final boolean isCritical;
     private final ActorRef l2Cache;
 
-    public InstantiateReadMessage(int key, ActorRef l2Cache, boolean isCritical,
-                                  CacheCrashConfig l1CrashConfig, CacheCrashConfig l2CrashConfig) {
-        super(l1CrashConfig, l2CrashConfig);
+    public InstantiateReadMessage(int key, ActorRef l2Cache, boolean isCritical, MessageConfig messageConfig) {
+        super(messageConfig);
         this.key = key;
         this.l2Cache = l2Cache;
         this.isCritical = isCritical;
