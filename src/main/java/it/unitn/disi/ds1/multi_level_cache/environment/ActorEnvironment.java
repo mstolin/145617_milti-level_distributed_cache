@@ -5,6 +5,7 @@ import akka.actor.ActorSystem;
 import it.unitn.disi.ds1.multi_level_cache.actors.*;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.CacheCrashConfig;
+import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageConfig;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -177,22 +178,22 @@ public class ActorEnvironment {
         return this.getActorFromList(this.l2Caches, index);
     }
 
-    public void makeClientWrite(ActorRef client, ActorRef l2Cache, int key, int value, CacheCrashConfig l1CrashConfig, CacheCrashConfig l2CrashConfig) {
-        InstantiateWriteMessage message = new InstantiateWriteMessage(key, value, l2Cache, false, l1CrashConfig, l2CrashConfig);
+    public void makeClientWrite(ActorRef client, ActorRef l2Cache, int key, int value, MessageConfig messageConfig) {
+        InstantiateWriteMessage message = new InstantiateWriteMessage(key, value, l2Cache, false, messageConfig);
         client.tell(message, ActorRef.noSender());
     }
 
     public void makeClientWrite(ActorRef client, ActorRef l2Cache, int key, int value) {
-        this.makeClientWrite(client, l2Cache, key, value, CacheCrashConfig.empty(), CacheCrashConfig.empty());
+        this.makeClientWrite(client, l2Cache, key, value, MessageConfig.none());
     }
 
-    public void makeClientCritWrite(ActorRef client, ActorRef l2Cache, int key, int value, CacheCrashConfig l1CrashConfig, CacheCrashConfig l2CrashConfig) {
-        InstantiateWriteMessage message = new InstantiateWriteMessage(key, value, l2Cache, true, l1CrashConfig, l2CrashConfig);
+    public void makeClientCritWrite(ActorRef client, ActorRef l2Cache, int key, int value, MessageConfig messageConfig) {
+        InstantiateWriteMessage message = new InstantiateWriteMessage(key, value, l2Cache, true, messageConfig);
         client.tell(message, ActorRef.noSender());
     }
 
     public void makeClientCritWrite(ActorRef client, ActorRef l2Cache, int key, int value) {
-        this.makeClientCritWrite(client, l2Cache, key, value, CacheCrashConfig.empty(), CacheCrashConfig.empty());
+        this.makeClientCritWrite(client, l2Cache, key, value, MessageConfig.none());
     }
 
     public void makeRandomClientWrite(ActorRef l2Cache, int key, int value) {
@@ -200,26 +201,22 @@ public class ActorEnvironment {
         this.makeClientWrite(randomClient, l2Cache, key, value);
     }
 
-    public void makeClientRead(ActorRef client, ActorRef l2Cache, int key, CacheCrashConfig l1CrashConfig,
-                               CacheCrashConfig l2CrashConfig) {
-        InstantiateReadMessage message = new InstantiateReadMessage(key, l2Cache, false, l1CrashConfig,
-                l2CrashConfig);
+    public void makeClientRead(ActorRef client, ActorRef l2Cache, int key, MessageConfig messageConfig) {
+        InstantiateReadMessage message = new InstantiateReadMessage(key, l2Cache, false, messageConfig);
         client.tell(message, ActorRef.noSender());
     }
 
     public void makeClientRead(ActorRef client, ActorRef l2Cache, int key) {
-        this.makeClientRead(client, l2Cache, key, CacheCrashConfig.empty(), CacheCrashConfig.empty());
+        this.makeClientRead(client, l2Cache, key, MessageConfig.none());
     }
 
-    public void makeClientCritRead(ActorRef client, ActorRef l2Cache, int key, CacheCrashConfig l1CrashConfig,
-                                   CacheCrashConfig l2CrashConfig) {
-        InstantiateReadMessage message = new InstantiateReadMessage(key, l2Cache, true, l1CrashConfig,
-                l2CrashConfig);
+    public void makeClientCritRead(ActorRef client, ActorRef l2Cache, int key, MessageConfig messageConfig) {
+        InstantiateReadMessage message = new InstantiateReadMessage(key, l2Cache, true, messageConfig);
         client.tell(message, ActorRef.noSender());
     }
 
     public void makeClientCritRead(ActorRef client, ActorRef l2Cache, int key) {
-        this.makeClientCritRead(client, l2Cache, key, CacheCrashConfig.empty(), CacheCrashConfig.empty());
+        this.makeClientCritRead(client, l2Cache, key, MessageConfig.none());
     }
 
     public void makeRandomClientRead(ActorRef l2Cache, int key) {
