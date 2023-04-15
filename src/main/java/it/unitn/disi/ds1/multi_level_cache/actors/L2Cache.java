@@ -22,17 +22,17 @@ public class L2Cache extends Cache {
 
     @Override
     protected void forwardMessageToNext(Serializable message, MessageType messageType) {
+        long messageDelay = 0;
+
         if (message instanceof Message) {
             Message msg = (Message) message;
             if (msg.isMessageDelayedAtL2()) {
-                this.send(message, this.mainL1Cache, msg.getL2MessageDelay());
-                //this.setTimeout(message, this.mainL1Cache, messageType);
-                return;
+                messageDelay = msg.getL2MessageDelay();
             }
         }
 
-        this.send(message, this.mainL1Cache);
         this.setTimeout(message, this.mainL1Cache, messageType);
+        this.send(message, this.mainL1Cache, messageDelay);
     }
 
     @Override
@@ -57,7 +57,6 @@ public class L2Cache extends Cache {
         if (message.getType() == MessageType.READ) {
             ReadMessage readMessage = (ReadMessage) message.getMessage();
             int key = readMessage.getKey();
-
             // if the key is in this map, then no ReadReply has been received for the key
             if (this.isReadUnconfirmed(key)) {
                 Logger.timeout(this.id, message.getType());
