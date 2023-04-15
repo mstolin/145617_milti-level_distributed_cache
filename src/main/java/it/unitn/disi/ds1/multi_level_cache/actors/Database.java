@@ -54,7 +54,7 @@ public class Database extends OperationalNode implements Coordinator {
                 // multicast to everyone who has requested the value
                 FillMessage fillMessage = new FillMessage(key, value.get(), updateCount.get());
                 Logger.fill(this.id, LoggerOperationType.SEND, key, value.get(), 0, updateCount.get(), 0);
-                sender.tell(fillMessage, this.getSelf());
+                this.send(fillMessage, sender);
                 // reset the config
                 this.removeUnconfirmedRead(key);
             } else {
@@ -133,7 +133,8 @@ public class Database extends OperationalNode implements Coordinator {
         if (!this.isKeyAvailable(key)) {
             Logger.error(this.id, LoggerOperationType.SEND, MessageType.READ, key, false,
                     String.format("Can't read, because key %d is unknown", key));
-            this.getSender().tell(ErrorMessage.unknownKey(key, MessageType.READ), this.getSelf());
+            ErrorMessage errorMessage = ErrorMessage.unknownKey(key, MessageType.READ);
+            this.send(errorMessage, this.getSender());
             return;
         }
 
@@ -152,7 +153,8 @@ public class Database extends OperationalNode implements Coordinator {
         if (!this.isKeyAvailable(key)) {
             Logger.error(this.id, LoggerOperationType.SEND, MessageType.CRITICAL_READ, key, false,
                     String.format("Can't read, because key %d is unknown", key));
-            this.getSender().tell(ErrorMessage.unknownKey(key, MessageType.CRITICAL_READ), this.getSelf());
+            ErrorMessage errorMessage = ErrorMessage.unknownKey(key, MessageType.CRITICAL_READ);
+            this.send(errorMessage, this.getSender());
             return;
         }
 

@@ -22,7 +22,7 @@ public class L2Cache extends Cache {
 
     @Override
     protected void forwardMessageToNext(Serializable message, MessageType messageType) {
-        this.mainL1Cache.tell(message, this.getSelf());
+        this.send(message, this.mainL1Cache);
         this.setTimeout(message, this.mainL1Cache, messageType);
     }
 
@@ -36,7 +36,7 @@ public class L2Cache extends Cache {
             int updateCount = message.getUpdateCount();
             WriteConfirmMessage confirmMessage = new WriteConfirmMessage(key, value, updateCount);
             Logger.writeConfirm(this.id, LoggerOperationType.SEND, key, value, 0, updateCount, 0);
-            client.tell(confirmMessage, this.getSelf());
+            this.send(confirmMessage, client);
             // reset timeout
             this.abortWrite(key);
         }
@@ -54,7 +54,7 @@ public class L2Cache extends Cache {
                 Logger.timeout(this.id, message.getType());
                 Logger.read(this.id, LoggerOperationType.SEND, key, readMessage.getUpdateCount(),
                         this.getUpdateCountOrElse(key), this.isKeyLocked(key), false, true);
-                this.database.tell(readMessage, this.getSelf());
+                this.send(readMessage, this.database);
             }
         } else if (message.getType() == MessageType.CRITICAL_READ) {
             CritReadMessage critReadMessage = (CritReadMessage) message.getMessage();
@@ -74,7 +74,7 @@ public class L2Cache extends Cache {
             if (this.isWriteUnconfirmed(key)) {
                 Logger.timeout(this.id, message.getType());
                 Logger.write(this.id, LoggerOperationType.SEND, key, writeMessage.getValue(), this.isKeyLocked(key));
-                this.database.tell(writeMessage, this.getSelf());
+                this.send(writeMessage, this.database);
             }
         } else if (message.getType() == MessageType.CRITICAL_WRITE) {
             CritWriteMessage writeMessage = (CritWriteMessage) message.getMessage();
@@ -98,7 +98,7 @@ public class L2Cache extends Cache {
         // answer back
         CritWriteVoteMessage critWriteVoteOkMessage = new CritWriteVoteMessage(key, isOk);
         Logger.criticalWriteVote(this.id, LoggerOperationType.SEND, key, isOk);
-        this.mainL1Cache.tell(critWriteVoteOkMessage, this.getSelf());
+        this.send(critWriteVoteOkMessage, this.mainL1Cache);
     }
 
     @Override
@@ -125,7 +125,7 @@ public class L2Cache extends Cache {
             ActorRef client = this.getUnconfirmedActorForWrit(key);
             WriteConfirmMessage confirmMessage = new WriteConfirmMessage(key, value, updateCount);
             Logger.writeConfirm(this.id, LoggerOperationType.SEND, key, value, 0, updateCount, 0);
-            client.tell(confirmMessage, this.getSelf());
+            this.send(confirmMessage, client);
         }
 
         // reset critical write
@@ -141,14 +141,14 @@ public class L2Cache extends Cache {
             Logger.error(this.id, LoggerOperationType.SEND, messageType, key, false, "Forward error message");
             // tell L2 about message
             ActorRef client = this.getUnconfirmedActorForWrit(key);
-            client.tell(message, this.getSelf());
+            this.send(message, client);
             // reset
             this.abortWrite(key);
         } else if (messageType == MessageType.CRITICAL_WRITE && !this.isWriteUnconfirmed(key)) {
             Logger.error(this.id, LoggerOperationType.SEND, messageType, key, false, "Forward error message");
             // tell L2 about message
             ActorRef client = this.getUnconfirmedActorForWrit(key);
-            client.tell(message, this.getSelf());
+            this.send(message, client);
             // reset and just timeout
             this.abortCritWrite(key, false);
         } else if ((messageType == MessageType.READ || messageType == MessageType.CRITICAL_READ) && this.isReadUnconfirmed(key)) {

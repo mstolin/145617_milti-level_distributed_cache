@@ -24,7 +24,7 @@ public class L1Cache extends Cache implements Coordinator {
 
     @Override
     protected void forwardMessageToNext(Serializable message, MessageType messageType) {
-        this.database.tell(message, this.getSelf());
+        this.send(message, this.database);
     }
 
     @Override
@@ -129,14 +129,14 @@ public class L1Cache extends Cache implements Coordinator {
             Logger.error(this.id, LoggerOperationType.SEND, messageType, key, false, "Forward error message");
             // tell L2 about message
             ActorRef l2Cache = this.getUnconfirmedActorForWrit(key);
-            l2Cache.tell(message, this.getSelf());
+            this.send(message, l2Cache);
             // reset
             this.abortWrite(key);
         } else if (messageType == MessageType.CRITICAL_WRITE && this.isWriteUnconfirmed(key)) {
             Logger.error(this.id, LoggerOperationType.SEND, messageType, key, false, "Forward error message");
             // tell L2 about message
             ActorRef l2Cache = this.getUnconfirmedActorForWrit(key);
-            l2Cache.tell(message, this.getSelf());
+            this.send(message, l2Cache);
             // reset and just timeout
             this.abortCritWrite(key, false);
         } else if ((messageType == MessageType.READ || messageType == MessageType.CRITICAL_READ) && this.isReadUnconfirmed(key)) {
@@ -219,7 +219,7 @@ public class L1Cache extends Cache implements Coordinator {
 
         CritWriteVoteMessage critWriteVoteMessage = new CritWriteVoteMessage(key, true);
         Logger.criticalWriteVote(this.id, LoggerOperationType.SEND, key, true);
-        this.database.tell(critWriteVoteMessage, this.getSelf());
+        this.send(critWriteVoteMessage, this.database);
     }
 
     @Override
