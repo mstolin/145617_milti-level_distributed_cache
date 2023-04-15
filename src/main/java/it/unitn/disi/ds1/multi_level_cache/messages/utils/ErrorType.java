@@ -4,5 +4,6 @@ public enum ErrorType {
 
     UNKNOWN_KEY,
     LOCKED_KEY,
+    INTERNAL_ERROR,
 
 }
