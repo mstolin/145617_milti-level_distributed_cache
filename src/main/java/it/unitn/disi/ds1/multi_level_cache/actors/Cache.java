@@ -232,18 +232,25 @@ public abstract class Cache extends OperationalNode {
     }
 
     private void onRefillMessage(RefillMessage message) {
-        // Print confirm
         int key = message.getKey();
         int value = message.getValue();
         int updateCount = message.getUpdateCount();
         boolean isLocked = this.isKeyLocked(key);
         boolean isUnconfirmed = this.isWriteUnconfirmed(key);
+        int actorUpdateCount = this.getUpdateCountOrElse(key);
+
+        if (!this.isKeyAvailable(key) && !isUnconfirmed) {
+            // this cache does not know about the key -> do nothing
+            Logger.refill(this.id, LoggerOperationType.RECEIVED, key, value, this.getValueOrElse(key),
+                    updateCount, actorUpdateCount, isLocked, false, false);
+            return;
+        }
+
         /*
         Only update if either,
         1. the data is locked and write-operation is unconfirmed (then, this was the requested Cache by client/L2)
         2. the data is unlocked and the message uc is newer than the current one (always update a write from the DB)
          */
-        int actorUpdateCount = this.getUpdateCountOrElse(key);
         boolean isMsgNewer = updateCount > actorUpdateCount;
         boolean isLockedAndUnconfirmed = isLocked && isUnconfirmed;
         boolean mustUpdate =  isLockedAndUnconfirmed || (!isLocked && isMsgNewer);
