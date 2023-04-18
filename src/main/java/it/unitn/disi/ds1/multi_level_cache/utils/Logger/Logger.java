@@ -19,7 +19,7 @@ public final class Logger {
     private final static String INIT_READ_FORMAT = "key: %d, is-critical: %b";
     private final static String INIT_WRITE_FORMAT = "key: %d, value: %d, is-critical: %b";
     private final static String JOIN_FORMAT = "%s of %d";
-    private final static String LOG_FORMAT = "%-12.12s | %-8.8s | %-3.3s | %-18.18s | %s";
+    private final static String LOG_FORMAT = "%-9.9s | %-8.8s | %-3.3s | %-18.18s | %s";
     private final static String READ_FORMAT_REC = "key: %d, msg-uc: %d, actor-uc: %d, is-locked: %b, is-older: %b, is-unconfirmed: %b";
     private final static String READ_FORMAT_SEND = "key: %d, uc: %d";
     private final static String REFILL_FORMAT = "key: %d, new-value: %d, old-value: %d, msg-uc: %d, actor-uc: %d, is-locked: %b, is-unconfirmed: %b, must-update: %b";
@@ -33,16 +33,17 @@ public final class Logger {
 
     public static void printHeader() {
         String header = String.format(LOG_FORMAT, "TIME", "ID", "ACT", "MESSAGE TYPE", "INFO");
-        String line = String.format(LOG_FORMAT, "-".repeat(12), "-".repeat(8), "-".repeat(3), "-".repeat(18), "-".repeat(30));
+        String line = String.format(LOG_FORMAT, "-".repeat(9), "-".repeat(8), "-".repeat(3), "-".repeat(18), "-".repeat(30));
         System.out.println(header);
         System.out.println(line);
     }
 
     public static void log(MessageType type, String id, LoggerOperationType operationType, String info) {
         long timePassed = System.currentTimeMillis() - START_TIME;
+        long minutes = timePassed / 60000;
         long seconds = timePassed / 1000;
         long millis = timePassed % 1000;
-        String time = String.format("%02d:%03d", seconds, millis);
+        String time = String.format("%02d:%02d,%03d", minutes, seconds, millis);
 
         info = info == null ? "" : info;
         String msg = String.format(LOG_FORMAT, time, id, operationType, type, info);
