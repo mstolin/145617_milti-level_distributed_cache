@@ -33,6 +33,7 @@ public abstract class Cache extends OperationalNode {
     protected void handleWriteMessage(WriteMessage message) {
         int key = message.getKey();
         int value = message.getValue();
+
         // lock
         this.lockKey(key);
         // set as unconfirmed
@@ -40,10 +41,11 @@ public abstract class Cache extends OperationalNode {
         // forward to next
         Logger.write(this.id, LoggerOperationType.SEND, key, value, this.isKeyLocked(key));
         this.forwardMessageToNext(message, MessageType.WRITE);
+
         // make crash afterwards
         if (this.isL1Cache() && message.mustL1Crash()) {
             this.makeSelfCrash(message.getL1RecoverDelay());
-        } else if (message.mustL2Crash()) {
+        } else if (!this.isL1Cache() && message.mustL2Crash()) {
             this.makeSelfCrash(message.getL2RecoverDelay());
         }
     }
@@ -58,7 +60,7 @@ public abstract class Cache extends OperationalNode {
         // make crash afterwards
         if (this.isL1Cache() && message.mustL1Crash()) {
             this.makeSelfCrash(message.getL1RecoverDelay());
-        } else if (message.mustL2Crash()) {
+        } else if (!this.isL1Cache() && message.mustL2Crash()) {
             this.makeSelfCrash(message.getL2RecoverDelay());
         }
     }
@@ -92,7 +94,7 @@ public abstract class Cache extends OperationalNode {
         // make crash afterwards
         if (this.isL1Cache() && message.mustL1Crash()) {
             this.makeSelfCrash(message.getL1RecoverDelay());
-        } else if (message.mustL2Crash()) {
+        } else if (!this.isL1Cache() && message.mustL2Crash()) {
             this.makeSelfCrash(message.getL2RecoverDelay());
         }
     }
@@ -114,7 +116,7 @@ public abstract class Cache extends OperationalNode {
         // make crash afterwards
         if (this.isL1Cache() && message.mustL1Crash()) {
             this.makeSelfCrash(message.getL1RecoverDelay());
-        } else if (message.mustL2Crash()) {
+        } else if (!this.isL1Cache() && message.mustL2Crash()) {
             this.makeSelfCrash(message.getL2RecoverDelay());
         }
     }
@@ -141,6 +143,8 @@ public abstract class Cache extends OperationalNode {
     protected abstract void abortCritWrite(int key, boolean multicastAbort);
 
     protected abstract boolean isL1Cache();
+
+    protected abstract void sendWriteConfirm(int key, int value, int updateCount);
 
     /**
      * Crashes this node
@@ -262,8 +266,13 @@ public abstract class Cache extends OperationalNode {
             if (isLockedAndUnconfirmed) {
                 // only unlock if this is the requested cache
                 this.unlockKey(key);
+                // send write confirm
+                if (!this.isL1Cache()) {
+                    this.sendWriteConfirm(key, value, updateCount);
+                }
             }
 
+            // Update value
             try {
                 this.setValue(key, value, updateCount);
                 this.handleRefillMessage(message);
