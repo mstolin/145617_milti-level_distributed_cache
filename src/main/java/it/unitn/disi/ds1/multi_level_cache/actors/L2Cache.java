@@ -3,6 +3,7 @@ package it.unitn.disi.ds1.multi_level_cache.actors;
 import akka.actor.ActorRef;
 import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
+import it.unitn.disi.ds1.multi_level_cache.messages.utils.ErrorType;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerOperationType;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageType;
@@ -70,8 +71,14 @@ public class L2Cache extends Cache {
 
             if (this.isWriteUnconfirmed(key)) {
                 Logger.timeout(this.id, message.getType());
-                Logger.write(this.id, LoggerOperationType.SEND, key, writeMessage.getValue(), this.isKeyLocked(key));
-                this.send(writeMessage, this.database);
+
+                // send error to client
+                Logger.error(this.id, LoggerOperationType.ERROR, message.getType(), key, false, "L1 is unreachable");
+                ErrorMessage errorMessage = new ErrorMessage(ErrorType.INTERNAL_ERROR, key, MessageType.WRITE);
+                ActorRef client = this.getUnconfirmedActorForWrit(key);
+                this.send(errorMessage, client);
+
+                this.abortWrite(key);
             }
         } else if (message.getType() == MessageType.CRITICAL_WRITE) {
             CritWriteMessage writeMessage = (CritWriteMessage) message.getMessage();
