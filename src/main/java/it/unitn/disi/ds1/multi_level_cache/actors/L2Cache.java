@@ -37,18 +37,7 @@ public class L2Cache extends Cache {
 
     @Override
     protected void handleRefillMessage(RefillMessage message) {
-        int key = message.getKey();
-        if (this.isWriteUnconfirmed(key)) {
-            // tell client write confirm
-            ActorRef client = this.getUnconfirmedActorForWrit(key);
-            int value = message.getValue();
-            int updateCount = message.getUpdateCount();
-            WriteConfirmMessage confirmMessage = new WriteConfirmMessage(key, value, updateCount);
-            Logger.writeConfirm(this.id, LoggerOperationType.SEND, key, value, 0, updateCount, 0);
-            this.send(confirmMessage, client);
-            // reset timeout
-            this.abortWrite(key);
-        }
+        this.abortWrite(message.getKey());
     }
 
     @Override
@@ -207,6 +196,17 @@ public class L2Cache extends Cache {
     @Override
     protected boolean isL1Cache() {
         return false;
+    }
+
+    @Override
+    protected void sendWriteConfirm(int key, int value, int updateCount) {
+        if (this.isWriteUnconfirmed(key)) {
+            // tell client write confirm
+            ActorRef client = this.getUnconfirmedActorForWrit(key);
+            WriteConfirmMessage confirmMessage = new WriteConfirmMessage(key, value, updateCount);
+            Logger.writeConfirm(this.id, LoggerOperationType.SEND, key, value, 0, updateCount, 0);
+            this.send(confirmMessage, client);
+        }
     }
 
     /**

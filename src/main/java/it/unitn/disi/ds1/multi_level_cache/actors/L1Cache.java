@@ -185,6 +185,11 @@ public class L1Cache extends Cache implements Coordinator {
     }
 
     @Override
+    protected void sendWriteConfirm(int key, int value, int updateCount) {
+        // Do nothing
+    }
+
+    @Override
     protected void handleFill(int key) {
         if (this.isReadUnconfirmed(key)) {
             int value = this.getValueOrElse(key);
