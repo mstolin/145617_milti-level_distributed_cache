@@ -1,8 +1,6 @@
 package it.unitn.disi.ds1.multi_level_cache.actors.utils;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 
 class DataEntry {
 
@@ -10,8 +8,6 @@ class DataEntry {
 
     /** The updateCount shows how often the value has been written. 1 by default.*/
     private int updateCount = 1;
-
-    private boolean isLocked = false;
 
     public DataEntry(int value) {
         this.value = value;
@@ -43,23 +39,12 @@ class DataEntry {
         this.updateCount = this.updateCount + 1;
     }
 
-    public boolean isLocked() {
-        return isLocked;
-    }
-
-    public void lock() {
-        this.isLocked = true;
-    }
-
-    public void unLock() {
-        this.isLocked = false;
-    }
-
 }
 
 public class DataStore {
 
     private Map<Integer, DataEntry> data = new HashMap<>();
+    private List<Integer> lockedKeys = new ArrayList<>();
 
     private DataEntry getData(int key) {
         return this.data.get(key);
@@ -115,32 +100,29 @@ public class DataStore {
     }
 
     public void lockValueForKey(int key) {
-        if (this.containsKey(key)) {
-            this.getData(key).lock();
+        if (!this.lockedKeys.contains(key)) {
+            this.lockedKeys.add(key);
         }
     }
 
     public void unLockValueForKey(int key) {
-        if (this.containsKey(key)) {
-            this.getData(key).unLock();
+        if (this.isLocked(key)) {
+            int index = this.lockedKeys.indexOf(key);
+            this.lockedKeys.remove(index);
         }
     }
 
     public void unLockAll() {
-        for (DataEntry entry: this.data.values()) {
-            entry.unLock();
-        }
+        this.lockedKeys = new ArrayList<>();
     }
 
     public boolean isLocked(int key) {
-        if (this.containsKey(key)) {
-            return this.getData(key).isLocked();
-        }
-        return false;
+        return this.lockedKeys.contains(key);
     }
 
     public void resetData() {
         this.data = new HashMap<>();
+        this.unLockAll();
     }
 
 }
