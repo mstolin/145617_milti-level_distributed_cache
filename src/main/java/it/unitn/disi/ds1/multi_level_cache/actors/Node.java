@@ -55,7 +55,10 @@ public abstract class Node extends DataNode {
     }
 
     protected void addUnconfirmedRead(int key, ActorRef actor) {
-        this.readConfig.addUnconfirmedRead(key, actor);
+        if (!this.readConfig.getUnconfirmedActors(key).contains(actor)) {
+            // don't add actor twice for the same key
+            this.readConfig.addUnconfirmedRead(key, actor);
+        }
     }
 
     protected void removeUnconfirmedRead(int key) {
