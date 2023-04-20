@@ -253,9 +253,9 @@ public class Client extends Node {
         int value = message.getValue();
         boolean isCritical = message.isCritical();
 
-        if (this.isWriteUnconfirmed(key)) {
+        if (this.isWaitingForWriteConfirm) {
             Logger.error(this.id, LoggerOperationType.ERROR, MessageType.INIT_WRITE, key, false,
-                    String.format("Waiting for another response for key %d", key));
+                    "Waiting for another write-confirm");
             return;
         }
 
@@ -313,9 +313,9 @@ public class Client extends Node {
         int key = message.getKey();
         boolean isCritical = message.isCritical();
 
-        if (this.isReadUnconfirmed(key) || this.isWriteUnconfirmed(key)) {
+        if (this.isWaitingForWriteConfirm) {
             Logger.error(this.id, LoggerOperationType.ERROR, MessageType.INIT_READ, key, false,
-                    String.format("Waiting for another response for key %d", key));
+                    "Waiting for write-confirm");
             return;
         }
 
