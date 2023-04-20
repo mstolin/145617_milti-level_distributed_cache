@@ -31,7 +31,7 @@ public abstract class OperationalNode extends Node {
         int value = message.getValue();
         Logger.write(this.id, LoggerOperationType.RECEIVED, key, value, this.isKeyLocked(key));
 
-        if (this.isKeyLocked(key) || this.isWriteUnconfirmed(key)) {
+        if (this.isKeyLocked(key)) {
             Logger.error(this.id, LoggerOperationType.SEND, MessageType.WRITE, key, false, "Can't read value, because it's locked");
             this.sendLockedErrorToSender(key, MessageType.WRITE);
         } else {
