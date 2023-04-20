@@ -19,7 +19,7 @@ public class Database extends OperationalNode implements Coordinator {
         super("Database");
 
         try {
-            this.setDefaultData(10);
+            this.setDefaultData(100);
         } catch (IllegalAccessException e) {
             System.out.printf("%s - Wasn't able to set default data\n", this.id);
         }
@@ -40,7 +40,8 @@ public class Database extends OperationalNode implements Coordinator {
     private void setDefaultData(int size) throws IllegalAccessException {
         for (int i = 0; i < size; i++) {
             int value = new Random().nextInt(1000);
-            this.setValue(i, value, 1);
+            int updateCount = new Random().nextInt(10-1)+1;
+            this.setValue(i, value, updateCount);
         }
     }
 
