@@ -41,7 +41,7 @@ public class L1Cache extends Cache implements Coordinator {
     }
 
     @Override
-    protected void forwardMessageToNext(Serializable message, MessageType messageType) {
+    protected void forwardMessageToNext(Serializable message, MessageType messageType, long millis) {
         long messageDelay = 0;
         if (message instanceof Message) {
             Message msg = (Message) message;
@@ -51,6 +51,11 @@ public class L1Cache extends Cache implements Coordinator {
         }
 
         this.send(message, this.database, messageDelay);
+    }
+
+    @Override
+    protected void forwardMessageToNext(Serializable message, MessageType messageType) {
+        this.forwardMessageToNext(message, messageType, this.getTimeoutMillis());
     }
 
     @Override

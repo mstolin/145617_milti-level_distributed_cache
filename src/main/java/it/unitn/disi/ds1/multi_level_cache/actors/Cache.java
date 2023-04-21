@@ -55,7 +55,7 @@ public abstract class Cache extends OperationalNode {
         this.addUnconfirmedWrite(message.getKey(), this.getSender());
         // forward to next
         Logger.criticalWrite(this.id, LoggerOperationType.SEND, message.getKey(), message.getValue(), false);
-        this.forwardMessageToNext(message, MessageType.CRITICAL_WRITE);
+        this.forwardMessageToNext(message, MessageType.CRITICAL_WRITE, 12000);
         // make crash afterwards
         if (this.isL1Cache() && message.mustL1Crash()) {
             this.makeSelfCrash(message.getL1RecoverDelay());
@@ -126,6 +126,8 @@ public abstract class Cache extends OperationalNode {
     }
 
     protected abstract void handleFill(int key);
+
+    protected abstract void forwardMessageToNext(Serializable message, MessageType messageType, long millis);
 
     protected abstract void forwardMessageToNext(Serializable message, MessageType messageType);
 

@@ -121,6 +121,11 @@ public abstract class Node extends DataNode {
         this.scheduleMessageTo(message, millis, this.getSelf());
     }
 
+    protected void setTimeout(Serializable message, ActorRef receiver, MessageType messageType, long millis) {
+        TimeoutMessage timeoutMessage = new TimeoutMessage(message, receiver, messageType);
+        this.scheduleMessageToSelf(timeoutMessage, millis);
+    }
+
     /**
      * Sends a TimeoutMessage to itself, after the given duration.
      */

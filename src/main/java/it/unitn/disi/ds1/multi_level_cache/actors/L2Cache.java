@@ -34,7 +34,7 @@ public class L2Cache extends Cache {
     }
 
     @Override
-    protected void forwardMessageToNext(Serializable message, MessageType messageType) {
+    protected void forwardMessageToNext(Serializable message, MessageType messageType, long millis) {
         long messageDelay = 0;
 
         if (message instanceof Message) {
@@ -44,8 +44,13 @@ public class L2Cache extends Cache {
             }
         }
 
-        this.setTimeout(message, this.mainL1Cache, messageType);
         this.send(message, this.mainL1Cache, messageDelay);
+        this.setTimeout(message, this.mainL1Cache, messageType, millis);
+    }
+
+    @Override
+    protected void forwardMessageToNext(Serializable message, MessageType messageType) {
+        this.forwardMessageToNext(message, messageType, this.getTimeoutMillis());
     }
 
     @Override
@@ -126,7 +131,7 @@ public class L2Cache extends Cache {
 
     @Override
     protected void handleCritWriteAbortMessage(CritWriteAbortMessage message) {
-        this.abortWrite(message.getKey());
+        this.abortCritWriteAnd(message.getKey(), true);
     }
 
     @Override
