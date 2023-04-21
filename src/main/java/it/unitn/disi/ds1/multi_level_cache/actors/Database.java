@@ -204,6 +204,11 @@ public class Database extends OperationalNode implements Coordinator {
     }
 
     @Override
+    protected long getTimeoutMillis() {
+        return 4500;
+    }
+
+    @Override
     public void abortCritWrite(int key) {
         this.acCoordinator.resetCritWriteConfig();
         this.unlockKey(key);
