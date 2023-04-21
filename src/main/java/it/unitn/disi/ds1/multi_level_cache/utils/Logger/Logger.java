@@ -200,7 +200,7 @@ public final class Logger {
         if (operationType == LoggerOperationType.RECEIVED) {
             msg = String.format(WRITE_FORMAT_REC, key, value, isLocked);
         } else if (isSendAction(operationType)) {
-            msg = String.format(WRITE_FORMAT_SEND, key, value);
+            msg = String.format(WRITE_FORMAT_REC, key, value, isLocked);
         }
 
         log(MessageType.WRITE, id, operationType, msg);
