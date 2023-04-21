@@ -199,20 +199,18 @@ public class Database extends OperationalNode implements Coordinator {
         if (message.getType() == MessageType.CRITICAL_WRITE_REQUEST && this.acCoordinator.hasRequestedCritWrite()) {
             CritWriteRequestMessage requestMessage = (CritWriteRequestMessage) message.getMessage();
             Logger.timeout(this.id, MessageType.CRITICAL_WRITE_REQUEST);
-            this.abortCritWrite(requestMessage.getKey(), true);
+            this.abortCritWrite(requestMessage.getKey());
         }
     }
 
     @Override
-    public void abortCritWrite(int key, boolean mulicastAbort) {
+    public void abortCritWrite(int key) {
         this.acCoordinator.resetCritWriteConfig();
         this.unlockKey(key);
 
-        if (mulicastAbort) {
-            CritWriteAbortMessage abortMessage = new CritWriteAbortMessage(key);
-            Logger.criticalWriteAbort(this.id, LoggerOperationType.MULTICAST, key);
-            this.multicast(abortMessage, this.l1Caches);
-        }
+        CritWriteAbortMessage abortMessage = new CritWriteAbortMessage(key);
+        Logger.criticalWriteAbort(this.id, LoggerOperationType.MULTICAST, key);
+        this.multicast(abortMessage, this.l1Caches);
     }
 
     @Override

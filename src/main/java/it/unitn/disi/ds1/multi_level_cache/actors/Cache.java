@@ -2,7 +2,6 @@ package it.unitn.disi.ds1.multi_level_cache.actors;
 
 import akka.actor.ActorRef;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
-import it.unitn.disi.ds1.multi_level_cache.messages.utils.CacheCrashConfig;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerOperationType;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageType;
@@ -140,7 +139,7 @@ public abstract class Cache extends OperationalNode {
 
     protected abstract boolean isCritWriteOk(int key);
 
-    protected abstract void abortCritWrite(int key, boolean multicastAbort);
+    protected abstract void abortCritWrite(int key);
 
     protected abstract boolean isL1Cache();
 

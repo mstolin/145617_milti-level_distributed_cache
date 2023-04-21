@@ -22,6 +22,24 @@ public class L1Cache extends Cache implements Coordinator {
         return Props.create(Cache.class, () -> new L1Cache(id));
     }
 
+    private void abortCritWriteAnd(int key, boolean multicastAbort, boolean sendVoteToDatabase) {
+        this.abortCritWrite(key);
+
+        // answer abort
+        if (sendVoteToDatabase) {
+            CritWriteVoteMessage voteMessage = new CritWriteVoteMessage(key, false);
+            Logger.criticalWriteVote(this.id, LoggerOperationType.SEND, key, false);
+            this.send(voteMessage, this.database);
+        }
+
+        // multicast abort message to L2s
+        if (multicastAbort) {
+            Logger.criticalWriteAbort(this.id, LoggerOperationType.MULTICAST, key);
+            CritWriteAbortMessage abortMessage = new CritWriteAbortMessage(key);
+            this.multicast(abortMessage, this.l2Caches);
+        }
+    }
+
     @Override
     protected void forwardMessageToNext(Serializable message, MessageType messageType) {
         long messageDelay = 0;
@@ -51,9 +69,10 @@ public class L1Cache extends Cache implements Coordinator {
             int key = requestMessage.getKey();
 
             if (this.isWriteUnconfirmed(key)) {
+                // Some L2 has timed-out during crit-write
                 Logger.timeout(this.id, message.getType());
                 // reset and just timeout
-                this.abortCritWrite(key, true);
+                this.abortCritWriteAnd(key, true, true);
             }
         } else if (message.getType() == MessageType.WRITE) {
             WriteMessage writeMessage = (WriteMessage) message.getMessage();
@@ -69,8 +88,9 @@ public class L1Cache extends Cache implements Coordinator {
             int key = critWriteMessage.getKey();
 
             if (this.isWriteUnconfirmed(key)) {
+                // DB has timed-out -> never happens
                 Logger.timeout(this.id, message.getType());
-                this.abortCritWrite(key, false);
+                this.abortCritWriteAnd(key, false, false);
             }
         } else if (message.getType() == MessageType.READ) {
             ReadMessage readMessage = (ReadMessage) message.getMessage();
@@ -98,7 +118,8 @@ public class L1Cache extends Cache implements Coordinator {
             // set as unconfirmed with no sender if not already srt as unconfirmed
             this.addUnconfirmedWrite(key, ActorRef.noSender());
         } else {
-            this.abortCritWrite(key, true);
+            // Some L2 has voted abort
+            this.abortCritWriteAnd(key, true, true);
         }
     }
 
@@ -115,13 +136,13 @@ public class L1Cache extends Cache implements Coordinator {
     protected void handleCritWriteAbortMessage(CritWriteAbortMessage message) {
         int key = message.getKey();
         // reset/abort
-        this.abortCritWrite(key, true);
+        this.abortCritWriteAnd(key, true, false);
     }
 
     @Override
     protected void handleCritWriteCommitMessage(CritWriteCommitMessage message) {
         // reset critical write
-        this.abortCritWrite(message.getKey(), false);
+        this.abortCritWriteAnd(message.getKey(), false, false);
         // multicast commit to all L2s
         Logger.criticalWriteCommit(this.id, LoggerOperationType.MULTICAST, message.getKey(), message.getValue(), 0,
                 message.getUpdateCount(), 0);
@@ -146,7 +167,7 @@ public class L1Cache extends Cache implements Coordinator {
             ActorRef l2Cache = this.getUnconfirmedActorForWrit(key);
             this.send(message, l2Cache);
             // reset and just timeout
-            this.abortCritWrite(key, false);
+            this.abortCritWriteAnd(key, false, false);
         } else if ((messageType == MessageType.READ || messageType == MessageType.CRITICAL_READ) && this.isReadUnconfirmed(key)) {
             if (messageType == MessageType.READ) {
                 Logger.error(this.id, LoggerOperationType.MULTICAST, messageType, key, false, "Forward error message");
@@ -236,20 +257,8 @@ public class L1Cache extends Cache implements Coordinator {
     }
 
     @Override
-    public void abortCritWrite(int key, boolean multicastAbort) {
+    public void abortCritWrite(int key) {
         this.abortWrite(key);
         this.acCoordinator.resetCritWriteConfig();
-
-        // answer abort
-        CritWriteVoteMessage voteMessage = new CritWriteVoteMessage(key, false);
-        Logger.criticalWriteVote(this.id, LoggerOperationType.SEND, key, false);
-        this.send(voteMessage, this.database);
-
-        // multicast abort message to L2s
-        if (multicastAbort) {
-            Logger.criticalWriteAbort(this.id, LoggerOperationType.MULTICAST, key);
-            CritWriteAbortMessage abortMessage = new CritWriteAbortMessage(key);
-            this.multicast(abortMessage, this.l2Caches);
-        }
     }
 }
