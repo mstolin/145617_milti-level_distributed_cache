@@ -14,6 +14,8 @@ public class L1Cache extends Cache implements Coordinator {
 
     private final ACCoordinator acCoordinator = new ACCoordinator(this);
 
+    private boolean haveAllL2VotedOk = false;
+
     public L1Cache(String id) {
         super(id);
     }
@@ -73,7 +75,7 @@ public class L1Cache extends Cache implements Coordinator {
             CritWriteRequestMessage requestMessage = (CritWriteRequestMessage) message.getMessage();
             int key = requestMessage.getKey();
 
-            if (this.isWriteUnconfirmed(key)) {
+            if (this.isWriteUnconfirmed(key) && !this.haveAllL2VotedOk) {
                 // Some L2 has timed-out during crit-write
                 Logger.timeout(this.id, message.getType());
                 // reset and just timeout
@@ -255,6 +257,7 @@ public class L1Cache extends Cache implements Coordinator {
     public void onVoteOk(int key, int value) {
         // set as unconfirmed with no sender, just to block all new write requests
         this.addUnconfirmedWrite(key, ActorRef.noSender());
+        this.haveAllL2VotedOk = true;
 
         CritWriteVoteMessage critWriteVoteMessage = new CritWriteVoteMessage(key, true);
         Logger.criticalWriteVote(this.id, LoggerOperationType.SEND, key, true);
@@ -263,6 +266,7 @@ public class L1Cache extends Cache implements Coordinator {
 
     @Override
     public void abortCritWrite(int key) {
+        this.haveAllL2VotedOk = false;
         this.abortWrite(key);
         this.acCoordinator.resetCritWriteConfig();
     }
