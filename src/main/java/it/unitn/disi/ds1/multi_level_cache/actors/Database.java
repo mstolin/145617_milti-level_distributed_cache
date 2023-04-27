@@ -96,7 +96,7 @@ public class Database extends OperationalNode implements Coordinator {
 
             // Send refill to all other L1 caches
             // todo make own method
-            RefillMessage refillMessage = new RefillMessage(key, value, updateCount);
+            RefillMessage refillMessage = new RefillMessage(message.getUuid(), key, value, updateCount);
             Logger.refill(this.id, LoggerOperationType.MULTICAST, key, value, 0, updateCount, 0, false, false, false);
             this.multicast(refillMessage, this.l1Caches);
 
@@ -114,7 +114,7 @@ public class Database extends OperationalNode implements Coordinator {
         // lock value from now on
         this.lockKey(key);
         // Multicast vote request to all L1s // todo make own method
-        CritWriteRequestMessage critWriteRequestMessage = new CritWriteRequestMessage(key);
+        CritWriteRequestMessage critWriteRequestMessage = new CritWriteRequestMessage(message.getUuid(), key);
         Logger.criticalWriteRequest(this.id, LoggerOperationType.MULTICAST, key, true);
         this.multicast(critWriteRequestMessage, this.l1Caches);
         this.setMulticastTimeout(critWriteRequestMessage, MessageType.CRITICAL_WRITE_REQUEST);
@@ -169,7 +169,7 @@ public class Database extends OperationalNode implements Coordinator {
     }
 
     @Override
-    public void onVoteOk(int key, int value) {
+    public void onVoteOk(UUID uuid, int key, int value) {
         // reset timeout
         this.acCoordinator.resetCritWriteConfig();
 
@@ -181,7 +181,7 @@ public class Database extends OperationalNode implements Coordinator {
             int updateCount = this.getUpdateCountOrElse(key);
             // now all participants have locked the data, then send a commit message to update the value
             // todo make own method
-            CritWriteCommitMessage commitMessage = new CritWriteCommitMessage(key, value, updateCount);
+            CritWriteCommitMessage commitMessage = new CritWriteCommitMessage(uuid, key, value, updateCount);
             Logger.criticalWriteCommit(this.id, LoggerOperationType.MULTICAST, key, value, 0, updateCount, 0);
             this.multicast(commitMessage, this.l1Caches);
         } catch (IllegalAccessException e) {
@@ -199,7 +199,7 @@ public class Database extends OperationalNode implements Coordinator {
         if (message.getType() == MessageType.CRITICAL_WRITE_REQUEST && this.acCoordinator.hasRequestedCritWrite()) {
             CritWriteRequestMessage requestMessage = (CritWriteRequestMessage) message.getMessage();
             Logger.timeout(this.id, MessageType.CRITICAL_WRITE_REQUEST);
-            this.abortCritWrite(requestMessage.getKey());
+            this.abortCritWrite(requestMessage.getUuid(), requestMessage.getKey());
         }
     }
 
@@ -209,11 +209,11 @@ public class Database extends OperationalNode implements Coordinator {
     }
 
     @Override
-    public void abortCritWrite(int key) {
+    public void abortCritWrite(UUID uuid, int key) {
         this.acCoordinator.resetCritWriteConfig();
         this.unlockKey(key);
 
-        CritWriteAbortMessage abortMessage = new CritWriteAbortMessage(key);
+        CritWriteAbortMessage abortMessage = new CritWriteAbortMessage(uuid, key);
         Logger.criticalWriteAbort(this.id, LoggerOperationType.MULTICAST, key);
         this.multicast(abortMessage, this.l1Caches);
     }

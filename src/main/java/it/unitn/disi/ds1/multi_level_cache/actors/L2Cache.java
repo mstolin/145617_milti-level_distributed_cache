@@ -10,6 +10,8 @@ import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageType;
 
 import java.io.Serializable;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 public class L2Cache extends Cache {
 
@@ -21,16 +23,16 @@ public class L2Cache extends Cache {
         return Props.create(Cache.class, () -> new L2Cache(id));
     }
 
-    private void abortCritWriteAnd(int key, boolean sendErrorToClient) {
+    private void abortCritWriteAnd(UUID uuid, int key, boolean sendErrorToClient) {
         // send error to client
         if (this.isWriteUnconfirmed(key) && sendErrorToClient) {
-            ActorRef client = this.getUnconfirmedActorForWrit(key);
+            ActorRef client = this.getUnconfirmedActorForWrit(uuid);
             ErrorMessage errorMessage = ErrorMessage.internalError(key, MessageType.CRITICAL_WRITE);
             Logger.error(this.id, LoggerOperationType.SEND, MessageType.ERROR, key, false, "");
             this.send(errorMessage, client);
         }
 
-        this.abortCritWrite(key);
+        this.abortCritWrite(uuid, key);
     }
 
     @Override
@@ -55,7 +57,7 @@ public class L2Cache extends Cache {
 
     @Override
     protected void handleRefillMessage(RefillMessage message) {
-        this.abortWrite(message.getKey());
+        this.abortWrite(message.getUuid(), message.getKey());
     }
 
     @Override
@@ -89,13 +91,17 @@ public class L2Cache extends Cache {
             if (this.isWriteUnconfirmed(key)) {
                 Logger.timeout(this.id, message.getType());
 
-                // send error to client
-                Logger.error(this.id, LoggerOperationType.ERROR, message.getType(), key, false, "L1 is unreachable");
-                ErrorMessage errorMessage = new ErrorMessage(ErrorType.INTERNAL_ERROR, key, MessageType.WRITE);
-                ActorRef client = this.getUnconfirmedActorForWrit(key);
-                this.send(errorMessage, client);
+                Optional<UUID> uuid = this.getUnconfirmedWriteUUID(key);
+                if (uuid.isPresent()) {
+                    // send error to client
+                    Logger.error(this.id, LoggerOperationType.ERROR, message.getType(), key, false, "L1 is unreachable");
+                    ErrorMessage errorMessage = new ErrorMessage(ErrorType.INTERNAL_ERROR, key, MessageType.WRITE);
+                    ActorRef client = this.getUnconfirmedActorForWrit(uuid.get());
+                    this.send(errorMessage, client);
 
-                this.abortWrite(key);
+                    // abort
+                    this.abortWrite(uuid.get(), key);
+                }
             }
         } else if (message.getType() == MessageType.CRITICAL_WRITE) {
             CritWriteMessage writeMessage = (CritWriteMessage) message.getMessage();
@@ -104,7 +110,7 @@ public class L2Cache extends Cache {
             if (this.isWriteUnconfirmed(key)) {
                 // do not forward to DB when crit write fails
                 Logger.timeout(this.id, message.getType());
-                this.abortCritWriteAnd(key, true);
+                this.abortCritWriteAnd(writeMessage.getUuid(), key, true);
             }
         }
     }
@@ -117,7 +123,7 @@ public class L2Cache extends Cache {
             this.lockKey(key);
         }
         // answer back
-        CritWriteVoteMessage critWriteVoteOkMessage = new CritWriteVoteMessage(key, isOk);
+        CritWriteVoteMessage critWriteVoteOkMessage = new CritWriteVoteMessage(message.getUuid(), key, isOk);
         Logger.criticalWriteVote(this.id, LoggerOperationType.SEND, key, isOk);
         this.send(critWriteVoteOkMessage, this.mainL1Cache);
     }
@@ -131,7 +137,7 @@ public class L2Cache extends Cache {
 
     @Override
     protected void handleCritWriteAbortMessage(CritWriteAbortMessage message) {
-        this.abortCritWriteAnd(message.getKey(), true);
+        this.abortCritWriteAnd(message.getUuid(), message.getKey(), true);
     }
 
     @Override
@@ -141,16 +147,19 @@ public class L2Cache extends Cache {
         int value = message.getValue();
         int updateCount = message.getUpdateCount();
 
-        // response write-confirm to client if needed
         if (this.isWriteUnconfirmed(key)) {
-            ActorRef client = this.getUnconfirmedActorForWrit(key);
-            WriteConfirmMessage confirmMessage = new WriteConfirmMessage(key, value, updateCount);
-            Logger.writeConfirm(this.id, LoggerOperationType.SEND, key, value, 0, updateCount, 0);
-            this.send(confirmMessage, client);
-        }
+            Optional<UUID> uuid = this.getUnconfirmedWriteUUID(key);
+            if (uuid.isPresent()) {
+                // response write-confirm to client if needed
+                ActorRef client = this.getUnconfirmedActorForWrit(uuid.get());
+                WriteConfirmMessage confirmMessage = new WriteConfirmMessage(key, value, updateCount);
+                Logger.writeConfirm(this.id, LoggerOperationType.SEND, key, value, 0, updateCount, 0);
+                this.send(confirmMessage, client);
 
-        // reset critical write
-        this.abortCritWriteAnd(key, false);
+                // reset critical write
+                this.abortCritWriteAnd(uuid.get(), key, false);
+            }
+        }
     }
 
     @Override
@@ -159,19 +168,28 @@ public class L2Cache extends Cache {
         int key = message.getKey();
 
         if (messageType == MessageType.WRITE && this.isWriteUnconfirmed(key)) {
-            Logger.error(this.id, LoggerOperationType.SEND, messageType, key, false, "Forward error message");
-            // tell L2 about message
-            ActorRef client = this.getUnconfirmedActorForWrit(key);
-            this.send(message, client);
-            // reset
-            this.abortWrite(key);
+            Optional<UUID> uuid = this.getUnconfirmedWriteUUID(key);
+            if (uuid.isPresent()) {
+                Logger.error(this.id, LoggerOperationType.SEND, messageType, key, false, "Forward error message");
+                // tell L2 about message
+
+                ActorRef client = this.getUnconfirmedActorForWrit(uuid.get());
+                this.send(message, client);
+
+                // reset
+                this.abortWrite(uuid.get(), key);
+            }
         } else if (messageType == MessageType.CRITICAL_WRITE && !this.isWriteUnconfirmed(key)) {
-            Logger.error(this.id, LoggerOperationType.SEND, messageType, key, false, "Forward error message");
-            // tell client about message
-            ActorRef client = this.getUnconfirmedActorForWrit(key);
-            this.send(message, client);
-            // reset and just timeout
-            this.abortCritWriteAnd(key, false);
+            Optional<UUID> uuid = this.getUnconfirmedWriteUUID(key);
+            if (uuid.isPresent()) {
+                Logger.error(this.id, LoggerOperationType.SEND, messageType, key, false, "Forward error message");
+                // tell client about message
+                ActorRef client = this.getUnconfirmedActorForWrit(uuid.get());
+                this.send(message, client);
+
+                // reset and just timeout
+                this.abortCritWriteAnd(uuid.get(), key, false);
+            }
         } else if ((messageType == MessageType.READ || messageType == MessageType.CRITICAL_READ) && this.isReadUnconfirmed(key)) {
             if (messageType == MessageType.READ) {
                 Logger.error(this.id, LoggerOperationType.MULTICAST, messageType, key, false, "Forward error message");
@@ -205,8 +223,8 @@ public class L2Cache extends Cache {
     }
 
     @Override
-    protected void abortCritWrite(int key) {
-        this.abortWrite(key);
+    protected void abortCritWrite(UUID uuid, int key) {
+        this.abortWrite(uuid, key);
     }
 
     @Override
@@ -215,10 +233,10 @@ public class L2Cache extends Cache {
     }
 
     @Override
-    protected void sendWriteConfirm(int key, int value, int updateCount) {
-        if (this.isWriteUnconfirmed(key)) {
+    protected void sendWriteConfirm(UUID uuid, int key, int value, int updateCount) {
+        if (this.isWriteUnconfirmed(key) && this.isWriteUUIDUnconfirmed(uuid)) {
             // tell client write confirm
-            ActorRef client = this.getUnconfirmedActorForWrit(key);
+            ActorRef client = this.getUnconfirmedActorForWrit(uuid);
             WriteConfirmMessage confirmMessage = new WriteConfirmMessage(key, value, updateCount);
             Logger.writeConfirm(this.id, LoggerOperationType.SEND, key, value, 0, updateCount, 0);
             this.send(confirmMessage, client);
