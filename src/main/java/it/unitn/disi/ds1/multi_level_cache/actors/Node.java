@@ -13,6 +13,8 @@ import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerOperationType;
 import java.io.Serializable;
 import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 public abstract class Node extends DataNode {
 
@@ -38,16 +40,32 @@ public abstract class Node extends DataNode {
         return this.writeConfig.isWriteUnconfirmed(key);
     }
 
-    protected void addUnconfirmedWrite(int key, ActorRef actor) {
-        this.writeConfig.addUnconfirmedWrite(key, actor);
+    protected boolean isWriteUUIDUnconfirmed(UUID uuid) {
+        return this.writeConfig.isWriteUUIDUnconfirmed(uuid);
     }
 
-    protected void removeUnconfirmedWrite(int key) {
+    protected void addUnconfirmedWrite(UUID uuid, int key, ActorRef actor) {
+        this.writeConfig.addUnconfirmedWrite(uuid, key, actor);
+    }
+
+    /*protected void removeUnconfirmedWrite(int key) {
         this.writeConfig.removeUnconfirmedWrite(key);
+    }*/
+
+    protected void removeUnconfirmedWrite(UUID uuid) {
+        this.writeConfig.removeUnconfirmedWrite(uuid);
     }
 
-    protected ActorRef getUnconfirmedActorForWrit(int key) {
+    /*protected ActorRef getUnconfirmedActorForWrit(int key) {
         return this.writeConfig.getUnconfirmedActor(key);
+    }*/
+
+    protected Optional<UUID> getUnconfirmedWriteUUID(int key) {
+        return this.writeConfig.getUnconfirmedUUID(key);
+    }
+
+    protected ActorRef getUnconfirmedActorForWrit(UUID uuid) {
+        return this.writeConfig.getUnconfirmedActor(uuid);
     }
 
     protected boolean isReadUnconfirmed(int key) {

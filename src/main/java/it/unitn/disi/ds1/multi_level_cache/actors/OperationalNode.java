@@ -16,6 +16,11 @@ public abstract class OperationalNode extends Node {
         this.send(errorMessage, this.getSender());
     }
 
+    private void sendInternalErrorToSender(int key, MessageType messageType) {
+        ErrorMessage errorMessage = ErrorMessage.internalError(key, messageType);
+        this.send(errorMessage, this.getSender());
+    }
+
     protected abstract void handleWriteMessage(WriteMessage message);
 
     protected abstract void handleCritWriteMessage(CritWriteMessage message);
@@ -34,6 +39,9 @@ public abstract class OperationalNode extends Node {
         if (this.isKeyLocked(key)) {
             Logger.error(this.id, LoggerOperationType.SEND, MessageType.WRITE, key, false, "Can't read value, because it's locked");
             this.sendLockedErrorToSender(key, MessageType.WRITE);
+        } if (this.isWriteUnconfirmed(key)) {
+            Logger.error(this.id, LoggerOperationType.SEND, MessageType.WRITE, key, false, "Can't read value, because it's already unconfirmed");
+            this.sendInternalErrorToSender(key, MessageType.WRITE);
         } else {
             this.handleWriteMessage(message);
         }
