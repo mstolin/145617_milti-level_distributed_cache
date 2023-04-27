@@ -6,7 +6,7 @@ import java.util.*;
 
 public class ReadConfig {
 
-    private Map<Integer, List<ActorRef>> unconfirmedReads = new HashMap<>();
+    private final Map<Integer, List<ActorRef>> unconfirmedReads = new HashMap<>();
 
     public boolean isReadUnconfirmed(int key) {
         return this.unconfirmedReads.containsKey(key);

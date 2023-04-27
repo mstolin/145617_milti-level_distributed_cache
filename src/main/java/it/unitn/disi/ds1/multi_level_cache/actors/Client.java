@@ -4,11 +4,14 @@ import akka.actor.ActorRef;
 import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageConfig;
+import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageType;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerOperationType;
-import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageType;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
 
 public class Client extends Node {
 
@@ -18,19 +21,27 @@ public class Client extends Node {
      * for the caches.
      */
     static final long TIMEOUT_MILLIS = 15000;
-    /** Max. number to retry write or read operations */
+    /**
+     * Max. number to retry write or read operations
+     */
     static final int MAX_RETRY_COUNT = 3;
-    /** List of level 2 caches, the client knows about */
+    /**
+     * List of level 2 caches, the client knows about
+     */
     private List<ActorRef> l2Caches;
-    /** WriteMessage retry count */
+    /**
+     * WriteMessage retry count
+     */
     private int writeRetryCount = 0;
-    /** Is this Node waiting for a write-confirm message */
+    /**
+     * Is this Node waiting for a write-confirm message
+     */
     private boolean isWaitingForWriteConfirm = false;
     /**
      * All unconfirmed read operations for the given key.
      * The value is the count of retries.
      */
-    private Map<Integer, Integer> unconfirmedReads = new HashMap<>();
+    private final Map<Integer, Integer> unconfirmedReads = new HashMap<>();
 
     public Client(String id) {
         super(id);
@@ -63,8 +74,8 @@ public class Client extends Node {
      * It also starts a write-timeout.
      *
      * @param l2Cache The choosen L2 cache actor
-     * @param key Key that has to be written
-     * @param value Value used to update the key
+     * @param key     Key that has to be written
+     * @param value   Value used to update the key
      */
     private void sendWriteMessage(ActorRef l2Cache, int key, int value, MessageConfig messageConfig) {
         WriteMessage writeMessage = new WriteMessage(key, value, messageConfig);
@@ -80,8 +91,8 @@ public class Client extends Node {
      * It also starts a write-timeout.
      *
      * @param l2Cache The choosen L2 cache actor
-     * @param key Key that has to be written
-     * @param value Value used to update the key
+     * @param key     Key that has to be written
+     * @param value   Value used to update the key
      */
     private void sendCritWriteMessage(ActorRef l2Cache, int key, int value, MessageConfig messageConfig) {
         CritWriteMessage critWriteMessage = new CritWriteMessage(key, value, messageConfig);
@@ -97,9 +108,9 @@ public class Client extends Node {
      * Additionally, it increases the write-retry-count.
      *
      * @param unreachableActor The previously tried unreachable L2 cache
-     * @param key Key that has to be written
-     * @param value Value used to update the key
-     * @param isCritical Determines if the message is of critical nature
+     * @param key              Key that has to be written
+     * @param value            Value used to update the key
+     * @param isCritical       Determines if the message is of critical nature
      */
     private void retryWriteMessage(ActorRef unreachableActor, int key, int value, boolean isCritical) {
         if (this.writeRetryCount < MAX_RETRY_COUNT) {
@@ -136,7 +147,7 @@ public class Client extends Node {
      * and start a timeout for the read message.
      *
      * @param l2Cache Target L2 cache
-     * @param key Key to be read
+     * @param key     Key to be read
      */
     private void sendReadMessage(ActorRef l2Cache, int key, MessageConfig messageConfig) {
         ReadMessage readMessage = new ReadMessage(key, this.getUpdateCountOrElse(key), messageConfig);
@@ -152,7 +163,7 @@ public class Client extends Node {
      * and start a timeout for the read message.
      *
      * @param l2Cache Target L2 cache
-     * @param key Key to be read
+     * @param key     Key to be read
      */
     private void sendCritReadMessage(ActorRef l2Cache, int key, MessageConfig messageConfig) {
         CritReadMessage critReadMessage = new CritReadMessage(key, this.getUpdateCountOrElse(key), messageConfig);
@@ -168,8 +179,8 @@ public class Client extends Node {
      * Additionally, it increases the retry count for the given key.
      *
      * @param unreachableActor The L2 cache that is unreachable
-     * @param key Key to be read
-     * @param isCritical Determines if the message is of critical nature
+     * @param key              Key to be read
+     * @param isCritical       Determines if the message is of critical nature
      */
     private void retryReadMessage(ActorRef unreachableActor, int key, boolean isCritical) {
         int retryCountForKey = this.getRetryCountForRead(key);

@@ -39,7 +39,8 @@ public abstract class OperationalNode extends Node {
         if (this.isKeyLocked(key)) {
             Logger.error(this.id, LoggerOperationType.SEND, MessageType.WRITE, key, false, "Can't read value, because it's locked");
             this.sendLockedErrorToSender(key, MessageType.WRITE);
-        } if (this.isWriteUnconfirmed(key)) {
+        }
+        if (this.isWriteUnconfirmed(key)) {
             Logger.error(this.id, LoggerOperationType.SEND, MessageType.WRITE, key, false, "Can't read value, because it's already unconfirmed");
             this.sendInternalErrorToSender(key, MessageType.WRITE);
         } else {

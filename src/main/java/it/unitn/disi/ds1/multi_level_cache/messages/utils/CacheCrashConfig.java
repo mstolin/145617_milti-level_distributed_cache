@@ -16,7 +16,7 @@ public class CacheCrashConfig {
         return new CacheCrashConfig(false, 0, 0);
     }
 
-    public static CacheCrashConfig create(long crashDelayMillis, long recoverDelayMillis){
+    public static CacheCrashConfig create(long crashDelayMillis, long recoverDelayMillis) {
         return new CacheCrashConfig(true, crashDelayMillis, recoverDelayMillis);
     }
 

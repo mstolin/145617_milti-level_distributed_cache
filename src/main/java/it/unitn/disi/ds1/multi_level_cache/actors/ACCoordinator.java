@@ -5,7 +5,7 @@ import it.unitn.disi.ds1.multi_level_cache.messages.CritWriteVoteMessage;
 import java.util.Optional;
 import java.util.UUID;
 
-public class ACCoordinator <T extends Coordinator> {
+public class ACCoordinator<T extends Coordinator> {
 
     private final T coordinator;
     private boolean hasRequestedCritWrite = false;

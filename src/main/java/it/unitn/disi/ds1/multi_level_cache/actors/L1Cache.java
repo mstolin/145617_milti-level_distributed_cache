@@ -3,9 +3,9 @@ package it.unitn.disi.ds1.multi_level_cache.actors;
 import akka.actor.ActorRef;
 import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
+import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageType;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerOperationType;
-import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageType;
 
 import java.io.Serializable;
 import java.util.List;
@@ -47,8 +47,7 @@ public class L1Cache extends Cache implements Coordinator {
     @Override
     protected void forwardMessageToNext(Serializable message, MessageType messageType, long millis) {
         long messageDelay = 0;
-        if (message instanceof Message) {
-            Message msg = (Message) message;
+        if (message instanceof Message msg) {
             if (msg.isMessageDelayedAtL1()) {
                 messageDelay = msg.getL1MessageDelay();
             }

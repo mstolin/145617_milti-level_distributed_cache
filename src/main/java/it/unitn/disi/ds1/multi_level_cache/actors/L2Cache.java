@@ -4,9 +4,9 @@ import akka.actor.ActorRef;
 import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.ErrorType;
+import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageType;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerOperationType;
-import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageType;
 
 import java.io.Serializable;
 import java.util.List;
@@ -39,8 +39,7 @@ public class L2Cache extends Cache {
     protected void forwardMessageToNext(Serializable message, MessageType messageType, long millis) {
         long messageDelay = 0;
 
-        if (message instanceof Message) {
-            Message msg = (Message) message;
+        if (message instanceof Message msg) {
             if (msg.isMessageDelayedAtL2()) {
                 messageDelay = msg.getL2MessageDelay();
             }

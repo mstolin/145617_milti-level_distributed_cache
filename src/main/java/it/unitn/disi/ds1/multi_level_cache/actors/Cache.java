@@ -2,16 +2,19 @@ package it.unitn.disi.ds1.multi_level_cache.actors;
 
 import akka.actor.ActorRef;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
+import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageType;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerOperationType;
-import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageType;
 
 import java.io.Serializable;
-import java.util.*;
+import java.util.List;
+import java.util.UUID;
 
 public abstract class Cache extends OperationalNode {
 
-    /** A direct reference to the database */
+    /**
+     * A direct reference to the database
+     */
     protected ActorRef database;
     /**
      * A reference to the main L1 cache if this is a L2 cache.
@@ -259,7 +262,7 @@ public abstract class Cache extends OperationalNode {
          */
         boolean isMsgNewer = updateCount > actorUpdateCount;
         boolean isLockedAndUnconfirmed = isLocked && isUUIDUnconfirmed;
-        boolean mustUpdate =  isLockedAndUnconfirmed || (!isLocked && isMsgNewer);
+        boolean mustUpdate = isLockedAndUnconfirmed || (!isLocked && isMsgNewer);
 
         Logger.refill(this.id, LoggerOperationType.RECEIVED, key, value, this.getValueOrElse(key),
                 updateCount, actorUpdateCount, isLocked, isUnconfirmed, mustUpdate);
@@ -286,6 +289,7 @@ public abstract class Cache extends OperationalNode {
 
     /**
      * A fill message is received after a read message has been sent.
+     *
      * @param message
      */
     private void onFillMessage(FillMessage message) {

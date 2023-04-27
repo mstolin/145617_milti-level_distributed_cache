@@ -2,9 +2,11 @@ package it.unitn.disi.ds1.multi_level_cache.environment;
 
 import akka.actor.ActorRef;
 import akka.actor.ActorSystem;
-import it.unitn.disi.ds1.multi_level_cache.actors.*;
+import it.unitn.disi.ds1.multi_level_cache.actors.Client;
+import it.unitn.disi.ds1.multi_level_cache.actors.Database;
+import it.unitn.disi.ds1.multi_level_cache.actors.L1Cache;
+import it.unitn.disi.ds1.multi_level_cache.actors.L2Cache;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
-import it.unitn.disi.ds1.multi_level_cache.messages.utils.CacheCrashConfig;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageConfig;
 
 import java.util.ArrayList;
@@ -55,7 +57,7 @@ public class ActorEnvironment {
             // tell l1 about l2s
             this.sendJoinL2CachesMessage(l1Cache, l2CachesForL1);
 
-            for (ActorRef l2Cache: l2CachesForL1) {
+            for (ActorRef l2Cache : l2CachesForL1) {
                 // tell l2 about l1
                 this.sendJoinMainL1CacheMessage(l2Cache, l1Cache);
                 // tell l2 about the db
@@ -64,7 +66,7 @@ public class ActorEnvironment {
         }
 
         // tell client about l2 caches
-        for (ActorRef client: this.clients) {
+        for (ActorRef client : this.clients) {
             this.sendJoinL2CachesMessage(client, this.l2Caches);
         }
     }
@@ -92,7 +94,7 @@ public class ActorEnvironment {
     private List<ActorRef> initL1Caches(int total) {
         List<ActorRef> actors = new ArrayList<>();
         for (int i = 0; i < total; i++) {
-            String id = this.genL1Id(i+1);
+            String id = this.genL1Id(i + 1);
             ActorRef actor = this.actorSystem.actorOf(L1Cache.props(id));
             actors.add(actor);
         }
@@ -103,7 +105,7 @@ public class ActorEnvironment {
         List<ActorRef> actors = new ArrayList<>();
         for (int i = 0; i < l1Size; i++) {
             for (int j = 0; j < total; j++) {
-                String id = this.genL2Id(i+1, j+1);
+                String id = this.genL2Id(i + 1, j + 1);
                 ActorRef actor = this.actorSystem.actorOf(L2Cache.props(id));
                 actors.add(actor);
             }
@@ -114,7 +116,7 @@ public class ActorEnvironment {
     private List<ActorRef> initClients(int total) {
         List<ActorRef> actors = new ArrayList<>();
         for (int i = 0; i < total; i++) {
-            String id = this.genClientId(i+1);
+            String id = this.genClientId(i + 1);
             ActorRef actor = this.actorSystem.actorOf(Client.props(id));
             actors.add(actor);
         }

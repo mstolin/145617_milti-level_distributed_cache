@@ -27,5 +27,5 @@ public class InstantiateReadMessage extends Message {
     public boolean isCritical() {
         return isCritical;
     }
-    
+
 }

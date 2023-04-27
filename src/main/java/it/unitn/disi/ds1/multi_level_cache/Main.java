@@ -3,7 +3,6 @@ package it.unitn.disi.ds1.multi_level_cache;
 import akka.actor.ActorRef;
 import it.unitn.disi.ds1.multi_level_cache.environment.ActorEnvironment;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.CacheBehaviourConfig;
-import it.unitn.disi.ds1.multi_level_cache.messages.utils.CacheCrashConfig;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageConfig;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
 
@@ -246,12 +245,9 @@ public class Main {
             //actorEnvironment.makeClientWrite(secondClient, l211, 3, 500);
 
             /*
-            WRITE A LOCKED KEY AT L1
+            WRITE AN UNCONFIRMED KEY AT L1 AT DIFFERENT L2
              */
-            /*actorEnvironment.makeClientWrite(firstClient, l211, 3, 100);
-            actorEnvironment.makeClientWrite(secondClient, l212,3, 500);*/
-            /*
-            // TODO WRITE WITH THE SAME KEY IS NOT UNIQUELY IDENTIFIABLE (SECOND WRITE BEING CONFIRMED AFTER FIRST REFILL ARRIVES)
+            actorEnvironment.makeClientWrite(firstClient, l211, 3, 100);
             actorEnvironment.makeClientWrite(
                     secondClient,
                     l212,
@@ -261,7 +257,7 @@ public class Main {
                             CacheBehaviourConfig.none(),
                             CacheBehaviourConfig.delayMessage(1)
                     )
-            );*/
+            );
 
             /*==============================
              CRITREAD

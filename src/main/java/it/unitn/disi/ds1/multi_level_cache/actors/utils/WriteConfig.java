@@ -10,7 +10,7 @@ import java.util.UUID;
 
 public class WriteConfig {
 
-    private Map<UUID, Pair<Integer, ActorRef>> unconfirmedWrites = new HashMap<>();
+    private final Map<UUID, Pair<Integer, ActorRef>> unconfirmedWrites = new HashMap<>();
 
     public boolean isWriteUnconfirmed(int key) {
         return this.unconfirmedWrites
@@ -45,7 +45,7 @@ public class WriteConfig {
     }
 
     public Optional<UUID> getUnconfirmedUUID(int key) {
-        for (Map.Entry<UUID, Pair<Integer, ActorRef>> entry: this.unconfirmedWrites.entrySet()) {
+        for (Map.Entry<UUID, Pair<Integer, ActorRef>> entry : this.unconfirmedWrites.entrySet()) {
             if (entry.getValue().first() == key) {
                 return Optional.of(entry.getKey());
             }

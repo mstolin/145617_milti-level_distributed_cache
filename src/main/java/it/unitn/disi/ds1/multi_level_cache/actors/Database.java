@@ -3,11 +3,14 @@ package it.unitn.disi.ds1.multi_level_cache.actors;
 import akka.actor.ActorRef;
 import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
+import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageType;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerOperationType;
-import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageType;
 
-import java.util.*;
+import java.util.List;
+import java.util.Optional;
+import java.util.Random;
+import java.util.UUID;
 
 public class Database extends OperationalNode implements Coordinator {
 
@@ -40,7 +43,7 @@ public class Database extends OperationalNode implements Coordinator {
     private void setDefaultData(int size) throws IllegalAccessException {
         for (int i = 0; i < size; i++) {
             int value = new Random().nextInt(1000);
-            int updateCount = new Random().nextInt(10-1)+1;
+            int updateCount = new Random().nextInt(10 - 1) + 1;
             this.setValue(i, value, updateCount);
         }
     }
@@ -102,7 +105,7 @@ public class Database extends OperationalNode implements Coordinator {
 
             // Unlock value
             this.unlockKey(key);
-        } catch(IllegalAccessException e) {
+        } catch (IllegalAccessException e) {
             // force timeout, either locked by another write or critical write
         }
     }
@@ -220,17 +223,17 @@ public class Database extends OperationalNode implements Coordinator {
 
     @Override
     public Receive createReceive() {
-       return this
-               .receiveBuilder()
-               .match(JoinL1CachesMessage.class, this::onJoinL1Caches)
-               .match(JoinL2CachesMessage.class, this::onJoinL2Caches)
-               .match(WriteMessage.class, this::onWriteMessage)
-               .match(CritWriteMessage.class, this::onCritWriteMessage)
-               .match(CritWriteVoteMessage.class, this::onCritWriteVoteMessage)
-               .match(ReadMessage.class, this::onReadMessage)
-               .match(CritReadMessage.class, this::onCritReadMessage)
-               .match(TimeoutMessage.class, this::onTimeoutMessage)
-               .build();
+        return this
+                .receiveBuilder()
+                .match(JoinL1CachesMessage.class, this::onJoinL1Caches)
+                .match(JoinL2CachesMessage.class, this::onJoinL2Caches)
+                .match(WriteMessage.class, this::onWriteMessage)
+                .match(CritWriteMessage.class, this::onCritWriteMessage)
+                .match(CritWriteVoteMessage.class, this::onCritWriteVoteMessage)
+                .match(ReadMessage.class, this::onReadMessage)
+                .match(CritReadMessage.class, this::onCritReadMessage)
+                .match(TimeoutMessage.class, this::onTimeoutMessage)
+                .build();
     }
 
 }

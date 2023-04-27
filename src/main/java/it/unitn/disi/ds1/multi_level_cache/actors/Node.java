@@ -5,7 +5,6 @@ import it.unitn.disi.ds1.multi_level_cache.actors.utils.ReadConfig;
 import it.unitn.disi.ds1.multi_level_cache.actors.utils.WriteConfig;
 import it.unitn.disi.ds1.multi_level_cache.messages.ErrorMessage;
 import it.unitn.disi.ds1.multi_level_cache.messages.TimeoutMessage;
-import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageConfig;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageType;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerOperationType;
@@ -18,14 +17,17 @@ import java.util.UUID;
 
 public abstract class Node extends DataNode {
 
-    private WriteConfig writeConfig = new WriteConfig();
-    private ReadConfig readConfig = new ReadConfig();
-
-    /** The timeout duration */
+    /**
+     * The timeout duration
+     */
     static final long TIMEOUT_MILLIS = 6000;
-    /** Data the Node knows about */
-    /** ID of this node */
+    /**
+     * ID of this node
+     */
     public String id;
+    private WriteConfig writeConfig = new WriteConfig();
+    /** Data the Node knows about */
+    private ReadConfig readConfig = new ReadConfig();
 
     public Node(String id) {
         super();
@@ -91,10 +93,10 @@ public abstract class Node extends DataNode {
      * Sends a message to all actors in the given group.
      *
      * @param message The message to be sent
-     * @param group The receiving group of actors
+     * @param group   The receiving group of actors
      */
     protected void multicast(Serializable message, List<ActorRef> group) {
-        for (ActorRef actor: group) {
+        for (ActorRef actor : group) {
             actor.tell(message, this.getSelf());
         }
     }
