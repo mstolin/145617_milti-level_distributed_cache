@@ -1,8 +1,8 @@
 package it.unitn.disi.ds1.multi_level_cache.messages;
 
-import java.io.Serializable;
+import java.util.UUID;
 
-public class RefillMessage implements Serializable {
+public class RefillMessage extends UUIDMessage {
 
     private final int key;
 
@@ -10,7 +10,8 @@ public class RefillMessage implements Serializable {
 
     private final int updateCount;
 
-    public RefillMessage(int key, int value, int updateCount) {
+    public RefillMessage(UUID uuid, int key, int value, int updateCount) {
+        super(uuid);
         this.key = key;
         this.value = value;
         this.updateCount = updateCount;
