@@ -79,6 +79,7 @@ public class Client extends Node {
      */
     private void sendWriteMessage(ActorRef l2Cache, int key, int value, MessageConfig messageConfig) {
         WriteMessage writeMessage = new WriteMessage(key, value, messageConfig);
+        Logger.write(this.id, LoggerOperationType.SEND, key, value, false, writeMessage.getUuid());
         this.send(writeMessage, l2Cache);
         // set timeout
         this.setTimeout(writeMessage, l2Cache, MessageType.WRITE);
@@ -112,7 +113,7 @@ public class Client extends Node {
      * @param value            Value used to update the key
      * @param isCritical       Determines if the message is of critical nature
      */
-    private void retryWriteMessage(ActorRef unreachableActor, int key, int value, boolean isCritical) {
+    /*private void retryWriteMessage(ActorRef unreachableActor, int key, int value, boolean isCritical) {
         if (this.writeRetryCount < MAX_RETRY_COUNT) {
             // get random actor
             List<ActorRef> workingL2Caches = this.l2Caches
@@ -132,7 +133,7 @@ public class Client extends Node {
             // abort retry
             this.resetWriteConfig();
         }
-    }
+    }*/
 
     /**
      * Resets all important configs to enable another write operation.
@@ -182,7 +183,7 @@ public class Client extends Node {
      * @param key              Key to be read
      * @param isCritical       Determines if the message is of critical nature
      */
-    private void retryReadMessage(ActorRef unreachableActor, int key, boolean isCritical) {
+    /*private void retryReadMessage(ActorRef unreachableActor, int key, boolean isCritical) {
         int retryCountForKey = this.getRetryCountForRead(key);
         if (retryCountForKey < MAX_RETRY_COUNT) {
             // get another actor (hoping it will work)
@@ -216,7 +217,7 @@ public class Client extends Node {
             // abort retries
             this.removeUnconfirmedRead(key);
         }
-    }
+    }*/
 
     /**
      * Returns the number of read retries for the given key.
@@ -282,7 +283,6 @@ public class Client extends Node {
             Logger.criticalWrite(this.id, LoggerOperationType.SEND, key, value, false);
             this.sendCritWriteMessage(l2Cache, key, value, message.getMessageConfig());
         } else {
-            Logger.write(this.id, LoggerOperationType.SEND, key, value, false);
             this.sendWriteMessage(l2Cache, key, value, message.getMessageConfig());
         }
     }
@@ -299,7 +299,7 @@ public class Client extends Node {
         int value = message.getValue();
         int updateCount = message.getUpdateCount();
 
-        Logger.writeConfirm(this.id, LoggerOperationType.RECEIVED, key, value, this.getValueOrElse(key), updateCount,
+        Logger.writeConfirm(this.id, message.getUuid(), LoggerOperationType.RECEIVED, key, value, this.getValueOrElse(key), updateCount,
                 this.getUpdateCountOrElse(key));
 
         this.unlockKey(key);
@@ -375,14 +375,8 @@ public class Client extends Node {
     protected void handleTimeoutMessage(TimeoutMessage message) {
         MessageType type = message.getType();
         if (type == MessageType.WRITE && this.isWaitingForWriteConfirm) {
-            WriteMessage writeMessage = (WriteMessage) message.getMessage();
-            int key = writeMessage.getKey();
-            int value = writeMessage.getValue();
-
             Logger.timeout(this.id, type);
-
-            // try again
-            this.retryWriteMessage(message.getUnreachableActor(), key, value, false);
+            this.resetWriteConfig();
         } else if (type == MessageType.READ) {
             ReadMessage readMessage = (ReadMessage) message.getMessage();
             int key = readMessage.getKey();
@@ -390,7 +384,7 @@ public class Client extends Node {
             // if the key is in this map, then no ReadReply has been received for the key
             if (this.isReadUnconfirmed(key)) {
                 Logger.timeout(this.id, type);
-                this.retryReadMessage(message.getUnreachableActor(), key, false);
+                this.removeUnconfirmedRead(key);
             }
         } else if (type == MessageType.CRITICAL_READ) {
             CritReadMessage critReadMessage = (CritReadMessage) message.getMessage();
@@ -398,17 +392,12 @@ public class Client extends Node {
 
             if (this.isReadUnconfirmed(key)) {
                 Logger.timeout(this.id, type);
-                this.retryReadMessage(message.getUnreachableActor(), key, true);
+                this.removeUnconfirmedRead(key);
             }
         } else if (type == MessageType.CRITICAL_WRITE && this.isWaitingForWriteConfirm) {
             CritWriteMessage critWriteMessage = (CritWriteMessage) message.getMessage();
-            int key = critWriteMessage.getKey();
-            int value = critWriteMessage.getValue();
-
             Logger.timeout(this.id, type);
-
-            // try again
-            this.retryWriteMessage(message.getUnreachableActor(), key, value, true);
+            this.resetWriteConfig();
         }
     }
 

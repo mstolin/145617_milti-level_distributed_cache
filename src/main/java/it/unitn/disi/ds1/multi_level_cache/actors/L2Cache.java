@@ -151,8 +151,8 @@ public class L2Cache extends Cache {
             if (uuid.isPresent()) {
                 // response write-confirm to client if needed
                 ActorRef client = this.getUnconfirmedActorForWrit(uuid.get());
-                WriteConfirmMessage confirmMessage = new WriteConfirmMessage(key, value, updateCount);
-                Logger.writeConfirm(this.id, LoggerOperationType.SEND, key, value, 0, updateCount, 0);
+                WriteConfirmMessage confirmMessage = new WriteConfirmMessage(key, value, updateCount, message.getUuid());
+                Logger.writeConfirm(this.id, message.getUuid(), LoggerOperationType.SEND, key, value, 0, updateCount, 0);
                 this.send(confirmMessage, client);
 
                 // reset critical write
@@ -236,8 +236,8 @@ public class L2Cache extends Cache {
         if (this.isWriteUnconfirmed(key) && this.isWriteUUIDUnconfirmed(uuid)) {
             // tell client write confirm
             ActorRef client = this.getUnconfirmedActorForWrit(uuid);
-            WriteConfirmMessage confirmMessage = new WriteConfirmMessage(key, value, updateCount);
-            Logger.writeConfirm(this.id, LoggerOperationType.SEND, key, value, 0, updateCount, 0);
+            WriteConfirmMessage confirmMessage = new WriteConfirmMessage(key, value, updateCount, uuid);
+            Logger.writeConfirm(this.id, uuid, LoggerOperationType.SEND, key, value, 0, updateCount, 0);
             this.send(confirmMessage, client);
         }
     }

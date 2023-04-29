@@ -34,7 +34,7 @@ public abstract class OperationalNode extends Node {
     protected void onWriteMessage(WriteMessage message) {
         int key = message.getKey();
         int value = message.getValue();
-        Logger.write(this.id, LoggerOperationType.RECEIVED, key, value, this.isKeyLocked(key));
+        Logger.write(this.id, LoggerOperationType.RECEIVED, key, value, this.isKeyLocked(key), message.getUuid());
 
         if (this.isKeyLocked(key)) {
             Logger.error(this.id, LoggerOperationType.SEND, MessageType.WRITE, key, false, "Can't read value, because it's locked");

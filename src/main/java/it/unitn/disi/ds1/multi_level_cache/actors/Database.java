@@ -100,7 +100,7 @@ public class Database extends OperationalNode implements Coordinator {
             // Send refill to all other L1 caches
             // todo make own method
             RefillMessage refillMessage = new RefillMessage(message.getUuid(), key, value, updateCount);
-            Logger.refill(this.id, LoggerOperationType.MULTICAST, key, value, 0, updateCount, 0, false, false, false);
+            Logger.refill(this.id, message.getUuid(), LoggerOperationType.MULTICAST, key, value, 0, updateCount, 0, false, false, false);
             this.multicast(refillMessage, this.l1Caches);
 
             // Unlock value

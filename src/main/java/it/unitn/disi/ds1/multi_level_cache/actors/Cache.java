@@ -41,7 +41,7 @@ public abstract class Cache extends OperationalNode {
         // set as unconfirmed
         this.addUnconfirmedWrite(message.getUuid(), message.getKey(), this.getSender());
         // forward to next
-        Logger.write(this.id, LoggerOperationType.SEND, key, value, this.isKeyLocked(key));
+        Logger.write(this.id, LoggerOperationType.SEND, key, value, this.isKeyLocked(key), message.getUuid());
         this.forwardMessageToNext(message, MessageType.WRITE);
 
         // make crash afterwards
@@ -250,7 +250,7 @@ public abstract class Cache extends OperationalNode {
 
         if (!this.isKeyAvailable(key) && !isUnconfirmed) {
             // this cache does not know about the key -> do nothing
-            Logger.refill(this.id, LoggerOperationType.RECEIVED, key, value, this.getValueOrElse(key),
+            Logger.refill(this.id, message.getUuid(), LoggerOperationType.RECEIVED, key, value, this.getValueOrElse(key),
                     updateCount, actorUpdateCount, isLocked, false, false);
             return;
         }
@@ -264,7 +264,7 @@ public abstract class Cache extends OperationalNode {
         boolean isLockedAndUnconfirmed = isLocked && isUUIDUnconfirmed;
         boolean mustUpdate = isLockedAndUnconfirmed || (!isLocked && isMsgNewer);
 
-        Logger.refill(this.id, LoggerOperationType.RECEIVED, key, value, this.getValueOrElse(key),
+        Logger.refill(this.id, message.getUuid(), LoggerOperationType.RECEIVED, key, value, this.getValueOrElse(key),
                 updateCount, actorUpdateCount, isLocked, isUnconfirmed, mustUpdate);
 
         if (mustUpdate) {

@@ -64,7 +64,7 @@ public class L1Cache extends Cache implements Coordinator {
     @Override
     protected void handleRefillMessage(RefillMessage message) {
         // just multicast to all L2s
-        Logger.refill(this.id, LoggerOperationType.MULTICAST, message.getKey(), message.getValue(), 0,
+        Logger.refill(this.id, message.getUuid(), LoggerOperationType.MULTICAST, message.getKey(), message.getValue(), 0,
                 message.getUpdateCount(), 0, false, false, true);
         this.multicast(message, this.l2Caches);
         this.abortWrite(message.getUuid(), message.getKey());
