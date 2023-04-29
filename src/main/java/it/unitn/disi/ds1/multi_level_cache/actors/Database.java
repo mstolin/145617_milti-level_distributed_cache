@@ -209,7 +209,7 @@ public class Database extends OperationalNode implements Coordinator {
 
     @Override
     protected long getTimeoutMillis() {
-        return 4500;
+        return 13000;
     }
 
     @Override

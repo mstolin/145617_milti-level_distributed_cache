@@ -20,7 +20,7 @@ public class Client extends Node {
      * time-out delay for the client is slightly longer than the one
      * for the caches.
      */
-    static final long TIMEOUT_MILLIS = 15000;
+    static final long TIMEOUT_MILLIS = 18000;
     /**
      * Max. number to retry write or read operations
      */
