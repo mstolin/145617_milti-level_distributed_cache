@@ -26,6 +26,11 @@ public class Client extends Node {
      */
     static final int MAX_RETRY_COUNT = 3;
     /**
+     * All unconfirmed read operations for the given key.
+     * The value is the count of retries.
+     */
+    private final Map<Integer, Integer> unconfirmedReads = new HashMap<>();
+    /**
      * List of level 2 caches, the client knows about
      */
     private List<ActorRef> l2Caches;
@@ -37,11 +42,6 @@ public class Client extends Node {
      * Is this Node waiting for a write-confirm message
      */
     private boolean isWaitingForWriteConfirm = false;
-    /**
-     * All unconfirmed read operations for the given key.
-     * The value is the count of retries.
-     */
-    private final Map<Integer, Integer> unconfirmedReads = new HashMap<>();
 
     public Client(String id) {
         super(id);

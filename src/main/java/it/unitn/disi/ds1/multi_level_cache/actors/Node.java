@@ -26,7 +26,9 @@ public abstract class Node extends DataNode {
      */
     public String id;
     private WriteConfig writeConfig = new WriteConfig();
-    /** Data the Node knows about */
+    /**
+     * Data the Node knows about
+     */
     private ReadConfig readConfig = new ReadConfig();
 
     public Node(String id) {
