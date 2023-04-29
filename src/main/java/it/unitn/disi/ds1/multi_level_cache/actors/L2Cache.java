@@ -171,7 +171,7 @@ public class L2Cache extends Cache {
         if (messageType == MessageType.WRITE && this.isWriteUnconfirmed(key)) {
             Optional<UUID> uuid = this.getUnconfirmedWriteUUID(key);
             if (uuid.isPresent()) {
-                Logger.error(this.id, LoggerOperationType.SEND, messageType, key, false, "Forward error message");
+                Logger.error(this.id, LoggerOperationType.SEND, messageType, key, false, message.getErrorMessage());
                 // tell L2 about message
 
                 ActorRef client = this.getUnconfirmedActorForWrit(uuid.get());
@@ -183,7 +183,7 @@ public class L2Cache extends Cache {
         } else if (messageType == MessageType.CRITICAL_WRITE && !this.isWriteUnconfirmed(key)) {
             Optional<UUID> uuid = this.getUnconfirmedWriteUUID(key);
             if (uuid.isPresent()) {
-                Logger.error(this.id, LoggerOperationType.SEND, messageType, key, false, "Forward error message");
+                Logger.error(this.id, LoggerOperationType.SEND, messageType, key, false, message.getErrorMessage());
                 // tell client about message
                 ActorRef client = this.getUnconfirmedActorForWrit(uuid.get());
                 this.send(message, client);
@@ -193,9 +193,9 @@ public class L2Cache extends Cache {
             }
         } else if ((messageType == MessageType.READ || messageType == MessageType.CRITICAL_READ) && this.isReadUnconfirmed(key)) {
             if (messageType == MessageType.READ) {
-                Logger.error(this.id, LoggerOperationType.MULTICAST, messageType, key, false, "Forward error message");
+                Logger.error(this.id, LoggerOperationType.MULTICAST, messageType, key, false, message.getErrorMessage());
             } else {
-                Logger.error(this.id, LoggerOperationType.MULTICAST, messageType, key, false, "Forward error message");
+                Logger.error(this.id, LoggerOperationType.MULTICAST, messageType, key, false, message.getErrorMessage());
             }
 
             // tell L2 about message

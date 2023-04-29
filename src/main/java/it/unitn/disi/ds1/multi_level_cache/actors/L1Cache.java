@@ -164,7 +164,7 @@ public class L1Cache extends Cache implements Coordinator {
         int key = message.getKey();
 
         if (messageType == MessageType.WRITE && this.isWriteUnconfirmed(key)) {
-            Logger.error(this.id, LoggerOperationType.SEND, messageType, key, false, "Forward error message");
+            Logger.error(this.id, LoggerOperationType.SEND, messageType, key, false, message.getErrorMessage());
             // tell L2 about message
             Optional<UUID> uuid = this.getUnconfirmedWriteUUID(key);
             if (uuid.isPresent()) {
@@ -174,7 +174,7 @@ public class L1Cache extends Cache implements Coordinator {
                 this.abortWrite(uuid.get(), key);
             }
         } else if (messageType == MessageType.CRITICAL_WRITE && this.isWriteUnconfirmed(key)) {
-            Logger.error(this.id, LoggerOperationType.SEND, messageType, key, false, "Forward error message");
+            Logger.error(this.id, LoggerOperationType.SEND, messageType, key, false, message.getErrorMessage());
             // tell L2 about message
             Optional<UUID> uuid = this.getUnconfirmedWriteUUID(key);
             if (uuid.isPresent()) {
@@ -185,9 +185,9 @@ public class L1Cache extends Cache implements Coordinator {
             }
         } else if ((messageType == MessageType.READ || messageType == MessageType.CRITICAL_READ) && this.isReadUnconfirmed(key)) {
             if (messageType == MessageType.READ) {
-                Logger.error(this.id, LoggerOperationType.MULTICAST, messageType, key, false, "Forward error message");
+                Logger.error(this.id, LoggerOperationType.MULTICAST, messageType, key, false, message.getErrorMessage());
             } else {
-                Logger.error(this.id, LoggerOperationType.MULTICAST, messageType, key, false, "Forward error message");
+                Logger.error(this.id, LoggerOperationType.MULTICAST, messageType, key, false, message.getErrorMessage());
             }
 
             // tell L2 about message
