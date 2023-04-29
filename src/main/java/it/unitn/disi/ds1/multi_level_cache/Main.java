@@ -58,14 +58,16 @@ public class Main {
             /*
             READ UNKNOWN KEY
              */
+            // TODO ERROR MESSAGES
             //actorEnvironment.makeClientRead(firstClient, l211, 989898989);
 
             /*
             READ A VALUE WITH CRASHED L2
              */
-            // TODO CLIENT RETRY
             /*actorEnvironment.makeCacheCrash(l221, 10000);
             Thread.sleep(2000);
+            actorEnvironment.makeClientRead(firstClient, l221, 1);
+            Thread.sleep(16000); // client times-out after 16s
             actorEnvironment.makeClientRead(firstClient, l221, 1);*/
 
             /*
@@ -226,7 +228,6 @@ public class Main {
             /*
             WRITE AND CRASH L1 AFTERWARDS
              */
-            // TODO DO NOT PROPAGATE TO DB WHEN L1 CRASHES (SAME AS ABOVE)
             /*actorEnvironment.makeClientWrite(
                     firstClient,
                     l211,
@@ -241,13 +242,13 @@ public class Main {
             /*
             WRITE A LOCKED KEY AT L2
              */
-            //actorEnvironment.makeClientWrite(firstClient, l211, 3, 100);
-            //actorEnvironment.makeClientWrite(secondClient, l211, 3, 500);
+            /*actorEnvironment.makeClientWrite(firstClient, l211, 3, 100);
+            actorEnvironment.makeClientWrite(secondClient, l211, 3, 500);*/
 
             /*
             WRITE AN UNCONFIRMED KEY AT L1 AT DIFFERENT L2
              */
-            actorEnvironment.makeClientWrite(firstClient, l211, 3, 100);
+            /*actorEnvironment.makeClientWrite(firstClient, l211, 3, 100);
             actorEnvironment.makeClientWrite(
                     secondClient,
                     l212,
@@ -257,7 +258,7 @@ public class Main {
                             CacheBehaviourConfig.none(),
                             CacheBehaviourConfig.delayMessage(1)
                     )
-            );
+            );*/
 
             /*==============================
              CRITREAD
@@ -381,25 +382,24 @@ public class Main {
             actorEnvironment.makeClientWrite(firstClient, l211, 3, 160);
             Thread.sleep(2000);
             actorEnvironment.makeClientCritRead(secondClient, l211, 3);
-            actorEnvironment.makeClientCritRead(secondClient, l223, 3);
-            actorEnvironment.makeClientCritRead(secondClient, l211, 3);*/
+            actorEnvironment.makeClientCritRead(secondClient, l223, 3);*/
 
             /*
             CRITWRITE WITH CRASHED L1
              */
-            /*actorEnvironment.makeCacheCrash(l11, 10000);
+            /*actorEnvironment.makeCacheCrash(l11, 20000);
             actorEnvironment.makeClientCritWrite(firstClient, l211, 3, 77);*/
 
             /*
             CRITWRITE WITH DIFFERENT CRASHED L1
              */
-            /*actorEnvironment.makeCacheCrash(l12, 10000);
+            /*actorEnvironment.makeCacheCrash(l12, 20000);
             actorEnvironment.makeClientCritWrite(firstClient, l211, 3, 77);*/
 
             /*
             CRITWRITE WITH CRASHED L2
              */
-            /*actorEnvironment.makeCacheCrash(l211, 10000);
+            /*actorEnvironment.makeCacheCrash(l211, 20000);
             actorEnvironment.makeClientCritWrite(firstClient, l211, 3, 77);*/
 
             /*
