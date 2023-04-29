@@ -32,13 +32,13 @@ public class L1Cache extends Cache implements Coordinator {
         // answer abort
         if (sendVoteToDatabase) {
             CritWriteVoteMessage voteMessage = new CritWriteVoteMessage(uuid, key, false);
-            Logger.criticalWriteVote(this.id, LoggerOperationType.SEND, key, false);
+            Logger.criticalWriteVote(this.id, uuid, LoggerOperationType.SEND, key, false);
             this.send(voteMessage, this.database);
         }
 
         // multicast abort message to L2s
         if (multicastAbort) {
-            Logger.criticalWriteAbort(this.id, LoggerOperationType.MULTICAST, key);
+            Logger.criticalWriteAbort(this.id, uuid, LoggerOperationType.MULTICAST, key);
             CritWriteAbortMessage abortMessage = new CritWriteAbortMessage(uuid, key);
             this.multicast(abortMessage, this.l2Caches);
         }
@@ -120,7 +120,7 @@ public class L1Cache extends Cache implements Coordinator {
             // first lock
             this.lockKey(key);
             // iff everything is ok, then multicast the request to all L2s, otherwise force a timeout
-            Logger.criticalWriteRequest(this.id, LoggerOperationType.MULTICAST, key, true);
+            Logger.criticalWriteRequest(this.id, message.getUuid(), LoggerOperationType.MULTICAST, key, true);
             this.acCoordinator.setCritWriteConfig(key);
             this.multicast(message, this.l2Caches);
             this.setMulticastTimeout(message, MessageType.CRITICAL_WRITE_REQUEST);
@@ -136,7 +136,7 @@ public class L1Cache extends Cache implements Coordinator {
     protected void handleCritWriteVoteMessage(CritWriteVoteMessage message) {
         int key = message.getKey();
         boolean isOk = message.isOk();
-        Logger.criticalWriteVote(this.id, LoggerOperationType.RECEIVED, key, isOk);
+        Logger.criticalWriteVote(this.id, message.getUuid(), LoggerOperationType.RECEIVED, key, isOk);
 
         this.acCoordinator.onCritWriteVoteMessage(message);
     }
@@ -153,7 +153,7 @@ public class L1Cache extends Cache implements Coordinator {
         // reset critical write
         this.abortCritWriteAnd(message.getUuid(), message.getKey(), false, false);
         // multicast commit to all L2s
-        Logger.criticalWriteCommit(this.id, LoggerOperationType.MULTICAST, message.getKey(), message.getValue(), 0,
+        Logger.criticalWriteCommit(this.id, message.getUuid(), LoggerOperationType.MULTICAST, message.getKey(), message.getValue(), 0,
                 message.getUpdateCount(), 0);
         this.multicast(message, this.l2Caches);
     }
@@ -268,7 +268,7 @@ public class L1Cache extends Cache implements Coordinator {
         this.haveAllL2VotedOk = true;
 
         CritWriteVoteMessage critWriteVoteMessage = new CritWriteVoteMessage(uuid, key, true);
-        Logger.criticalWriteVote(this.id, LoggerOperationType.SEND, key, true);
+        Logger.criticalWriteVote(this.id, uuid, LoggerOperationType.SEND, key, true);
         this.send(critWriteVoteMessage, this.database);
     }
 

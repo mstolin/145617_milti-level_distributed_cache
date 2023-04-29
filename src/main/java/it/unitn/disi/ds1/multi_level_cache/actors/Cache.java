@@ -57,7 +57,7 @@ public abstract class Cache extends OperationalNode {
         // set as unconfirmed
         this.addUnconfirmedWrite(message.getUuid(), message.getKey(), this.getSender());
         // forward to next
-        Logger.criticalWrite(this.id, LoggerOperationType.SEND, message.getKey(), message.getValue(), false);
+        Logger.criticalWrite(this.id, message.getUuid(), LoggerOperationType.SEND, message.getKey(), message.getValue(), false);
         this.forwardMessageToNext(message, MessageType.CRITICAL_WRITE, 12000);
         // make crash afterwards
         if (this.isL1Cache() && message.mustL1Crash()) {
@@ -211,12 +211,12 @@ public abstract class Cache extends OperationalNode {
     private void onCritWriteRequestMessage(CritWriteRequestMessage message) {
         int key = message.getKey();
         boolean isOk = this.isCritWriteOk(key);
-        Logger.criticalWriteRequest(this.id, LoggerOperationType.RECEIVED, key, isOk);
+        Logger.criticalWriteRequest(this.id, message.getUuid(), LoggerOperationType.RECEIVED, key, isOk);
         this.handleCritWriteRequestMessage(message, isOk);
     }
 
     private void onCritWriteAbortMessage(CritWriteAbortMessage message) {
-        Logger.criticalWriteAbort(this.id, LoggerOperationType.RECEIVED, message.getKey());
+        Logger.criticalWriteAbort(this.id, message.getUuid(), LoggerOperationType.RECEIVED, message.getKey());
         this.handleCritWriteAbortMessage(message);
     }
 
@@ -226,7 +226,7 @@ public abstract class Cache extends OperationalNode {
         int value = message.getValue();
         int updateCount = message.getUpdateCount();
 
-        Logger.criticalWriteCommit(this.id, LoggerOperationType.RECEIVED, key, value, this.getValueOrElse(key), updateCount,
+        Logger.criticalWriteCommit(this.id, message.getUuid(), LoggerOperationType.RECEIVED, key, value, this.getValueOrElse(key), updateCount,
                 this.getUpdateCountOrElse(key));
 
         // unlock and update

@@ -51,7 +51,7 @@ public abstract class OperationalNode extends Node {
     protected void onCritWriteMessage(CritWriteMessage message) {
         int key = message.getKey();
         int value = message.getValue();
-        Logger.criticalWrite(this.id, LoggerOperationType.RECEIVED, key, value, this.isKeyLocked(key));
+        Logger.criticalWrite(this.id, message.getUuid(), LoggerOperationType.RECEIVED, key, value, this.isKeyLocked(key));
 
         if (this.isKeyLocked(key) || this.isWriteUnconfirmed(key)) {
             Logger.error(this.id, LoggerOperationType.SEND, MessageType.CRITICAL_WRITE, key, false, "Can't read value, because it's locked");
@@ -62,7 +62,7 @@ public abstract class OperationalNode extends Node {
     }
 
     protected void onCritWriteVoteMessage(CritWriteVoteMessage message) {
-        Logger.criticalWriteVote(this.id, LoggerOperationType.RECEIVED, message.getKey(), message.isOk());
+        Logger.criticalWriteVote(this.id, message.getUuid(), LoggerOperationType.RECEIVED, message.getKey(), message.isOk());
         this.handleCritWriteVoteMessage(message);
     }
 

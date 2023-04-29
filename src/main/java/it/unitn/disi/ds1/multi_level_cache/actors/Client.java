@@ -280,7 +280,7 @@ public class Client extends Node {
         Logger.initWrite(this.id, key, value, isCritical);
 
         if (isCritical) {
-            Logger.criticalWrite(this.id, LoggerOperationType.SEND, key, value, false);
+            Logger.criticalWrite(this.id, message.getUuid(), LoggerOperationType.SEND, key, value, false);
             this.sendCritWriteMessage(l2Cache, key, value, message.getMessageConfig());
         } else {
             this.sendWriteMessage(l2Cache, key, value, message.getMessageConfig());
