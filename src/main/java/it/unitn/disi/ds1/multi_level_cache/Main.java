@@ -2,6 +2,8 @@ package it.unitn.disi.ds1.multi_level_cache;
 
 import akka.actor.ActorRef;
 import it.unitn.disi.ds1.multi_level_cache.environment.ActorEnvironment;
+import it.unitn.disi.ds1.multi_level_cache.messages.utils.CacheBehaviourConfig;
+import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageConfig;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
 
 import java.util.NoSuchElementException;
