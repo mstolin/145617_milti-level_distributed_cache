@@ -27,8 +27,9 @@ public class L2Cache extends Cache {
         // send error to client
         if (this.isWriteUnconfirmed(key) && sendErrorToClient) {
             ActorRef client = this.getUnconfirmedActorForWrit(uuid);
-            ErrorMessage errorMessage = ErrorMessage.internalError(key, MessageType.CRITICAL_WRITE);
-            Logger.error(this.id, LoggerOperationType.SEND, MessageType.ERROR, key, false, "");
+            String errMsg = "Aborted Critical Write";
+            ErrorMessage errorMessage = ErrorMessage.internalError(key, MessageType.CRITICAL_WRITE, errMsg);
+            Logger.error(this.id, LoggerOperationType.SEND, MessageType.ERROR, key, false, errMsg);
             this.send(errorMessage, client);
         }
 
@@ -93,8 +94,9 @@ public class L2Cache extends Cache {
                 Optional<UUID> uuid = this.getUnconfirmedWriteUUID(key);
                 if (uuid.isPresent()) {
                     // send error to client
-                    Logger.error(this.id, LoggerOperationType.ERROR, message.getType(), key, false, "L1 is unreachable");
-                    ErrorMessage errorMessage = new ErrorMessage(ErrorType.INTERNAL_ERROR, key, MessageType.WRITE);
+                    String errMsg = "L1 is unreachable";
+                    Logger.error(this.id, LoggerOperationType.ERROR, message.getType(), key, false, errMsg);
+                    ErrorMessage errorMessage = ErrorMessage.internalError(key, MessageType.WRITE, errMsg);
                     ActorRef client = this.getUnconfirmedActorForWrit(uuid.get());
                     this.send(errorMessage, client);
 

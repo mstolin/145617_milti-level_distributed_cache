@@ -12,12 +12,12 @@ public abstract class OperationalNode extends Node {
     }
 
     private void sendLockedErrorToSender(int key, MessageType messageType) {
-        ErrorMessage errorMessage = ErrorMessage.lockedKey(key, messageType);
+        ErrorMessage errorMessage = ErrorMessage.lockedKey(key, messageType, String.format("Key %d is locked", key));
         this.send(errorMessage, this.getSender());
     }
 
     private void sendInternalErrorToSender(int key, MessageType messageType) {
-        ErrorMessage errorMessage = ErrorMessage.internalError(key, messageType);
+        ErrorMessage errorMessage = ErrorMessage.internalError(key, messageType, "Internal Error");
         this.send(errorMessage, this.getSender());
     }
 

@@ -160,7 +160,7 @@ public abstract class Node extends DataNode {
     }
 
     protected void onErrorMessage(ErrorMessage message) {
-        Logger.error(this.id, LoggerOperationType.RECEIVED, message.getMessageType(), message.getKey(), false, "Received error message");
+        Logger.error(this.id, LoggerOperationType.RECEIVED, message.getMessageType(), message.getKey(), false, message.getErrorMessage());
         this.handleErrorMessage(message);
     }
 

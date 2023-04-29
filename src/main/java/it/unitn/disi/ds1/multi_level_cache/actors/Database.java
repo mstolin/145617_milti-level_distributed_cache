@@ -62,8 +62,9 @@ public class Database extends OperationalNode implements Coordinator {
                 // reset the config
                 this.removeUnconfirmedRead(key);
             } else {
-                Logger.error(this.id, LoggerOperationType.SEND, MessageType.FILL, key, false, "Key is unknown");
-                ErrorMessage errorMessage = ErrorMessage.unknownKey(key, MessageType.FILL);
+                String errMsg = "Key is unknown";
+                Logger.error(this.id, LoggerOperationType.SEND, MessageType.FILL, key, false, errMsg);
+                ErrorMessage errorMessage = ErrorMessage.unknownKey(key, MessageType.FILL, errMsg);
                 this.send(errorMessage, sender);
             }
         } else {
@@ -135,9 +136,9 @@ public class Database extends OperationalNode implements Coordinator {
         int key = message.getKey();
 
         if (!this.isKeyAvailable(key)) {
-            Logger.error(this.id, LoggerOperationType.SEND, MessageType.READ, key, false,
-                    String.format("Can't read, because key %d is unknown", key));
-            ErrorMessage errorMessage = ErrorMessage.unknownKey(key, MessageType.READ);
+            String errMsg = String.format("Can't read, because key %d is unknown", key);
+            Logger.error(this.id, LoggerOperationType.SEND, MessageType.READ, key, false, errMsg);
+            ErrorMessage errorMessage = ErrorMessage.unknownKey(key, MessageType.READ, errMsg);
             this.send(errorMessage, this.getSender());
             return;
         }
@@ -153,9 +154,9 @@ public class Database extends OperationalNode implements Coordinator {
         int key = message.getKey();
 
         if (!this.isKeyAvailable(key)) {
-            Logger.error(this.id, LoggerOperationType.SEND, MessageType.CRITICAL_READ, key, false,
-                    String.format("Can't read, because key %d is unknown", key));
-            ErrorMessage errorMessage = ErrorMessage.unknownKey(key, MessageType.CRITICAL_READ);
+            String errMsg = String.format("Can't read, because key %d is unknown", key);
+            Logger.error(this.id, LoggerOperationType.SEND, MessageType.CRITICAL_READ, key, false, errMsg);
+            ErrorMessage errorMessage = ErrorMessage.unknownKey(key, MessageType.CRITICAL_READ, errMsg);
             this.send(errorMessage, this.getSender());
             return;
         }
