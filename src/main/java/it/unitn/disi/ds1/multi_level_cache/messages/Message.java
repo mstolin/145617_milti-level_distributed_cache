@@ -1,15 +1,20 @@
 package it.unitn.disi.ds1.multi_level_cache.messages;
 
-import it.unitn.disi.ds1.multi_level_cache.messages.utils.CacheCrashConfig;
 import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageConfig;
 
-import java.io.Serializable;
+import java.util.UUID;
 
-public abstract class Message implements Serializable {
+public abstract class Message extends UUIDMessage {
 
     protected final MessageConfig messageConfig;
 
     protected Message(MessageConfig messageConfig) {
+        super();
+        this.messageConfig = messageConfig;
+    }
+
+    protected Message(UUID uuid, MessageConfig messageConfig) {
+        super(uuid);
         this.messageConfig = messageConfig;
     }
 

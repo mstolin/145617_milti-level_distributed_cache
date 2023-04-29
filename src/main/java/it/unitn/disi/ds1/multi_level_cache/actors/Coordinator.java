@@ -1,5 +1,7 @@
 package it.unitn.disi.ds1.multi_level_cache.actors;
 
+import java.util.UUID;
+
 public interface Coordinator {
 
     /**
@@ -12,8 +14,8 @@ public interface Coordinator {
     /**
      * Is getting called when all participants voted ok.
      */
-    void onVoteOk(int key, int value);
+    void onVoteOk(UUID uuid, int key, int value);
 
-    void abortCritWrite(int key);
+    void abortCritWrite(UUID uuid, int key);
 
 }

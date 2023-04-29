@@ -1,14 +1,15 @@
 package it.unitn.disi.ds1.multi_level_cache.messages;
 
-import java.io.Serializable;
+import java.util.UUID;
 
-public class CritWriteVoteMessage implements Serializable {
+public class CritWriteVoteMessage extends UUIDMessage {
 
     private final boolean isOk;
 
     private final int key;
 
-    public CritWriteVoteMessage(int key, boolean isOk) {
+    public CritWriteVoteMessage(UUID uuid, int key, boolean isOk) {
+        super(uuid);
         this.key = key;
         this.isOk = isOk;
     }

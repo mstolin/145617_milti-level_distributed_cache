@@ -2,16 +2,19 @@ package it.unitn.disi.ds1.multi_level_cache.actors;
 
 import akka.actor.ActorRef;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
+import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageType;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerOperationType;
-import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageType;
 
 import java.io.Serializable;
-import java.util.*;
+import java.util.List;
+import java.util.UUID;
 
 public abstract class Cache extends OperationalNode {
 
-    /** A direct reference to the database */
+    /**
+     * A direct reference to the database
+     */
     protected ActorRef database;
     /**
      * A reference to the main L1 cache if this is a L2 cache.
@@ -36,9 +39,9 @@ public abstract class Cache extends OperationalNode {
         // lock
         this.lockKey(key);
         // set as unconfirmed
-        this.addUnconfirmedWrite(message.getKey(), this.getSender());
+        this.addUnconfirmedWrite(message.getUuid(), message.getKey(), this.getSender());
         // forward to next
-        Logger.write(this.id, LoggerOperationType.SEND, key, value, this.isKeyLocked(key));
+        Logger.write(this.id, LoggerOperationType.SEND, key, value, this.isKeyLocked(key), message.getUuid());
         this.forwardMessageToNext(message, MessageType.WRITE);
 
         // make crash afterwards
@@ -52,10 +55,10 @@ public abstract class Cache extends OperationalNode {
     @Override
     protected void handleCritWriteMessage(CritWriteMessage message) {
         // set as unconfirmed
-        this.addUnconfirmedWrite(message.getKey(), this.getSender());
+        this.addUnconfirmedWrite(message.getUuid(), message.getKey(), this.getSender());
         // forward to next
-        Logger.criticalWrite(this.id, LoggerOperationType.SEND, message.getKey(), message.getValue(), false);
-        this.forwardMessageToNext(message, MessageType.CRITICAL_WRITE, 12000);
+        Logger.criticalWrite(this.id, message.getUuid(), LoggerOperationType.SEND, message.getKey(), message.getValue(), false);
+        this.forwardMessageToNext(message, MessageType.CRITICAL_WRITE);
         // make crash afterwards
         if (this.isL1Cache() && message.mustL1Crash()) {
             this.makeSelfCrash(message.getL1RecoverDelay());
@@ -141,11 +144,11 @@ public abstract class Cache extends OperationalNode {
 
     protected abstract boolean isCritWriteOk(int key);
 
-    protected abstract void abortCritWrite(int key);
+    protected abstract void abortCritWrite(UUID uuid, int key);
 
     protected abstract boolean isL1Cache();
 
-    protected abstract void sendWriteConfirm(int key, int value, int updateCount);
+    protected abstract void sendWriteConfirm(UUID uuid, int key, int value, int updateCount);
 
     /**
      * Crashes this node
@@ -165,8 +168,8 @@ public abstract class Cache extends OperationalNode {
         this.getContext().become(this.createReceive());
     }
 
-    protected void abortWrite(int key) {
-        this.removeUnconfirmedWrite(key);
+    protected void abortWrite(UUID uuid, int key) {
+        this.removeUnconfirmedWrite(uuid);
         this.unlockKey(key);
     }
 
@@ -208,12 +211,12 @@ public abstract class Cache extends OperationalNode {
     private void onCritWriteRequestMessage(CritWriteRequestMessage message) {
         int key = message.getKey();
         boolean isOk = this.isCritWriteOk(key);
-        Logger.criticalWriteRequest(this.id, LoggerOperationType.RECEIVED, key, isOk);
+        Logger.criticalWriteRequest(this.id, message.getUuid(), LoggerOperationType.RECEIVED, key, isOk);
         this.handleCritWriteRequestMessage(message, isOk);
     }
 
     private void onCritWriteAbortMessage(CritWriteAbortMessage message) {
-        Logger.criticalWriteAbort(this.id, LoggerOperationType.RECEIVED, message.getKey());
+        Logger.criticalWriteAbort(this.id, message.getUuid(), LoggerOperationType.RECEIVED, message.getKey());
         this.handleCritWriteAbortMessage(message);
     }
 
@@ -223,7 +226,7 @@ public abstract class Cache extends OperationalNode {
         int value = message.getValue();
         int updateCount = message.getUpdateCount();
 
-        Logger.criticalWriteCommit(this.id, LoggerOperationType.RECEIVED, key, value, this.getValueOrElse(key), updateCount,
+        Logger.criticalWriteCommit(this.id, message.getUuid(), LoggerOperationType.RECEIVED, key, value, this.getValueOrElse(key), updateCount,
                 this.getUpdateCountOrElse(key));
 
         // unlock and update
@@ -241,26 +244,27 @@ public abstract class Cache extends OperationalNode {
         int value = message.getValue();
         int updateCount = message.getUpdateCount();
         boolean isLocked = this.isKeyLocked(key);
+        boolean isUUIDUnconfirmed = this.isWriteUUIDUnconfirmed(message.getUuid());
         boolean isUnconfirmed = this.isWriteUnconfirmed(key);
         int actorUpdateCount = this.getUpdateCountOrElse(key);
 
         if (!this.isKeyAvailable(key) && !isUnconfirmed) {
             // this cache does not know about the key -> do nothing
-            Logger.refill(this.id, LoggerOperationType.RECEIVED, key, value, this.getValueOrElse(key),
+            Logger.refill(this.id, message.getUuid(), LoggerOperationType.RECEIVED, key, value, this.getValueOrElse(key),
                     updateCount, actorUpdateCount, isLocked, false, false);
             return;
         }
 
         /*
         Only update if either,
-        1. the data is locked and write-operation is unconfirmed (then, this was the requested Cache by client/L2)
+        1. the data is locked and write-operation UUID is unconfirmed (then, this was the requested Cache by client/L2)
         2. the data is unlocked and the message uc is newer than the current one (always update a write from the DB)
          */
         boolean isMsgNewer = updateCount > actorUpdateCount;
-        boolean isLockedAndUnconfirmed = isLocked && isUnconfirmed;
-        boolean mustUpdate =  isLockedAndUnconfirmed || (!isLocked && isMsgNewer);
+        boolean isLockedAndUnconfirmed = isLocked && isUUIDUnconfirmed;
+        boolean mustUpdate = isLockedAndUnconfirmed || (!isLocked && isMsgNewer);
 
-        Logger.refill(this.id, LoggerOperationType.RECEIVED, key, value, this.getValueOrElse(key),
+        Logger.refill(this.id, message.getUuid(), LoggerOperationType.RECEIVED, key, value, this.getValueOrElse(key),
                 updateCount, actorUpdateCount, isLocked, isUnconfirmed, mustUpdate);
 
         if (mustUpdate) {
@@ -269,7 +273,7 @@ public abstract class Cache extends OperationalNode {
                 this.unlockKey(key);
                 // send write confirm
                 if (!this.isL1Cache()) {
-                    this.sendWriteConfirm(key, value, updateCount);
+                    this.sendWriteConfirm(message.getUuid(), key, value, updateCount);
                 }
             }
 
@@ -285,6 +289,7 @@ public abstract class Cache extends OperationalNode {
 
     /**
      * A fill message is received after a read message has been sent.
+     *
      * @param message
      */
     private void onFillMessage(FillMessage message) {

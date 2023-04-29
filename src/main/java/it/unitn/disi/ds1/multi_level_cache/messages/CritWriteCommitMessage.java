@@ -1,8 +1,8 @@
 package it.unitn.disi.ds1.multi_level_cache.messages;
 
-import java.io.Serializable;
+import java.util.UUID;
 
-public class CritWriteCommitMessage implements Serializable {
+public class CritWriteCommitMessage extends UUIDMessage {
 
     private final int key;
 
@@ -10,7 +10,8 @@ public class CritWriteCommitMessage implements Serializable {
 
     private final int updateCount;
 
-    public CritWriteCommitMessage(int key, int value, int updateCount) {
+    public CritWriteCommitMessage(UUID uuid, int key, int value, int updateCount) {
+        super(uuid);
         this.key = key;
         this.value = value;
         this.updateCount = updateCount;

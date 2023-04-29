@@ -6,7 +6,9 @@ class DataEntry {
 
     private int value;
 
-    /** The updateCount shows how often the value has been written. 1 by default.*/
+    /**
+     * The updateCount shows how often the value has been written. 1 by default.
+     */
     private int updateCount = 1;
 
     public DataEntry(int value) {
@@ -22,12 +24,12 @@ class DataEntry {
         return value;
     }
 
-    public int getUpdateCount() {
-        return updateCount;
-    }
-
     public void setValue(int value) {
         this.value = value;
+    }
+
+    public int getUpdateCount() {
+        return updateCount;
     }
 
     public void setUpdateCount(int updateCount) {
@@ -107,8 +109,7 @@ public class DataStore {
 
     public void unLockValueForKey(int key) {
         if (this.isLocked(key)) {
-            int index = this.lockedKeys.indexOf(key);
-            this.lockedKeys.remove(index);
+            this.lockedKeys.remove((Integer) key);
         }
     }
 

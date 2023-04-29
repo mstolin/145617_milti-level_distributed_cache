@@ -3,11 +3,14 @@ package it.unitn.disi.ds1.multi_level_cache.actors;
 import akka.actor.ActorRef;
 import akka.actor.Props;
 import it.unitn.disi.ds1.multi_level_cache.messages.*;
+import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageType;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.Logger;
 import it.unitn.disi.ds1.multi_level_cache.utils.Logger.LoggerOperationType;
-import it.unitn.disi.ds1.multi_level_cache.messages.utils.MessageType;
 
-import java.util.*;
+import java.util.List;
+import java.util.Optional;
+import java.util.Random;
+import java.util.UUID;
 
 public class Database extends OperationalNode implements Coordinator {
 
@@ -40,7 +43,7 @@ public class Database extends OperationalNode implements Coordinator {
     private void setDefaultData(int size) throws IllegalAccessException {
         for (int i = 0; i < size; i++) {
             int value = new Random().nextInt(1000);
-            int updateCount = new Random().nextInt(10-1)+1;
+            int updateCount = new Random().nextInt(10 - 1) + 1;
             this.setValue(i, value, updateCount);
         }
     }
@@ -59,8 +62,9 @@ public class Database extends OperationalNode implements Coordinator {
                 // reset the config
                 this.removeUnconfirmedRead(key);
             } else {
-                Logger.error(this.id, LoggerOperationType.SEND, MessageType.FILL, key, false, "Key is unknown");
-                ErrorMessage errorMessage = ErrorMessage.unknownKey(key, MessageType.FILL);
+                String errMsg = "Key is unknown";
+                Logger.error(this.id, LoggerOperationType.SEND, MessageType.FILL, key, false, errMsg);
+                ErrorMessage errorMessage = ErrorMessage.unknownKey(key, MessageType.FILL, errMsg);
                 this.send(errorMessage, sender);
             }
         } else {
@@ -96,13 +100,13 @@ public class Database extends OperationalNode implements Coordinator {
 
             // Send refill to all other L1 caches
             // todo make own method
-            RefillMessage refillMessage = new RefillMessage(key, value, updateCount);
-            Logger.refill(this.id, LoggerOperationType.MULTICAST, key, value, 0, updateCount, 0, false, false, false);
+            RefillMessage refillMessage = new RefillMessage(message.getUuid(), key, value, updateCount);
+            Logger.refill(this.id, message.getUuid(), LoggerOperationType.MULTICAST, key, value, 0, updateCount, 0, false, false, false);
             this.multicast(refillMessage, this.l1Caches);
 
             // Unlock value
             this.unlockKey(key);
-        } catch(IllegalAccessException e) {
+        } catch (IllegalAccessException e) {
             // force timeout, either locked by another write or critical write
         }
     }
@@ -114,8 +118,8 @@ public class Database extends OperationalNode implements Coordinator {
         // lock value from now on
         this.lockKey(key);
         // Multicast vote request to all L1s // todo make own method
-        CritWriteRequestMessage critWriteRequestMessage = new CritWriteRequestMessage(key);
-        Logger.criticalWriteRequest(this.id, LoggerOperationType.MULTICAST, key, true);
+        CritWriteRequestMessage critWriteRequestMessage = new CritWriteRequestMessage(message.getUuid(), key);
+        Logger.criticalWriteRequest(this.id, message.getUuid(), LoggerOperationType.MULTICAST, key, true);
         this.multicast(critWriteRequestMessage, this.l1Caches);
         this.setMulticastTimeout(critWriteRequestMessage, MessageType.CRITICAL_WRITE_REQUEST);
         // set crit write config
@@ -132,9 +136,9 @@ public class Database extends OperationalNode implements Coordinator {
         int key = message.getKey();
 
         if (!this.isKeyAvailable(key)) {
-            Logger.error(this.id, LoggerOperationType.SEND, MessageType.READ, key, false,
-                    String.format("Can't read, because key %d is unknown", key));
-            ErrorMessage errorMessage = ErrorMessage.unknownKey(key, MessageType.READ);
+            String errMsg = String.format("Can't read, because key %d is unknown", key);
+            Logger.error(this.id, LoggerOperationType.SEND, MessageType.READ, key, false, errMsg);
+            ErrorMessage errorMessage = ErrorMessage.unknownKey(key, MessageType.READ, errMsg);
             this.send(errorMessage, this.getSender());
             return;
         }
@@ -150,9 +154,9 @@ public class Database extends OperationalNode implements Coordinator {
         int key = message.getKey();
 
         if (!this.isKeyAvailable(key)) {
-            Logger.error(this.id, LoggerOperationType.SEND, MessageType.CRITICAL_READ, key, false,
-                    String.format("Can't read, because key %d is unknown", key));
-            ErrorMessage errorMessage = ErrorMessage.unknownKey(key, MessageType.CRITICAL_READ);
+            String errMsg = String.format("Can't read, because key %d is unknown", key);
+            Logger.error(this.id, LoggerOperationType.SEND, MessageType.CRITICAL_READ, key, false, errMsg);
+            ErrorMessage errorMessage = ErrorMessage.unknownKey(key, MessageType.CRITICAL_READ, errMsg);
             this.send(errorMessage, this.getSender());
             return;
         }
@@ -169,7 +173,7 @@ public class Database extends OperationalNode implements Coordinator {
     }
 
     @Override
-    public void onVoteOk(int key, int value) {
+    public void onVoteOk(UUID uuid, int key, int value) {
         // reset timeout
         this.acCoordinator.resetCritWriteConfig();
 
@@ -181,8 +185,8 @@ public class Database extends OperationalNode implements Coordinator {
             int updateCount = this.getUpdateCountOrElse(key);
             // now all participants have locked the data, then send a commit message to update the value
             // todo make own method
-            CritWriteCommitMessage commitMessage = new CritWriteCommitMessage(key, value, updateCount);
-            Logger.criticalWriteCommit(this.id, LoggerOperationType.MULTICAST, key, value, 0, updateCount, 0);
+            CritWriteCommitMessage commitMessage = new CritWriteCommitMessage(uuid, key, value, updateCount);
+            Logger.criticalWriteCommit(this.id, uuid, LoggerOperationType.MULTICAST, key, value, 0, updateCount, 0);
             this.multicast(commitMessage, this.l1Caches);
         } catch (IllegalAccessException e) {
             // already locked -> force timeout
@@ -199,38 +203,38 @@ public class Database extends OperationalNode implements Coordinator {
         if (message.getType() == MessageType.CRITICAL_WRITE_REQUEST && this.acCoordinator.hasRequestedCritWrite()) {
             CritWriteRequestMessage requestMessage = (CritWriteRequestMessage) message.getMessage();
             Logger.timeout(this.id, MessageType.CRITICAL_WRITE_REQUEST);
-            this.abortCritWrite(requestMessage.getKey());
+            this.abortCritWrite(requestMessage.getUuid(), requestMessage.getKey());
         }
     }
 
     @Override
     protected long getTimeoutMillis() {
-        return 4500;
+        return 13000;
     }
 
     @Override
-    public void abortCritWrite(int key) {
+    public void abortCritWrite(UUID uuid, int key) {
         this.acCoordinator.resetCritWriteConfig();
         this.unlockKey(key);
 
-        CritWriteAbortMessage abortMessage = new CritWriteAbortMessage(key);
-        Logger.criticalWriteAbort(this.id, LoggerOperationType.MULTICAST, key);
+        CritWriteAbortMessage abortMessage = new CritWriteAbortMessage(uuid, key);
+        Logger.criticalWriteAbort(this.id, uuid, LoggerOperationType.MULTICAST, key);
         this.multicast(abortMessage, this.l1Caches);
     }
 
     @Override
     public Receive createReceive() {
-       return this
-               .receiveBuilder()
-               .match(JoinL1CachesMessage.class, this::onJoinL1Caches)
-               .match(JoinL2CachesMessage.class, this::onJoinL2Caches)
-               .match(WriteMessage.class, this::onWriteMessage)
-               .match(CritWriteMessage.class, this::onCritWriteMessage)
-               .match(CritWriteVoteMessage.class, this::onCritWriteVoteMessage)
-               .match(ReadMessage.class, this::onReadMessage)
-               .match(CritReadMessage.class, this::onCritReadMessage)
-               .match(TimeoutMessage.class, this::onTimeoutMessage)
-               .build();
+        return this
+                .receiveBuilder()
+                .match(JoinL1CachesMessage.class, this::onJoinL1Caches)
+                .match(JoinL2CachesMessage.class, this::onJoinL2Caches)
+                .match(WriteMessage.class, this::onWriteMessage)
+                .match(CritWriteMessage.class, this::onCritWriteMessage)
+                .match(CritWriteVoteMessage.class, this::onCritWriteVoteMessage)
+                .match(ReadMessage.class, this::onReadMessage)
+                .match(CritReadMessage.class, this::onCritReadMessage)
+                .match(TimeoutMessage.class, this::onTimeoutMessage)
+                .build();
     }
 
 }

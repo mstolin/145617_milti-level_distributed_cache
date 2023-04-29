@@ -4,7 +4,9 @@ import java.io.Serializable;
 
 public class CrashMessage implements Serializable {
 
-    /** Delay of milliseconds */
+    /**
+     * Delay of milliseconds
+     */
     private final long recoverAfter;
 
     public CrashMessage(long recoverAfter) {

@@ -12,7 +12,12 @@ public abstract class OperationalNode extends Node {
     }
 
     private void sendLockedErrorToSender(int key, MessageType messageType) {
-        ErrorMessage errorMessage = ErrorMessage.lockedKey(key, messageType);
+        ErrorMessage errorMessage = ErrorMessage.lockedKey(key, messageType, String.format("Key %d is locked", key));
+        this.send(errorMessage, this.getSender());
+    }
+
+    private void sendInternalErrorToSender(int key, MessageType messageType) {
+        ErrorMessage errorMessage = ErrorMessage.internalError(key, messageType, "Internal Error");
         this.send(errorMessage, this.getSender());
     }
 
@@ -29,11 +34,15 @@ public abstract class OperationalNode extends Node {
     protected void onWriteMessage(WriteMessage message) {
         int key = message.getKey();
         int value = message.getValue();
-        Logger.write(this.id, LoggerOperationType.RECEIVED, key, value, this.isKeyLocked(key));
+        Logger.write(this.id, LoggerOperationType.RECEIVED, key, value, this.isKeyLocked(key), message.getUuid());
 
         if (this.isKeyLocked(key)) {
             Logger.error(this.id, LoggerOperationType.SEND, MessageType.WRITE, key, false, "Can't read value, because it's locked");
             this.sendLockedErrorToSender(key, MessageType.WRITE);
+        }
+        if (this.isWriteUnconfirmed(key)) {
+            Logger.error(this.id, LoggerOperationType.SEND, MessageType.WRITE, key, false, "Can't read value, because it's already unconfirmed");
+            this.sendInternalErrorToSender(key, MessageType.WRITE);
         } else {
             this.handleWriteMessage(message);
         }
@@ -42,7 +51,7 @@ public abstract class OperationalNode extends Node {
     protected void onCritWriteMessage(CritWriteMessage message) {
         int key = message.getKey();
         int value = message.getValue();
-        Logger.criticalWrite(this.id, LoggerOperationType.RECEIVED, key, value, this.isKeyLocked(key));
+        Logger.criticalWrite(this.id, message.getUuid(), LoggerOperationType.RECEIVED, key, value, this.isKeyLocked(key));
 
         if (this.isKeyLocked(key) || this.isWriteUnconfirmed(key)) {
             Logger.error(this.id, LoggerOperationType.SEND, MessageType.CRITICAL_WRITE, key, false, "Can't read value, because it's locked");
@@ -53,7 +62,7 @@ public abstract class OperationalNode extends Node {
     }
 
     protected void onCritWriteVoteMessage(CritWriteVoteMessage message) {
-        Logger.criticalWriteVote(this.id, LoggerOperationType.RECEIVED, message.getKey(), message.isOk());
+        Logger.criticalWriteVote(this.id, message.getUuid(), LoggerOperationType.RECEIVED, message.getKey(), message.isOk());
         this.handleCritWriteVoteMessage(message);
     }
 

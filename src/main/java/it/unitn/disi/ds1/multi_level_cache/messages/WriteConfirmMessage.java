@@ -1,14 +1,15 @@
 package it.unitn.disi.ds1.multi_level_cache.messages;
 
-import java.io.Serializable;
+import java.util.UUID;
 
-public class WriteConfirmMessage implements Serializable {
+public class WriteConfirmMessage extends UUIDMessage {
 
     private final int key;
     private final int value;
     private final int updateCount;
 
-    public WriteConfirmMessage(int key, int value, int updateCount) {
+    public WriteConfirmMessage(int key, int value, int updateCount, UUID uuid) {
+        super(uuid);
         this.key = key;
         this.value = value;
         this.updateCount = updateCount;

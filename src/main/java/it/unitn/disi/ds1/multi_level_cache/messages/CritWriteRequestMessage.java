@@ -1,12 +1,13 @@
 package it.unitn.disi.ds1.multi_level_cache.messages;
 
-import java.io.Serializable;
+import java.util.UUID;
 
-public class CritWriteRequestMessage implements Serializable {
+public class CritWriteRequestMessage extends UUIDMessage {
 
     private final int key;
 
-    public CritWriteRequestMessage(int key) {
+    public CritWriteRequestMessage(UUID uuid, int key) {
+        super(uuid);
         this.key = key;
     }
 
