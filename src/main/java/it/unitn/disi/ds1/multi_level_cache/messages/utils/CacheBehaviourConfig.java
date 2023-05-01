@@ -10,10 +10,6 @@ public class CacheBehaviourConfig {
         this.recoverDelay = recoverDelay;
     }
 
-    public static CacheBehaviourConfig delayAndRecover(long messageDelay, long recoverDelay) {
-        return new CacheBehaviourConfig(messageDelay, recoverDelay);
-    }
-
     public static CacheBehaviourConfig delayMessage(long messageDelay) {
         return new CacheBehaviourConfig(messageDelay, 0);
     }
